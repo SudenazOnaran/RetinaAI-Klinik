@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import jsPDF from "jspdf";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -23,42 +22,219 @@ import {
 } from "@/components/ui/table";
 import { format } from "date-fns";
 import { tr } from "date-fns/locale";
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import {
+  downloadRetinaReportPdf,
+  previewRetinaReportPdf,
+} from "@/lib/retina-report-pdf";
+import { loadRetinaSettingsFromStorage } from "@/lib/retina-settings";
 
 export default function PatientDetailClient({ patient }: { patient: any }) {
-  const [activeTab, setActiveTab] = useState<"analysis" | "reports">(
-    "analysis",
-  );
+  const [activeTab, setActiveTab] = useState<
+    "analysis" | "reports" | "progress"
+  >("analysis");
   const [editOpen, setEditOpen] = useState(false);
 
   const reports = patient.analyses ?? [];
 
-  /* 🧾 PDF OLUŞTURMA */
-  const downloadPDF = (r: any) => {
-    const pdf = new jsPDF();
+  const parseJsonArray = (value: string | null | undefined) => {
+    if (!value) return [];
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
 
-    pdf.setFontSize(14);
-    pdf.text("AI Retina Analiz Raporu", 20, 20);
+  const normalizeDiagnosisKey = (value: unknown) => {
+    return String(value || "")
+      .trim()
+      .toLocaleLowerCase("tr-TR")
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/ı/g, "i")
+      .replace(/ç/g, "c")
+      .replace(/ğ/g, "g")
+      .replace(/ö/g, "o")
+      .replace(/ş/g, "s")
+      .replace(/ü/g, "u")
+      .replace(/\s+/g, "_");
+  };
 
-    pdf.setFontSize(10);
-    pdf.text(`Hasta: ${patient.fullName}`, 20, 35);
-    pdf.text(`TC: ${patient.tcNo}`, 20, 42);
-    pdf.text(
-      `Tarih: ${format(new Date(r.createdAt), "dd.MM.yyyy HH:mm")}`,
-      20,
-      49,
-    );
+  const getDoctorFeedback = (report: any) => {
+    const feedback = report?.drFeedback;
 
-    pdf.line(20, 55, 190, 55);
-
-    pdf.text(`AI Teşhisi: ${r.aiResult}`, 20, 65);
-    pdf.text(`Güven: %${Math.round(r.confidence * 100)}`, 20, 72);
-
-    if (r.doctorNote) {
-      pdf.text("Doktor Yorumu:", 20, 85);
-      pdf.text(r.doctorNote, 20, 92, { maxWidth: 170 });
+    if (Array.isArray(feedback)) {
+      const firstValid = feedback.find((v) => v !== null && v !== "null");
+      return firstValid ?? null;
     }
 
-    pdf.save(`analiz-${patient.tcNo}-${r.id}.pdf`);
+    if (typeof feedback === "string" && feedback !== "null") {
+      return feedback;
+    }
+
+    return null;
+  };
+
+  const formatDiagnosisLabel = (label: string) => {
+    return label.replaceAll("_", " ");
+  };
+
+  const isApprovalFeedback = (value: unknown) => {
+    const normalized = normalizeDiagnosisKey(value);
+    return [
+      "ai_sonucu_doğru",
+      "ai_sonucu_dogru",
+      "ai_doğru",
+      "ai_dogru",
+      "dogru",
+      "doğru",
+      "evet",
+      "yes",
+      "correct",
+    ].includes(normalized);
+  };
+
+  // Report saving flow stores these canonical DR labels.
+  const toReportDiagnosisLabel = (value: unknown) => {
+    const normalized = normalizeDiagnosisKey(value);
+
+    if (!normalized) return null;
+    if (normalized === "no_dr") return "No_DR";
+    if (normalized === "mild") return "Mild";
+    if (normalized === "moderate") return "Moderate";
+    if (normalized === "severe") return "Severe";
+    if (normalized === "proliferative_dr") return "Proliferative_DR";
+
+    // Legacy aliases still encountered in older rows.
+    if (["yok", "healthy", "saglikli"].includes(normalized)) return "No_DR";
+    if (["hafif", "hafif_evre"].includes(normalized)) return "Mild";
+    if (["orta", "orta_evre"].includes(normalized)) return "Moderate";
+    if (["ciddi", "agir", "agir_evre"].includes(normalized)) return "Severe";
+    if (
+      ["proliferative", "proliferatif", "cok_ileri_evre"].includes(normalized)
+    )
+      return "Proliferative_DR";
+
+    return null;
+  };
+
+  const resolveEffectiveDiagnosis = (report: any) => {
+    const doctorFeedback = getDoctorFeedback(report);
+    if (doctorFeedback && !isApprovalFeedback(doctorFeedback)) {
+      return doctorFeedback;
+    }
+    if (report?.aiResult) return report.aiResult;
+    return "No_DR";
+  };
+
+  const getSeverityScore = (label: string) => {
+    const canonical = toReportDiagnosisLabel(label);
+
+    if (canonical === "Proliferative_DR") return 4;
+    if (canonical === "Severe") return 3;
+    if (canonical === "Moderate") return 2;
+    if (canonical === "Mild") return 1;
+    return 0;
+  };
+
+  const severityLabel = (score: number) => {
+    if (score >= 4) return "Proliferatif";
+    if (score === 3) return "Ciddi";
+    if (score === 2) return "Orta";
+    if (score === 1) return "Hafif";
+    return "Yok";
+  };
+
+  const orderedReports = [...reports].sort(
+    (a: any, b: any) =>
+      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+  );
+
+  const progressionData = orderedReports.map(
+    (r: any, index: number, arr: any[]) => {
+      const aiResultLabel = formatDiagnosisLabel(r.aiResult || "-");
+      const finalDiagnosisRaw = resolveEffectiveDiagnosis(r);
+      const finalDiagnosisLabel = formatDiagnosisLabel(finalDiagnosisRaw);
+      const score = getSeverityScore(finalDiagnosisRaw);
+      const previousScore =
+        index > 0
+          ? getSeverityScore(resolveEffectiveDiagnosis(arr[index - 1]))
+          : score;
+      const delta = score - previousScore;
+
+      return {
+        id: r.id,
+        date: new Date(r.createdAt),
+        dateLabel: format(new Date(r.createdAt), "dd MMM yy", {
+          locale: tr,
+        }),
+        aiResultLabel,
+        finalDiagnosisRaw,
+        finalDiagnosisLabel,
+        stage: score,
+        stageLabel: severityLabel(score),
+        delta,
+        trend: delta < 0 ? "İyileşme" : delta > 0 ? "Kötüleşme" : "Stabil",
+      };
+    },
+  );
+
+  const netChange =
+    progressionData.length >= 2
+      ? progressionData[progressionData.length - 1].stage -
+        progressionData[0].stage
+      : 0;
+
+  const netTrendLabel =
+    netChange < 0
+      ? "Genel İyileşme"
+      : netChange > 0
+        ? "Genel Kötüleşme"
+        : "Genel Stabil";
+
+  const handlePreviewReportPdf = async (report: any) => {
+    const labels = parseJsonArray(report.aiOdriLabels);
+    const confidences = parseJsonArray(report.aiOdriConfidences);
+    const odirResults = labels.map((label: string, idx: number) => ({
+      label,
+      confidence: Number(confidences[idx] ?? 0),
+    }));
+
+    const payload = {
+      patientId: patient.id,
+      patientInfo: {
+        fullName: patient.fullName,
+        tcNo: patient.tcNo,
+        age: patient.age,
+      },
+      doctorName: patient?.doctor?.name,
+      reportDate: report.createdAt,
+      aiResult: report.aiResult,
+      confidence: Number(report.confidence ?? 0),
+      odirResults,
+      clinicalFinalResult: resolveEffectiveDiagnosis(report),
+      doctorNote: report.doctorNote,
+      medications: report.ilaclar,
+      originalImage: report.originalImage,
+      heatmapUrl: report.heatmapUrl,
+    };
+
+    const settings = loadRetinaSettingsFromStorage();
+    if (settings.report.autoOpenPreview) {
+      await previewRetinaReportPdf(payload);
+    } else {
+      await downloadRetinaReportPdf(payload);
+    }
   };
 
   return (
@@ -104,11 +280,26 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
         >
           Geçmiş Raporlar
         </Button>
+        <Button
+          className="border-[#cfd8d7] bg-white text-[#476775] hover:bg-[#eef3f2]"
+          variant={activeTab === "progress" ? "default" : "outline"}
+          onClick={() => setActiveTab("progress")}
+        >
+          Değişim Analizi
+        </Button>
       </div>
 
       {activeTab === "analysis" ? (
-        <ImageAnalysisCard patientId={patient.id} />
-      ) : (
+        <ImageAnalysisCard
+          patientId={patient.id}
+          patientInfo={{
+            fullName: patient.fullName,
+            tcNo: patient.tcNo,
+            age: patient.age,
+          }}
+          doctorName={patient?.doctor?.name}
+        />
+      ) : activeTab === "reports" ? (
         <Card className="border border-[#d8e0df] bg-white shadow-sm">
           <CardHeader className="border-b border-slate-100">
             <CardTitle>Geçmiş Analizler</CardTitle>
@@ -158,16 +349,14 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
                       })}
                     </TableCell>
                     <TableCell className="px-4 py-2">
-                      <Badge>{r.aiResult}</Badge>
+                      <Badge>{formatDiagnosisLabel(r.aiResult || "-")}</Badge>
                     </TableCell>
                     <TableCell className="px-4 py-2">
                       %{Math.round(r.confidence * 100)}
                     </TableCell>
                     <TableCell>
                       <Badge>
-                        {r.drFeedback
-                          ? r.drFeedback.replace("_", " ")
-                          : "AI Sonucu Doğru"}
+                        {formatDiagnosisLabel(resolveEffectiveDiagnosis(r))}
                       </Badge>
                     </TableCell>
 
@@ -212,10 +401,10 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
                     <TableCell className="px-4 py-2">
                       <Button
                         size="sm"
-                        className="bg-[var(--retina-primary)] text-white hover:bg-[var(--retina-primary-deep)]"
-                        onClick={() => downloadPDF(r)}
+                        variant="outline"
+                        onClick={() => handlePreviewReportPdf(r)}
                       >
-                        PDF İndir
+                        PDF Görüntüle
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -224,6 +413,122 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
             </Table>
           </CardContent>
         </Card>
+      ) : (
+        <div className="space-y-4">
+          <Card className="border border-[#d8e0df] bg-white shadow-sm">
+            <CardHeader className="border-b border-slate-100">
+              <CardTitle>Klinik Sonuç Değişim Grafiği</CardTitle>
+              <CardDescription>
+                Nihai sonuc hesaplamasi Gecmis Raporlar ile aynidir: doktor geri
+                bildirimi varsa o, yoksa AI sonucu kullanilir.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-6">
+              {progressionData.length < 2 ? (
+                <p className="text-sm text-slate-600">
+                  Degisim analizi icin en az 2 analiz kaydi gerekli.
+                </p>
+              ) : (
+                <>
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <div className="rounded-lg border border-[#d8e0df] bg-[#f8fbff] p-3">
+                      <p className="text-xs text-slate-500">Son Durum</p>
+                      <p className="text-base font-semibold text-slate-900">
+                        {
+                          progressionData[progressionData.length - 1]
+                            .finalDiagnosisLabel
+                        }
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-[#d8e0df] bg-[#f8fbff] p-3">
+                      <p className="text-xs text-slate-500">Genel Değişim</p>
+                      <p className="text-base font-semibold text-slate-900">
+                        {netTrendLabel}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-[#d8e0df] bg-[#f8fbff] p-3">
+                      <p className="text-xs text-slate-500">Toplam Muayene</p>
+                      <p className="text-base font-semibold text-slate-900">
+                        {progressionData.length}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="h-[320px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={progressionData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="dateLabel" />
+                        <YAxis
+                          domain={[0, 4]}
+                          ticks={[0, 1, 2, 3, 4]}
+                          tickFormatter={(value) =>
+                            severityLabel(Number(value))
+                          }
+                        />
+                        <Tooltip
+                          formatter={(value: number, _name, payload: any) => [
+                            payload?.payload?.finalDiagnosisLabel ||
+                              `${severityLabel(Number(value))}`,
+                            payload?.payload?.trend || "Durum",
+                          ]}
+                          labelFormatter={(label) => `Tarih: ${label}`}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="stage"
+                          stroke="#1e90ff"
+                          strokeWidth={3}
+                          activeDot={{ r: 7 }}
+                          name="Retinopati Seviyesi"
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  <div className="rounded-lg border border-[#d8e0df] bg-white">
+                    <Table>
+                      <TableHeader className="bg-slate-50">
+                        <TableRow>
+                          <TableHead>Tarih</TableHead>
+                          <TableHead>AI Sonucu</TableHead>
+                          <TableHead>Nihai Sonuç</TableHead>
+                          <TableHead>Değişim Yorumu</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {progressionData.map((item) => (
+                          <TableRow key={item.id}>
+                            <TableCell>{item.dateLabel}</TableCell>
+                            <TableCell>
+                              <Badge>{item.aiResultLabel}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge>{item.finalDiagnosisLabel}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                className={
+                                  item.trend === "İyileşme"
+                                    ? "bg-emerald-500 text-white"
+                                    : item.trend === "Kötüleşme"
+                                      ? "bg-red-500 text-white"
+                                      : "bg-slate-500 text-white"
+                                }
+                              >
+                                {item.trend}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   );

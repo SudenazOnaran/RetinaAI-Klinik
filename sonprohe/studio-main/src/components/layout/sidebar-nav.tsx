@@ -5,13 +5,24 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
 } from "@/components/ui/sidebar";
-import { LayoutDashboard, Users, Settings, ChevronRight } from "lucide-react";
+import {
+  LayoutDashboard,
+  Users,
+  Settings,
+  UserRound,
+  ChevronRight,
+} from "lucide-react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 
 const menuItems = [
   { href: "/dashboard", label: "Panel", icon: LayoutDashboard },
   { href: "/dashboard/hastalar", label: "Hasta Kayıtları", icon: Users },
+  {
+    href: "/dashboard/profil-bilgileri",
+    label: "Profil Bilgileri",
+    icon: UserRound,
+  },
   { href: "/dashboard/ayarlar", label: "Sistem Ayarları", icon: Settings },
 ];
 

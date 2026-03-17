@@ -16,9 +16,29 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Upload, X, Loader2, Save, Zap, ShieldCheck } from "lucide-react";
 import { saveAnalysisAction } from "@/app/actions/save-analysis";
-import jsPDF from "jspdf";
+import {
+  downloadRetinaReportPdf,
+  previewRetinaReportPdf,
+} from "@/lib/retina-report-pdf";
+import { loadRetinaSettingsFromStorage } from "@/lib/retina-settings";
 
-export function ImageAnalysisCard({ patientId }: { patientId: string }) {
+type PatientReportInfo = {
+  fullName?: string;
+  tcNo?: string;
+  age?: number;
+};
+
+type ImageAnalysisCardProps = {
+  patientId: string;
+  patientInfo?: PatientReportInfo;
+  doctorName?: string;
+};
+
+export function ImageAnalysisCard({
+  patientId,
+  patientInfo,
+  doctorName,
+}: ImageAnalysisCardProps) {
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [base64Image, setBase64Image] = useState<string | null>(null);
@@ -28,7 +48,6 @@ export function ImageAnalysisCard({ patientId }: { patientId: string }) {
   const [isLoading, setIsLoading] = useState(false);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
   const [actualResult, setActualResult] = useState("");
-  const [drFeedback, setDrFeedback] = useState("");
 
   const { toast } = useToast();
 
@@ -70,13 +89,10 @@ export function ImageAnalysisCard({ patientId }: { patientId: string }) {
     if (!result) return;
     setIsLoading(true);
     try {
-      const finalResult =
-        isCorrect === false ? actualResult : result.pytorch.label;
-
       await saveAnalysisAction({
         patientId,
-        aiResult: finalResult,
-        drFeedback: isCorrect === false ? actualResult : undefined, // 🔹 buraya ekledik
+        aiResult: result.pytorch.label,
+        drFeedback: isCorrect === false ? actualResult : undefined,
         aiOdriLabels: result.odir?.results.map((r: any) => r.label) || [],
         aiOdriConfidences:
           result.odir?.results.map((r: any) => r.confidence) || [],
@@ -97,7 +113,6 @@ export function ImageAnalysisCard({ patientId }: { patientId: string }) {
       setIlaclar("");
       setIsCorrect(null);
       setActualResult("");
-      setDrFeedback("");
       window.location.reload();
     } catch (err: any) {
       console.error("Analiz kaydedilemedi hata detayı:", err);
@@ -111,33 +126,40 @@ export function ImageAnalysisCard({ patientId }: { patientId: string }) {
     }
   };
 
-  const handleDownloadPDF = () => {
+  const handlePreviewPDF = async () => {
     if (!result) return;
-    const doc = new jsPDF();
 
-    doc.setFontSize(18);
-    doc.text("Retina Analiz Raporu", 14, 20);
+    try {
+      const settings = loadRetinaSettingsFromStorage();
+      const payload = {
+        patientId,
+        patientInfo,
+        doctorName,
+        aiResult: result.pytorch.label,
+        confidence: result.pytorch.confidence,
+        odirResults: result.odir?.results ?? [],
+        clinicalFinalResult:
+          isCorrect === false && actualResult
+            ? actualResult
+            : result.pytorch.label,
+        doctorNote,
+        medications: ilaclar,
+        originalImage: base64Image || previewUrl,
+        heatmapUrl: result.heatmap,
+      };
 
-    doc.setFontSize(12);
-    doc.text(`AI Sonucu: ${result.pytorch.label}`, 14, 40);
-    doc.text(`Güven: ${(result.pytorch.confidence * 100).toFixed(1)}%`, 14, 50);
-    doc.text(
-      `Risk Tahmini: ${result.tensorflow.labels[0] || "Sağlıklı"}`,
-      14,
-      60
-    );
-    doc.text(`Doktor Notu: ${doctorNote || "-"}`, 14, 70);
-    doc.text(`İlaçlar: ${ilaclar || "-"}`, 14, 80);
-
-    if (previewUrl) {
-      doc.addImage(previewUrl, "JPEG", 14, 90, 180, 120);
+      if (settings.report.autoOpenPreview) {
+        await previewRetinaReportPdf(payload);
+      } else {
+        await downloadRetinaReportPdf(payload);
+      }
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "Hata",
+        description: "PDF oluşturulurken hata oluştu.",
+      });
     }
-
-    if (result.heatmap) {
-      doc.addImage(result.heatmap, "JPEG", 14, 210, 180, 120);
-    }
-
-    doc.save("rapor.pdf");
   };
 
   return (
@@ -293,7 +315,7 @@ export function ImageAnalysisCard({ patientId }: { patientId: string }) {
                   value={actualResult}
                   onChange={(e) => setActualResult(e.target.value)}
                 >
-                  <option value={drFeedback}>Doğru Etiketi Seçin...</option>
+                  <option value="">Doğru Etiketi Seçin...</option>
                   {[
                     "No_DR",
                     "Mild",
@@ -356,9 +378,9 @@ export function ImageAnalysisCard({ patientId }: { patientId: string }) {
 
               <Button
                 className="flex-1 h-16 rounded-2xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-extrabold text-xl shadow-lg transition-all hover:scale-[1.02]"
-                onClick={handleDownloadPDF}
+                onClick={handlePreviewPDF}
               >
-                PDF İndir
+                PDF Görüntüle
               </Button>
             </div>
           </div>

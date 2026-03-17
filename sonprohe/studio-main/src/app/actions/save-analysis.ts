@@ -27,6 +27,20 @@ export async function saveAnalysisAction({
   drFeedback?: string; // Bu değer varsa DOKTOR DÜZELTMİŞTİR, yoksa AI DOĞRUDUR.
 }) {
   try {
+    const normalize = (value: string) =>
+      value.trim().toLowerCase().replace(/\s+/g, "_");
+    const validDrLabels = new Set([
+      "no_dr",
+      "mild",
+      "moderate",
+      "severe",
+      "proliferative_dr",
+    ]);
+    const sanitizedFeedback =
+      drFeedback && validDrLabels.has(normalize(drFeedback))
+        ? drFeedback
+        : undefined;
+
     const doctor = await getCurrentDoctorSession();
     if (!doctor) {
       throw new Error("Oturum bulunamadı");
@@ -55,14 +69,14 @@ export async function saveAnalysisAction({
         aiOdriConfidences: aiOdriConfidences
           ? JSON.stringify(aiOdriConfidences)
           : null,
-        drFeedback, // Doktorun düzeltmesi (varsa)
+        drFeedback: sanitizedFeedback, // Doktorun düzeltmesi (varsa)
       },
     });
 
     // 🔹 2. Hasta Risk Durumunu Belirle (MANTIK BURADA DÜZELTİLDİ)
     // Eğer drFeedback doluysa (Doktor "Yanlış" deyip düzeltmişse) -> Doktorun dediğini al.
     // Eğer drFeedback boşsa (Doktor "Evet Doğru" dediyse) -> AI sonucunu (aiResult) al.
-    const finalRiskStatus = drFeedback ? drFeedback : aiResult;
+    const finalRiskStatus = sanitizedFeedback ? sanitizedFeedback : aiResult;
 
     // 🔹 3. Patient Tablosunu Güncelle
     await prisma.patient.update({

@@ -18,6 +18,11 @@ export default async function HastaDetayPage({
   const patient = await prisma.patient.findFirst({
     where: { id: id, doctorId: doctor.id },
     include: {
+      doctor: {
+        select: {
+          name: true,
+        },
+      },
       analyses: {
         orderBy: { createdAt: "desc" },
       },

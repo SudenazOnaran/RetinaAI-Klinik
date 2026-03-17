@@ -1,8 +1,13 @@
 "use client";
 
+import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, PanelLeft } from "lucide-react";
+import {
+  loadRetinaSettingsFromStorage,
+  RetinaSettings,
+} from "@/lib/retina-settings";
 import { RetinaAiLogo } from "@/components/icons/logo";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { LogoutButton } from "@/components/layout/logout-button";
@@ -23,10 +28,49 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const isPatientDetail = pathname.startsWith("/dashboard/hastalar/");
 
+  useEffect(() => {
+    const applyAppearance = (settings: RetinaSettings) => {
+      document.documentElement.classList.toggle(
+        "dark",
+        settings.appearance.darkMode,
+      );
+      document.documentElement.classList.toggle(
+        "dense-table",
+        settings.appearance.denseTable,
+      );
+    };
+
+    applyAppearance(loadRetinaSettingsFromStorage());
+
+    const onSettingsUpdated = (event: Event) => {
+      const custom = event as CustomEvent<RetinaSettings>;
+      if (custom.detail) {
+        applyAppearance(custom.detail);
+      }
+    };
+
+    window.addEventListener(
+      "retina-settings-updated",
+      onSettingsUpdated as EventListener,
+    );
+
+    return () => {
+      window.removeEventListener(
+        "retina-settings-updated",
+        onSettingsUpdated as EventListener,
+      );
+    };
+  }, []);
+
   return (
     <div className="clinic-app-bg mx-auto flex min-h-screen w-full">
-      <SidebarProvider defaultOpen>
-        <Sidebar className="w-[280px] overflow-hidden border-r border-[var(--retina-border)] bg-white shadow-sm">
+      <SidebarProvider
+        defaultOpen
+        style={{
+          ["--sidebar-width" as string]: "280px",
+        }}
+      >
+        <Sidebar className="overflow-hidden border-r border-[var(--retina-border)] bg-white shadow-sm">
           <SidebarHeader className="border-b border-[var(--retina-border)] bg-[#f2f7ff]">
             <div className="flex items-center gap-3 p-5 relative">
               <RetinaAiLogo className="h-10 w-10 text-[var(--retina-primary)]" />

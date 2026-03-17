@@ -109,3 +109,43 @@
     background: var(--retina-background);
   }
 }
+
+/* Dashboard dense table mode */
+html.dense-table table th,
+html.dense-table table td {
+  padding-top: 0.4rem !important;
+  padding-bottom: 0.4rem !important;
+}
+
+html.dense-table table tr {
+  height: auto !important;
+}
+
+/* Global dark mode support for dashboard surfaces */
+html.dark .clinic-app-bg {
+  background: radial-gradient(circle at top left, #1b2437 0%, #0b1220 48%)
+    no-repeat;
+  background-color: #0b1220;
+}
+
+html.dark .bg-white,
+html.dark .clinic-panel {
+  background-color: #111827 !important;
+  border-color: #2f3c52 !important;
+}
+
+html.dark .text-slate-900 {
+  color: #e5e7eb !important;
+}
+
+html.dark .text-slate-700,
+html.dark .text-slate-600,
+html.dark .text-muted-foreground {
+  color: #94a3b8 !important;
+}
+
+html.dark .border-slate-100,
+html.dark .border-\[\#d8e0df\],
+html.dark .border-\[var\(--retina-border\)\] {
+  border-color: #2f3c52 !important;
+}
