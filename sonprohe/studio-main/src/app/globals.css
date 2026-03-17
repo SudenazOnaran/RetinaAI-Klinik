@@ -1,0 +1,111 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 40% 98%;
+    --foreground: 222.2 84% 4.9%;
+    --radius: 0.75rem;
+    --clinic-bg: #f8fafc;
+    --clinic-panel: #ffffff;
+    --clinic-soft-gray: #dbe6f5;
+    --clinic-blue: #1e90ff;
+    --clinic-blue-deep: #0a2540;
+    --clinic-green: #2ecc71;
+    --clinic-green-deep: #00bfa6;
+    --clinic-beige: #f2f7ff;
+    --clinic-wood: #6c63ff;
+    --clinic-wood-deep: #8a7cff;
+    --retina-primary: #1e90ff;
+    --retina-primary-deep: #0a2540;
+    --retina-secondary: #6c63ff;
+    --retina-secondary-soft: #8a7cff;
+    --retina-accent: #00bfa6;
+    --retina-background: #f8fafc;
+    --retina-text: #1a1a1a;
+    --retina-border: #dbe6f5;
+  }
+}
+
+.animated-blue-gradient {
+  background: linear-gradient(135deg, #f8fafc 0%, #eef5ff 52%, #f4f2ff 100%);
+}
+
+/* 🎨 Sidebar Kaydırma Çubuğu */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(30, 144, 255, 0.45);
+  border-radius: 10px;
+}
+
+/* Yazıların Okunabilirliği İçin Extra Katman */
+.sidebar-overlay {
+  background: rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(2px);
+}
+/* globals.css içine ekle */
+[data-sidebar="menu-button"][data-active="true"],
+[data-sidebar="menu-button"]:hover {
+  color: var(--retina-primary-deep) !important;
+  background: #edf5ff;
+}
+
+[data-sidebar="menu-button"] svg {
+  color: var(--retina-primary);
+}
+
+[data-sidebar="menu-button"][data-active="true"] svg {
+  color: var(--retina-accent) !important;
+}
+
+/* globals.css veya özel css dosyan */
+@layer utilities {
+  .clinic-app-bg {
+    background: radial-gradient(circle at top left, #eef5ff 0%, #f8fafc 45%)
+      no-repeat;
+    background-color: var(--clinic-bg);
+  }
+
+  .clinic-page-shell {
+    background: var(--retina-background);
+  }
+
+  .clinic-panel {
+    background-color: var(--clinic-panel);
+    border: 1px solid var(--retina-border);
+    box-shadow: 0 12px 36px rgba(10, 37, 64, 0.08);
+  }
+
+  .clinic-wood-strip {
+    background: rgba(108, 99, 255, 0.1);
+    border: 1px solid rgba(108, 99, 255, 0.24);
+  }
+
+  .clinic-action {
+    background-color: var(--retina-primary);
+    color: #ffffff;
+  }
+
+  .clinic-action:hover {
+    background-color: var(--retina-primary-deep);
+  }
+
+  .clinic-link {
+    color: var(--retina-secondary);
+  }
+
+  .clinic-link:hover {
+    color: var(--retina-secondary-soft);
+  }
+
+  .clinic-accent-text {
+    color: var(--retina-primary-deep);
+  }
+
+  .soft-dashboard-bg {
+    background: var(--retina-background);
+  }
+}

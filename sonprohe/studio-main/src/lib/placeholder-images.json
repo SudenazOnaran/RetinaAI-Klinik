@@ -1,0 +1,46 @@
+{
+  "placeholderImages": [
+    {
+      "id": "fundus-placeholder",
+      "description": "A placeholder image for the fundus upload area.",
+      "imageUrl": "https://images.unsplash.com/photo-1600893993343-25710f4f14c7?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw4fHxyZXRpbmElMjBleWV8ZW58MHx8fHwxNzY1MTk1MTA3fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "retina eye"
+    },
+    {
+      "id": "patient-1",
+      "description": "Avatar for patient 1",
+      "imageUrl": "https://images.unsplash.com/photo-1710974481447-fb001ad9ad5a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHxwZXJzb24lMjBmYWNlfGVufDB8fHx8MTc2NTE4MzEwM3ww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "person face"
+    },
+    {
+      "id": "patient-2",
+      "description": "Avatar for patient 2",
+      "imageUrl": "https://images.unsplash.com/photo-1725028748781-7adb1df9a943?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw1fHxwZXJzb24lMjBmYWNlfGVufDB8fHx8MTc2NTE4MzEwM3ww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "person face"
+    },
+    {
+      "id": "patient-3",
+      "description": "Avatar for patient 3",
+      "imageUrl": "https://images.unsplash.com/photo-1580489944761-15a19d654956?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHx3b21hbiUyMGZhY2V8ZW58MHx8fHwxNzY1MTY2NDYzfDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "woman face"
+    },
+    {
+      "id": "patient-4",
+      "description": "Avatar for patient 4",
+      "imageUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw3fHxtYW4lMjBmYWNlfGVufDB8fHx8MTc2NTEwNTc4NXww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "man face"
+    },
+    {
+      "id": "patient-5",
+      "description": "Avatar for patient 5",
+      "imageUrl": "https://images.unsplash.com/photo-1530268729831-4b0b9e170218?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxMHx8cGVyc29uJTIwZmFjZXxlbnwwfHx8fDE3NjUxODMxMDN8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "person face"
+    },
+    {
+      "id": "fundus-image-1",
+      "description": "Fundus image for a patient",
+      "imageUrl": "https://images.unsplash.com/photo-1615552440985-d652ebf4c199?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxyZXRpbmElMjBleWV8ZW58MHx8fHwxNzY1MTk1MTA3fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "retina eye"
+    }
+  ]
+}
