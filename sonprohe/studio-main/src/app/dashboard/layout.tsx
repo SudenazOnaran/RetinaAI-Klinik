@@ -27,16 +27,13 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname();
   const isPatientDetail = pathname.startsWith("/dashboard/hastalar/");
+  const isCalendarPage = pathname.startsWith("/dashboard/takvim");
 
   useEffect(() => {
     const applyAppearance = (settings: RetinaSettings) => {
       document.documentElement.classList.toggle(
         "dark",
         settings.appearance.darkMode,
-      );
-      document.documentElement.classList.toggle(
-        "dense-table",
-        settings.appearance.denseTable,
       );
     };
 
@@ -112,8 +109,14 @@ export default function DashboardLayout({
             </div>
           </header>
 
-          <main className="flex-1 p-6 md:p-8">
-            <div className="mx-auto w-full max-w-7xl">{children}</div>
+          <main
+            className={`flex-1 ${isCalendarPage ? "p-3 md:p-4" : "p-6 md:p-8"}`}
+          >
+            <div
+              className={`mx-auto w-full ${isCalendarPage ? "max-w-none" : "max-w-7xl"}`}
+            >
+              {children}
+            </div>
           </main>
         </SidebarInset>
       </SidebarProvider>

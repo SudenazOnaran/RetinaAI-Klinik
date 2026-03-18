@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { DashboardAlertCenter } from "@/components/dashboard/dashboard-alert-center";
 
 export default async function DashboardPage() {
   const doctor = await getCurrentDoctorSession();
@@ -26,35 +27,87 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const [totalPatients, totalAnalyses, highRiskPatients, recentPatients] =
-    await Promise.all([
-      prisma.patient.count({ where: { doctorId: doctor.id } }),
-      prisma.analysis.count({ where: { patient: { doctorId: doctor.id } } }),
-      prisma.patient.findMany({
-        where: {
-          doctorId: doctor.id,
-          risk: { in: ["Severe", "Proliferative_DR"] },
+  const highRiskLabels = [
+    "Severe",
+    "Proliferative_DR",
+    "Ağır Evre",
+    "Çok İleri Evre",
+  ];
+
+  const [
+    totalPatients,
+    totalAnalyses,
+    highRiskPatients,
+    recentPatients,
+    alertPatients,
+  ] = await Promise.all([
+    prisma.patient.count({ where: { doctorId: doctor.id } }),
+    prisma.analysis.count({ where: { patient: { doctorId: doctor.id } } }),
+    prisma.patient.findMany({
+      where: {
+        doctorId: doctor.id,
+        risk: { in: highRiskLabels },
+      },
+      take: 5,
+      orderBy: { createdAt: "desc" },
+      include: {
+        analyses: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: {
+            confidence: true,
+            createdAt: true,
+          },
         },
-        take: 5,
-        orderBy: { createdAt: "desc" },
-      }),
-      prisma.patient.findMany({
-        where: { doctorId: doctor.id },
-        take: 5,
-        orderBy: { createdAt: "desc" },
-      }),
-    ]);
+      },
+    }),
+    prisma.patient.findMany({
+      where: { doctorId: doctor.id },
+      take: 5,
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.patient.findMany({
+      where: {
+        doctorId: doctor.id,
+        analyses: {
+          some: {},
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        fullName: true,
+        risk: true,
+        analyses: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: {
+            createdAt: true,
+            confidence: true,
+          },
+        },
+      },
+    }),
+  ]);
 
   const highRiskCount = await prisma.patient.count({
     where: {
       doctorId: doctor.id,
-      risk: { in: ["Severe", "Proliferative_DR"] },
+      risk: { in: highRiskLabels },
     },
   });
 
   const highRiskRate = totalPatients
     ? Math.round((highRiskCount / totalPatients) * 100)
     : 0;
+
+  const dashboardAlertPatients = alertPatients.map((patient) => ({
+    id: patient.id,
+    fullName: patient.fullName,
+    risk: patient.risk,
+    latestAnalysisAt: patient.analyses[0]?.createdAt.toISOString() ?? null,
+    latestConfidence: patient.analyses[0]?.confidence ?? null,
+  }));
 
   return (
     <div className="clinic-app-bg min-h-screen p-4 md:p-6">
@@ -136,37 +189,39 @@ export default async function DashboardPage() {
             </CardHeader>
 
             <CardContent className="space-y-3 pt-4">
-              {recentPatients.map((patient) => (
-                <div
-                  key={patient.id}
-                  className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#7eaec9] text-sm font-bold text-white">
-                      {patient.fullName[0]}
-                    </div>
-                    <div>
-                      <p className="text-sm font-semibold text-slate-900">
-                        {patient.fullName}
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        T.C: {patient.tcNo}
-                      </p>
-                    </div>
-                  </div>
-
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    asChild
-                    className="text-slate-700"
+              {recentPatients.map(
+                (patient: (typeof recentPatients)[number]) => (
+                  <div
+                    key={patient.id}
+                    className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5"
                   >
-                    <Link href={`/dashboard/hastalar/${patient.id}`}>
-                      İncele <ChevronRight className="ml-1 h-3 w-3" />
-                    </Link>
-                  </Button>
-                </div>
-              ))}
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#7eaec9] text-sm font-bold text-white">
+                        {patient.fullName[0]}
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">
+                          {patient.fullName}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          T.C: {patient.tcNo}
+                        </p>
+                      </div>
+                    </div>
+
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      asChild
+                      className="text-slate-700"
+                    >
+                      <Link href={`/dashboard/hastalar/${patient.id}`}>
+                        İncele <ChevronRight className="ml-1 h-3 w-3" />
+                      </Link>
+                    </Button>
+                  </div>
+                ),
+              )}
             </CardContent>
           </Card>
 
@@ -183,7 +238,7 @@ export default async function DashboardPage() {
 
             <CardContent className="space-y-3 pt-4">
               {highRiskPatients.length > 0 ? (
-                highRiskPatients.map((p) => (
+                highRiskPatients.map((p: (typeof highRiskPatients)[number]) => (
                   <Link
                     key={p.id}
                     href={`/dashboard/hastalar/${p.id}`}
@@ -206,6 +261,10 @@ export default async function DashboardPage() {
               )}
             </CardContent>
           </Card>
+        </section>
+
+        <section>
+          <DashboardAlertCenter patients={dashboardAlertPatients} />
         </section>
       </div>
     </div>

@@ -36,16 +36,29 @@ function ToggleRow({
   description,
   checked,
   onCheckedChange,
+  darkMode,
   tone = "emerald",
 }: {
   label: string;
   description: string;
   checked: boolean;
   onCheckedChange: (value: boolean) => void;
+  darkMode: boolean;
   tone?: "emerald" | "amber" | "indigo";
 }) {
-  const toneClass =
-    tone === "amber"
+  const toneClass = darkMode
+    ? tone === "amber"
+      ? checked
+        ? "border-amber-500/40 bg-amber-500/12"
+        : "border-slate-700 bg-slate-900/70"
+      : tone === "indigo"
+        ? checked
+          ? "border-indigo-500/40 bg-indigo-500/12"
+          : "border-slate-700 bg-slate-900/70"
+        : checked
+          ? "border-emerald-500/40 bg-emerald-500/12"
+          : "border-slate-700 bg-slate-900/70"
+    : tone === "amber"
       ? checked
         ? "border-amber-200 bg-amber-50/80"
         : "border-[#d8e0df] bg-[#f6f9f8]"
@@ -57,29 +70,41 @@ function ToggleRow({
           ? "border-emerald-200 bg-emerald-50/80"
           : "border-[#d8e0df] bg-[#f6f9f8]";
 
+  const badgeClass = darkMode
+    ? checked
+      ? "bg-emerald-900/40 text-emerald-200"
+      : "bg-slate-700 text-slate-200"
+    : checked
+      ? "bg-emerald-100 text-emerald-700"
+      : "bg-slate-200 text-slate-600";
+
+  const labelClass = darkMode ? "text-slate-100" : "text-slate-900";
+  const descriptionClass = darkMode
+    ? "text-slate-400"
+    : "text-muted-foreground";
+  const switchClass = darkMode
+    ? "data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-slate-600 [&>span]:bg-slate-100 data-[state=checked]:[&>span]:bg-emerald-100 data-[state=unchecked]:[&>span]:bg-slate-200"
+    : "data-[state=checked]:bg-[#2f9e7e] data-[state=unchecked]:bg-[#94a3b8] [&>span]:bg-[#eef2ff] data-[state=checked]:[&>span]:bg-[#d1fae5] data-[state=unchecked]:[&>span]:bg-[#e2e8f0]";
+
   return (
     <div
       className={`flex items-center justify-between rounded-lg border p-3 transition-colors ${toneClass}`}
     >
       <div className="space-y-0.5">
         <div className="flex items-center gap-2">
-          <Label>{label}</Label>
+          <Label className={labelClass}>{label}</Label>
           <span
-            className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
-              checked
-                ? "bg-emerald-100 text-emerald-700"
-                : "bg-slate-200 text-slate-600"
-            }`}
+            className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${badgeClass}`}
           >
             {checked ? "Açık" : "Kapalı"}
           </span>
         </div>
-        <p className="text-xs text-muted-foreground">{description}</p>
+        <p className={`text-xs ${descriptionClass}`}>{description}</p>
       </div>
       <Switch
         checked={checked}
         onCheckedChange={onCheckedChange}
-        className="data-[state=checked]:bg-[#2f9e7e] data-[state=unchecked]:bg-[#94a3b8] [&>span]:bg-[#eef2ff] data-[state=checked]:[&>span]:bg-[#d1fae5] data-[state=unchecked]:[&>span]:bg-[#e2e8f0]"
+        className={switchClass}
       />
     </div>
   );
@@ -89,10 +114,33 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<RetinaSettings>(
     getDefaultRetinaSettings(),
   );
+  const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
-    setSettings(loadRetinaSettingsFromStorage());
+    const hydrate = async () => {
+      const local = loadRetinaSettingsFromStorage();
+      setSettings(local);
+
+      try {
+        const res = await fetch("/api/doctor/settings", { method: "GET" });
+        if (!res.ok) return;
+
+        const data = (await res.json()) as {
+          settings?: Partial<RetinaSettings>;
+        };
+
+        if (data.settings) {
+          const normalized = normalizeRetinaSettings(data.settings);
+          setSettings(normalized);
+          saveRetinaSettingsToStorage(normalized);
+        }
+      } catch {
+        // Yerel ayarlar ile devam edilir.
+      }
+    };
+
+    void hydrate();
   }, []);
 
   useEffect(() => {
@@ -103,26 +151,78 @@ export default function SettingsPage() {
     }
   }, [settings.appearance.darkMode]);
 
-  const handleSaveSettings = () => {
+  const handleSaveSettings = async () => {
+    setIsSaving(true);
     const validated = normalizeRetinaSettings(settings);
-    setSettings(validated);
-    saveRetinaSettingsToStorage(validated);
+    try {
+      const res = await fetch("/api/doctor/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ settings: validated }),
+      });
 
-    toast({
-      title: "Ayarlar kaydedildi",
-      description: "Klinik tercihleri başarıyla uygulandı.",
-    });
+      if (!res.ok) {
+        throw new Error("Ayarlar veritabanina kaydedilemedi");
+      }
+
+      const data = (await res.json()) as {
+        settings?: Partial<RetinaSettings>;
+      };
+
+      const next = normalizeRetinaSettings(data.settings ?? validated);
+      setSettings(next);
+      saveRetinaSettingsToStorage(next);
+
+      toast({
+        title: "Ayarlar kaydedildi",
+        description: "Klinik tercihleri merkezi veritabanina kaydedildi.",
+      });
+    } catch {
+      setSettings(validated);
+      saveRetinaSettingsToStorage(validated);
+      toast({
+        variant: "destructive",
+        title: "Uyari",
+        description: "Merkezi kayit basarisiz. Ayarlar yerel olarak saklandi.",
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleResetDefaults = () => {
+  const handleResetDefaults = async () => {
+    setIsSaving(true);
     const defaults = getDefaultRetinaSettings();
-    setSettings(defaults);
-    saveRetinaSettingsToStorage(defaults);
+    try {
+      const res = await fetch("/api/doctor/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ settings: defaults }),
+      });
 
-    toast({
-      title: "Varsayılanlara dönüldü",
-      description: "Ayarlar standart değerlere sıfırlandı.",
-    });
+      if (!res.ok) {
+        throw new Error("Varsayilan ayarlar kaydedilemedi");
+      }
+
+      setSettings(defaults);
+      saveRetinaSettingsToStorage(defaults);
+
+      toast({
+        title: "Varsayilanlara donuldu",
+        description: "Ayarlar merkezi olarak sifirlandi.",
+      });
+    } catch {
+      setSettings(defaults);
+      saveRetinaSettingsToStorage(defaults);
+      toast({
+        variant: "destructive",
+        title: "Uyari",
+        description:
+          "Merkezi sifirlama basarisiz. Varsayilanlar yerel olarak uygulandi.",
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const updateClinic = (
@@ -175,26 +275,47 @@ export default function SettingsPage() {
     }));
   };
 
+  const isDark = settings.appearance.darkMode;
+  const pageContainerClass = isDark
+    ? "clinic-app-bg mx-auto max-w-4xl space-y-8 rounded-2xl border border-slate-700/80 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.14),_transparent_42%),radial-gradient(circle_at_bottom_right,_rgba(59,130,246,0.12),_transparent_36%),linear-gradient(160deg,_#0b1220_0%,_#111827_45%,_#1e293b_100%)] p-4 shadow-2xl shadow-slate-950/40 md:p-6"
+    : "clinic-app-bg mx-auto max-w-4xl space-y-8 p-4 md:p-6";
+  const cardClass = isDark
+    ? "border border-slate-700 bg-slate-900/70 shadow-lg shadow-slate-950/30"
+    : "border border-[#d8e0df] bg-white shadow-sm";
+  const titleClass = isDark ? "text-slate-100" : "text-slate-900";
+  const subtitleClass = isDark ? "text-slate-400" : "text-slate-600";
+  const inputClass = isDark
+    ? "border-slate-600 bg-slate-900/80 text-slate-100 placeholder:text-slate-500 focus-visible:ring-emerald-500"
+    : "border-[#d8e0df] bg-white";
+  const labelClass = isDark ? "text-slate-200" : "text-slate-900";
+  const cardDescriptionClass = isDark ? "text-slate-400" : "text-slate-600";
+
   return (
-    <div className="clinic-app-bg mx-auto max-w-4xl space-y-8 p-4 md:p-6">
+    <div className={pageContainerClass}>
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+        <h1 className={`text-2xl font-bold tracking-tight ${titleClass}`}>
           Sistem Ayarları
         </h1>
-        <p className="text-sm text-slate-600">
+        <p className={`text-sm ${subtitleClass}`}>
           Uygulamanın raporlama ve görünüm ayarlarını yönetin.
         </p>
       </div>
 
       <div className="grid gap-6">
-        <Card className="border border-[#d8e0df] bg-white shadow-sm">
+        <Card className={cardClass}>
           <CardHeader className="flex flex-row items-center gap-4">
-            <div className="rounded-lg bg-[#edf2e4] p-2 text-[#64895a]">
+            <div
+              className={`rounded-lg p-2 ${
+                isDark
+                  ? "bg-emerald-900/40 text-emerald-200"
+                  : "bg-[#edf2e4] text-[#64895a]"
+              }`}
+            >
               <Building2 size={20} />
             </div>
             <div>
-              <CardTitle>Klinik Bilgileri</CardTitle>
-              <CardDescription>
+              <CardTitle className={titleClass}>Klinik Bilgileri</CardTitle>
+              <CardDescription className={cardDescriptionClass}>
                 Kurum adı, rapor başlığı ve adres gibi temel tanımlar.
               </CardDescription>
             </div>
@@ -202,23 +323,26 @@ export default function SettingsPage() {
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label>Klinik Adı</Label>
+                <Label className={labelClass}>Klinik Adı</Label>
                 <Input
+                  className={inputClass}
                   value={settings.clinic.clinicName}
                   onChange={(e) => updateClinic("clinicName", e.target.value)}
                 />
               </div>
               <div className="space-y-2">
-                <Label>PDF Rapor Başlığı</Label>
+                <Label className={labelClass}>PDF Rapor Başlığı</Label>
                 <Input
+                  className={inputClass}
                   value={settings.clinic.reportHeader}
                   onChange={(e) => updateClinic("reportHeader", e.target.value)}
                 />
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Klinik Adresi</Label>
+              <Label className={labelClass}>Klinik Adresi</Label>
               <Textarea
+                className={inputClass}
                 value={settings.clinic.address}
                 onChange={(e) => updateClinic("address", e.target.value)}
                 placeholder="Adres, il/ilçe"
@@ -227,14 +351,20 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        <Card className="border border-[#d8e0df] bg-white shadow-sm">
+        <Card className={cardClass}>
           <CardHeader className="flex flex-row items-center gap-4">
-            <div className="rounded-lg bg-[#dceaf2] p-2 text-[#5f90ad]">
+            <div
+              className={`rounded-lg p-2 ${
+                isDark
+                  ? "bg-sky-900/40 text-sky-200"
+                  : "bg-[#dceaf2] text-[#5f90ad]"
+              }`}
+            >
               <FileText size={20} />
             </div>
             <div>
-              <CardTitle>Raporlama Tercihleri</CardTitle>
-              <CardDescription>
+              <CardTitle className={titleClass}>Raporlama Tercihleri</CardTitle>
+              <CardDescription className={cardDescriptionClass}>
                 Oluşturulan PDF raporlarının içeriğini belirleyin.
               </CardDescription>
             </div>
@@ -244,51 +374,67 @@ export default function SettingsPage() {
               label="Doktor Notlarını Dahil Et"
               description="Yazdığınız manuel yorumları rapora ekler."
               checked={settings.report.includeDoctorNotes}
+              darkMode={isDark}
               onCheckedChange={(v) => updateReport("includeDoctorNotes", v)}
             />
             <ToggleRow
               label="Isı Haritasını Dahil Et"
               description="Görsel rapor kısmında heatmap paneli ekler."
               checked={settings.report.includeHeatmap}
+              darkMode={isDark}
               onCheckedChange={(v) => updateReport("includeHeatmap", v)}
             />
             <ToggleRow
               label="İlaç Planını Dahil Et"
               description="Tedavi ve ilaç önerilerini PDF raporda gösterir."
               checked={settings.report.includeMedications}
+              darkMode={isDark}
               onCheckedChange={(v) => updateReport("includeMedications", v)}
             />
             <ToggleRow
               label="Önizlemeyi Otomatik Aç"
               description="PDF oluşturulduğunda önce önizleme sekmesini açar."
               checked={settings.report.autoOpenPreview}
+              darkMode={isDark}
               onCheckedChange={(v) => updateReport("autoOpenPreview", v)}
             />
             <ToggleRow
               label="Kompakt PDF Düzeni"
               description="Yazı boyutunu azaltarak raporu daha az sayfada tutar."
               checked={settings.report.compactPdf}
+              darkMode={isDark}
               onCheckedChange={(v) => updateReport("compactPdf", v)}
             />
           </CardContent>
         </Card>
 
-        <Card className="border border-[#d8e0df] bg-white shadow-sm">
+        <Card className={cardClass}>
           <CardHeader className="flex flex-row items-center gap-4">
-            <div className="rounded-lg bg-[#e9ecf9] p-2 text-[#5d6fa8]">
+            <div
+              className={`rounded-lg p-2 ${
+                isDark
+                  ? "bg-indigo-900/40 text-indigo-200"
+                  : "bg-[#e9ecf9] text-[#5d6fa8]"
+              }`}
+            >
               <ShieldCheck size={20} />
             </div>
             <div>
-              <CardTitle>Triage ve Klinik Eşikler</CardTitle>
-              <CardDescription>
+              <CardTitle className={titleClass}>
+                Triage ve Klinik Eşikler
+              </CardTitle>
+              <CardDescription className={cardDescriptionClass}>
                 Risk seviyesine göre kontrol süresi ve AI güven eşiği.
               </CardDescription>
             </div>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label>Yüksek Risk Kontrol Süresi (gün)</Label>
+              <Label className={labelClass}>
+                Yüksek Risk Kontrol Süresi (gün)
+              </Label>
               <Input
+                className={inputClass}
                 type="number"
                 min={1}
                 max={30}
@@ -299,8 +445,11 @@ export default function SettingsPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Orta Risk Kontrol Süresi (gün)</Label>
+              <Label className={labelClass}>
+                Orta Risk Kontrol Süresi (gün)
+              </Label>
               <Input
+                className={inputClass}
                 type="number"
                 min={1}
                 max={180}
@@ -311,8 +460,11 @@ export default function SettingsPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Düşük Risk Kontrol Süresi (gün)</Label>
+              <Label className={labelClass}>
+                Düşük Risk Kontrol Süresi (gün)
+              </Label>
               <Input
+                className={inputClass}
                 type="number"
                 min={1}
                 max={365}
@@ -323,8 +475,9 @@ export default function SettingsPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>AI Güven Eşiği (0.50 - 0.99)</Label>
+              <Label className={labelClass}>AI Güven Eşiği (0.50 - 0.99)</Label>
               <Input
+                className={inputClass}
                 type="number"
                 min={0.5}
                 max={0.99}
@@ -338,15 +491,21 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        <Card className="border border-[#d8e0df] bg-white shadow-sm">
+        <Card className={cardClass}>
           <CardHeader className="flex flex-row items-center gap-4">
-            <div className="rounded-lg bg-[#fff3e4] p-2 text-[#b17a3f]">
+            <div
+              className={`rounded-lg p-2 ${
+                isDark
+                  ? "bg-amber-900/40 text-amber-200"
+                  : "bg-[#fff3e4] text-[#b17a3f]"
+              }`}
+            >
               <BellRing size={20} />
             </div>
             <div>
-              <CardTitle>Bildirim Tercihleri</CardTitle>
-              <CardDescription>
-                Kritik hasta, günlük özet ve takip hatırlatmalarını yönetin.
+              <CardTitle className={titleClass}>Bildirim Tercihleri</CardTitle>
+              <CardDescription className={cardDescriptionClass}>
+                Kritik vaka ve takip hatırlatma bildirimlerini yönetin.
               </CardDescription>
             </div>
           </CardHeader>
@@ -356,22 +515,17 @@ export default function SettingsPage() {
               label="Kritik Vaka Uyarısı"
               description="Yüksek riskli analizlerde anlık uyarı verir."
               checked={settings.notifications.criticalCaseAlert}
+              darkMode={isDark}
               onCheckedChange={(v) =>
                 updateNotifications("criticalCaseAlert", v)
               }
             />
             <ToggleRow
               tone="amber"
-              label="Günlük Rapor Özeti"
-              description="Gün sonunda analiz adet ve risk dağılım özeti gösterir."
-              checked={settings.notifications.dailySummary}
-              onCheckedChange={(v) => updateNotifications("dailySummary", v)}
-            />
-            <ToggleRow
-              tone="amber"
               label="Kontrol Takip Hatırlatması"
               description="Planlanan takip günü yaklaşan hastaları listeler."
               checked={settings.notifications.followupReminder}
+              darkMode={isDark}
               onCheckedChange={(v) =>
                 updateNotifications("followupReminder", v)
               }
@@ -379,14 +533,20 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        <Card className="border border-[#d8e0df] bg-white shadow-sm">
+        <Card className={cardClass}>
           <CardHeader className="flex flex-row items-center gap-4">
-            <div className="rounded-lg bg-[#efe7da] p-2 text-[#8b6a49]">
+            <div
+              className={`rounded-lg p-2 ${
+                isDark
+                  ? "bg-slate-700/70 text-slate-100"
+                  : "bg-[#efe7da] text-[#8b6a49]"
+              }`}
+            >
               <Moon size={20} />
             </div>
             <div>
-              <CardTitle>Görünüm Tercihleri</CardTitle>
-              <CardDescription>
+              <CardTitle className={titleClass}>Görünüm Tercihleri</CardTitle>
+              <CardDescription className={cardDescriptionClass}>
                 Arayüz temasını kişiselleştirin.
               </CardDescription>
             </div>
@@ -397,14 +557,8 @@ export default function SettingsPage() {
               label="Gece Modu"
               description="Sistemi koyu renk şemasına geçirir."
               checked={settings.appearance.darkMode}
+              darkMode={isDark}
               onCheckedChange={(v) => updateAppearance("darkMode", v)}
-            />
-            <ToggleRow
-              tone="indigo"
-              label="Yoğun Tablo Modu"
-              description="Hasta ve rapor tablolarında daha fazla satır görünür."
-              checked={settings.appearance.denseTable}
-              onCheckedChange={(v) => updateAppearance("denseTable", v)}
             />
           </CardContent>
         </Card>
@@ -413,16 +567,25 @@ export default function SettingsPage() {
       <div className="flex flex-wrap justify-end gap-3 pt-4">
         <Button
           variant="outline"
-          className="gap-2 border-[#d8e0df]"
+          className={`gap-2 ${
+            isDark
+              ? "border-slate-600 bg-slate-800 text-slate-200 hover:bg-slate-700"
+              : "border-[#d8e0df]"
+          }`}
           onClick={handleResetDefaults}
         >
           <RotateCcw size={16} /> Varsayılana Dön
         </Button>
         <Button
-          className="gap-2 bg-[#659f92] px-8 text-white hover:bg-[#84b9ad]"
+          className={`gap-2 px-8 text-white ${
+            isDark
+              ? "bg-emerald-600 hover:bg-emerald-500"
+              : "bg-[#659f92] hover:bg-[#84b9ad]"
+          }`}
           onClick={handleSaveSettings}
+          disabled={isSaving}
         >
-          <Save size={18} /> Ayarları Kaydet
+          <Save size={18} /> {isSaving ? "Kaydediliyor..." : "Ayarları Kaydet"}
         </Button>
       </div>
     </div>

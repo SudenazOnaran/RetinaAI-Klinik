@@ -56,7 +56,7 @@ export async function saveAnalysisAction({
     }
 
     // 🔹 1. Analysis tablosuna kaydet
-    await prisma.analysis.create({
+    const savedAnalysis = await prisma.analysis.create({
       data: {
         patientId,
         aiResult, // AI'nın bulduğu ham sonuç
@@ -70,6 +70,10 @@ export async function saveAnalysisAction({
           ? JSON.stringify(aiOdriConfidences)
           : null,
         drFeedback: sanitizedFeedback, // Doktorun düzeltmesi (varsa)
+      },
+      select: {
+        id: true,
+        createdAt: true,
       },
     });
 
@@ -85,6 +89,13 @@ export async function saveAnalysisAction({
         risk: finalRiskStatus, // Artık hasta listesinde bu görünecek
       },
     });
+
+    return {
+      analysisId: savedAnalysis.id,
+      createdAt: savedAnalysis.createdAt.toISOString(),
+      finalRiskStatus,
+      confidence,
+    };
   } catch (error) {
     console.error("Error saving analysis:", error);
     throw error;

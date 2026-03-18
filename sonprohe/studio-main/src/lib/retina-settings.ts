@@ -26,12 +26,10 @@ export type RetinaSettings = {
   };
   notifications: {
     criticalCaseAlert: boolean;
-    dailySummary: boolean;
     followupReminder: boolean;
   };
   appearance: {
     darkMode: boolean;
-    denseTable: boolean;
   };
 };
 
@@ -68,12 +66,10 @@ export const getDefaultRetinaSettings = (): RetinaSettings => ({
   },
   notifications: {
     criticalCaseAlert: true,
-    dailySummary: false,
     followupReminder: true,
   },
   appearance: {
     darkMode: false,
-    denseTable: false,
   },
 });
 

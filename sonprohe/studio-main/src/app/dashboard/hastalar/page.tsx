@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import HastalarClient from "./HastalarClient";
 import { Card, CardContent } from "@/components/ui/card";
 import { User, Activity, AlertTriangle, Plus } from "lucide-react";
+import { isHighRiskLabel } from "@/lib/risk-alerts";
 
 export default async function HastalarPage() {
   const doctor = await getCurrentDoctorSession();
@@ -28,12 +29,13 @@ export default async function HastalarPage() {
     prisma.analysis.count({ where: { patient: { doctorId: doctor.id } } }),
   ]);
 
-  // ⚠️ YÜKSEK RİSK HESAPLAMA
-  // Dashboard ile tutarlı olması için sadece "Severe" ve "Proliferative_DR" olanları sayıyoruz.
-  // Eğer tüm hastalıkları saymak istersen filter'ı değiştirebiliriz.
-  const highRiskCount = patients.filter((p) =>
-    ["Severe", "Proliferative_DR"].includes(p.risk || ""),
-  ).length;
+  // Ortak risk sınıflandırıcısı ile hesaplanır (Severe, Proliferative_DR, Ağır Evre, Çok İleri Evre vb.)
+  const highRiskCount = patients.filter((p) => isHighRiskLabel(p.risk)).length;
+
+  const serializedPatients = patients.map((patient) => ({
+    ...patient,
+    createdAt: patient.createdAt.toISOString(),
+  }));
 
   return (
     <div className="clinic-app-bg min-h-screen p-4 md:p-6">
@@ -96,7 +98,7 @@ export default async function HastalarPage() {
           <Card className="overflow-hidden border border-slate-200 bg-white shadow-sm">
             <CardContent className="p-0">
               <div className="p-6">
-                <HastalarClient patients={patients} />
+                <HastalarClient patients={serializedPatients} />
               </div>
             </CardContent>
           </Card>

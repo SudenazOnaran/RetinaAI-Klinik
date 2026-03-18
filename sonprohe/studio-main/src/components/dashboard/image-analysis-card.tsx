@@ -21,6 +21,7 @@ import {
   previewRetinaReportPdf,
 } from "@/lib/retina-report-pdf";
 import { loadRetinaSettingsFromStorage } from "@/lib/retina-settings";
+import { isCriticalAlertCandidate } from "@/lib/risk-alerts";
 
 type PatientReportInfo = {
   fullName?: string;
@@ -89,7 +90,7 @@ export function ImageAnalysisCard({
     if (!result) return;
     setIsLoading(true);
     try {
-      await saveAnalysisAction({
+      const saveResult = await saveAnalysisAction({
         patientId,
         aiResult: result.pytorch.label,
         drFeedback: isCorrect === false ? actualResult : undefined,
@@ -97,11 +98,28 @@ export function ImageAnalysisCard({
         aiOdriConfidences:
           result.odir?.results.map((r: any) => r.confidence) || [],
         confidence: result.pytorch.confidence,
-        heatmapUrl: result.heatmap,
+        heatmapUrl: result.heatmapPlus,
         originalImage: base64Image || "",
         doctorNote,
         ilaclar,
       });
+
+      const settings = loadRetinaSettingsFromStorage();
+      if (
+        settings.notifications.criticalCaseAlert &&
+        isCriticalAlertCandidate(
+          saveResult.finalRiskStatus,
+          saveResult.confidence,
+          settings,
+        )
+      ) {
+        toast({
+          variant: "destructive",
+          title: "Kritik vaka uyarısı",
+          description:
+            "Yüksek riskli analiz algılandı. Hastayı öncelikli takibe alın.",
+        });
+      }
 
       toast({ title: "Başarılı", description: "Analiz kaydedildi." });
 
@@ -145,7 +163,7 @@ export function ImageAnalysisCard({
         doctorNote,
         medications: ilaclar,
         originalImage: base64Image || previewUrl,
-        heatmapUrl: result.heatmap,
+        heatmapUrl: result.heatmapPlus,
       };
 
       if (settings.report.autoOpenPreview) {
@@ -163,140 +181,216 @@ export function ImageAnalysisCard({
   };
 
   return (
-    <Card className="w-full relative overflow-hidden bg-gradient-to-br from-white/80 via-blue-50 to-purple-50 shadow-2xl rounded-3xl border border-transparent animate-in fade-in zoom-in-95 duration-500">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-3xl font-extrabold text-slate-900">
+    <Card className="w-full overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-b from-slate-50 to-white shadow-xl">
+      <CardHeader className="space-y-2 border-b border-slate-200 bg-white/90 pb-5">
+        <CardTitle className="text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
           GÖRÜNTÜ ANALİZİ
         </CardTitle>
-        <CardDescription className="text-slate-700 font-semibold">
-          Retina fundus verisini yapay zeka ile hızlıca değerlendirin.
+        <CardDescription className="max-w-3xl text-sm text-slate-600 md:text-base">
+          Retina fundus görüntüsünü klinik akış için hızlı şekilde analiz edin,
+          açıklama haritalarını karşılaştırın ve raporu kaydedin.
         </CardDescription>
       </CardHeader>
 
-      <CardContent className="space-y-8 pt-6">
-        {/* Dosya Yükleme */}
+      <CardContent className="space-y-6 p-4 md:p-6">
         {!previewUrl ? (
-          <div className="group border-4 border-dashed border-blue-300 rounded-2xl p-16 text-center hover:bg-blue-100 cursor-pointer relative transition-all duration-500">
-            <Upload className="mx-auto h-16 w-16 text-blue-400 group-hover:scale-110 transition-transform mb-4" />
-            <p className="text-lg font-bold text-blue-600 uppercase">
-              GÖRÜNTÜ YÜKLE
+          <div className="relative overflow-hidden rounded-2xl border-2 border-dashed border-cyan-300 bg-cyan-50/40 p-10 text-center transition-colors hover:border-cyan-400 hover:bg-cyan-50 md:p-14">
+            <Upload className="mx-auto mb-4 h-12 w-12 text-cyan-700" />
+            <p className="text-base font-semibold text-slate-800 md:text-lg">
+              Fundus görüntüsü seçin
+            </p>
+            <p className="mt-1 text-sm text-slate-500">
+              Desteklenen formatlar: JPG, PNG, BMP, WEBP
             </p>
             <input
               type="file"
               accept="image/*"
-              className="absolute inset-0 opacity-0 cursor-pointer"
+              className="absolute inset-0 cursor-pointer opacity-0"
               onChange={handleFileChange}
             />
           </div>
         ) : (
-          <div className="relative aspect-video bg-black rounded-2xl overflow-hidden border-2 border-blue-300 shadow-lg transition-transform hover:scale-[1.02] duration-500">
+          <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-950">
             <img
               src={previewUrl}
               alt="Preview"
-              className="w-full h-full object-contain"
+              className="h-[320px] w-full object-contain md:h-[420px]"
             />
             <Button
               variant="destructive"
               size="icon"
-              className="absolute top-4 right-4 rounded-xl shadow-xl hover:scale-110 transition-transform"
+              className="absolute right-3 top-3 h-9 w-9 rounded-xl"
               onClick={() => {
                 setPreviewUrl(null);
                 setBase64Image(null);
                 setResult(null);
               }}
             >
-              <X className="h-5 w-5" />
+              <X className="h-4 w-4" />
             </Button>
           </div>
         )}
 
-        {/* Kartlar ve Heatmap */}
         {result && (
-          <div className="flex flex-col md:flex-row gap-6">
-            <div className="flex flex-col gap-6 md:w-1/3">
-              {/* Evre Kartı */}
-              <div className="p-6 bg-gradient-to-br from-purple-500 to-pink-500 text-white rounded-3xl shadow-xl space-y-4 flex flex-col justify-center items-start transform hover:scale-[1.03] transition-transform relative overflow-hidden">
-                <p className="text-lg font-bold tracking-wide">
-                  Diyabetik Retinopati Evresi
+          <div className="grid gap-5 xl:grid-cols-[330px_minmax(0,1fr)]">
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-cyan-100 bg-gradient-to-br from-cyan-700 to-blue-700 p-5 text-white shadow-lg">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-100">
+                  DR Sonucu
                 </p>
-                <p className="text-3xl font-extrabold">
+                <p className="mt-3 text-3xl font-bold leading-tight">
                   {result.pytorch.label.replace("_", " ")}
                 </p>
-                <p className="text-xl font-bold text-right">
+                <p className="mt-4 rounded-lg bg-white/15 px-3 py-2 text-sm font-medium">
                   Güven: {(result.pytorch.confidence * 100).toFixed(1)}%
+                </p>
+                <p className="mt-2 rounded-lg bg-white/10 px-3 py-2 text-xs font-medium text-cyan-100">
+                  Ham Güven:{" "}
+                  {(
+                    (result.pytorch.rawConfidence ??
+                      result.pytorch.confidence) * 100
+                  ).toFixed(1)}
+                  % | T={result.pytorch.temperature ?? "-"}
                 </p>
               </div>
 
-              {/* Risk Tahmini Kartı */}
-              <div className="p-6 bg-gradient-to-br from-green-400 to-teal-500 text-white rounded-3xl shadow-xl space-y-4">
-                <p className="text-lg font-bold">ODIR Risk Tahminleri</p>
-
-                <div className="space-y-2">
+              <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-5 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-800">
+                  ODIR Risk Tahminleri
+                </p>
+                <div className="mt-3 space-y-2">
                   {result.odir.results.map((r: any, i: number) => (
                     <div
                       key={i}
-                      className="flex justify-between bg-white/20 px-4 py-2 rounded-xl text-lg font-bold"
+                      className="flex items-center justify-between rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm"
                     >
-                      <span>{r.label}</span>
-                      <span>{(r.confidence * 100).toFixed(1)}%</span>
+                      <span className="font-medium text-slate-800">
+                        {r.label}
+                      </span>
+                      <span className="font-semibold text-emerald-700">
+                        {(r.confidence * 100).toFixed(1)}%
+                      </span>
                     </div>
                   ))}
                 </div>
               </div>
+
+              {result.uncertainty || result.ood ? (
+                <div className="rounded-2xl border border-amber-100 bg-amber-50/70 p-5 shadow-sm">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-800">
+                    Güvenilirlik Katmanı
+                  </p>
+                  <div className="mt-3 space-y-1 text-sm text-slate-700">
+                    <p>
+                      Predictive Entropy:{" "}
+                      {Number(
+                        result.uncertainty?.predictiveEntropy || 0,
+                      ).toFixed(4)}
+                    </p>
+                    <p>
+                      Mutual Information:{" "}
+                      {Number(
+                        result.uncertainty?.mutualInformation || 0,
+                      ).toFixed(4)}
+                    </p>
+                    <p>
+                      Sınıf Varyansı:{" "}
+                      {Number(result.uncertainty?.classVariance || 0).toFixed(
+                        6,
+                      )}
+                    </p>
+                    <p>
+                      OOD Skoru: %
+                      {(Number(result.ood?.score || 0) * 100).toFixed(1)}
+                    </p>
+                    <p>
+                      OOD Durumu:{" "}
+                      {result.ood?.isOutOfDistribution
+                        ? "Dağılım Dışı Şüpheli"
+                        : "Dağılım İçi"}
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+
+              {result.localization ? (
+                <div className="rounded-2xl border border-indigo-100 bg-indigo-50/70 p-5 shadow-sm">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-indigo-800">
+                    Localization Metrikleri
+                  </p>
+                  <div className="mt-3 space-y-1 text-sm text-slate-700">
+                    <p>
+                      IoU: {Number(result.localization.iou || 0).toFixed(4)}
+                    </p>
+                    <p>
+                      Dice: {Number(result.localization.dice || 0).toFixed(4)}
+                    </p>
+                    <p>
+                      Pointing Hit:{" "}
+                      {result.localization.pointingHit ? "Evet" : "Hayır"}
+                    </p>
+                  </div>
+                </div>
+              ) : null}
             </div>
 
-            {/* Heatmap */}
-            <div className="relative md:w-2/3 h-[400px] bg-black rounded-3xl overflow-hidden shadow-xl transform hover:scale-[1.02] transition-transform flex items-center justify-center">
-              <img
-                src={result.heatmap}
-                alt="Heatmap"
-                className="w-full h-full object-contain opacity-90 hover:opacity-100 transition-opacity rounded-2xl"
-              />
+            <div className="space-y-4">
+              {result.heatmapPlus ? (
+                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-950 shadow-sm">
+                  <div className="border-b border-slate-800 bg-slate-900/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-cyan-200">
+                    Grad-CAM++
+                  </div>
+                  <img
+                    src={result.heatmapPlus}
+                    alt="Grad-CAM Plus Plus Heatmap"
+                    className="h-[280px] w-full object-contain md:h-[320px]"
+                  />
+                </div>
+              ) : null}
             </div>
           </div>
         )}
       </CardContent>
 
-      <CardFooter className="flex-col gap-6 pt-2 pb-10 px-4">
+      <CardFooter className="border-t border-slate-200 bg-slate-50/70 px-4 pb-6 pt-5 md:px-6 md:pb-8">
         {!result ? (
           <Button
-            className="w-full h-16 rounded-2xl bg-gradient-to-r from-blue-500 to-green-500 hover:from-green-500 hover:to-green-400 text-white font-extrabold text-xl shadow-lg transition-all hover:scale-[1.02] flex items-center justify-center gap-3"
+            className="h-13 w-full rounded-xl bg-cyan-700 text-base font-semibold text-white shadow-sm transition hover:bg-cyan-800"
             onClick={handleAnalyze}
             disabled={isLoading || !file}
           >
             {isLoading ? (
-              <Loader2 className="animate-spin h-6 w-6" />
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
             ) : (
-              <Zap className="h-6 w-6" />
+              <Zap className="mr-2 h-5 w-5" />
             )}
             Analizi Başlat
           </Button>
         ) : (
-          <div className="w-full space-y-6 animate-in fade-in duration-500">
-            {/* Onay Paneli */}
-            <div className="flex flex-col md:flex-row items-center justify-between p-6 bg-white/90 border border-gray-200 rounded-2xl gap-4">
-              <div className="flex items-center gap-3 text-slate-900">
-                <ShieldCheck className="h-6 w-6" />
-                <Label className="font-bold text-lg tracking-tight uppercase">
+          <div className="w-full space-y-5">
+            <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 md:flex-row md:items-center md:justify-between md:p-5">
+              <div className="flex items-center gap-3 text-slate-800">
+                <ShieldCheck className="h-5 w-5 text-cyan-700" />
+                <Label className="text-sm font-semibold uppercase tracking-[0.08em] md:text-base">
                   Yapay Zeka Sonucu Doğru mu?
                 </Label>
               </div>
-              <div className="flex gap-3">
+              <div className="flex gap-2">
                 <Button
-                  className={`rounded-2xl px-8 font-bold transition-all ${
+                  className={`rounded-xl px-6 text-sm font-semibold ${
                     isCorrect === true
-                      ? "bg-green-500 hover:bg-green-600 text-white"
-                      : "bg-white border border-green-500 hover:bg-green-100 text-green-600"
+                      ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                      : "border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50"
                   }`}
                   onClick={() => setIsCorrect(true)}
                 >
                   EVET
                 </Button>
                 <Button
-                  className={`rounded-2xl px-8 font-bold transition-all ${
+                  className={`rounded-xl px-6 text-sm font-semibold ${
                     isCorrect === false
-                      ? "bg-red-500 hover:bg-red-600 text-white"
-                      : "bg-white border border-red-500 hover:bg-red-100 text-red-600"
+                      ? "bg-rose-600 text-white hover:bg-rose-700"
+                      : "border border-rose-300 bg-white text-rose-700 hover:bg-rose-50"
                   }`}
                   onClick={() => setIsCorrect(false)}
                 >
@@ -306,16 +400,16 @@ export function ImageAnalysisCard({
             </div>
 
             {isCorrect === false && (
-              <div className="space-y-2">
-                <Label className="text-sm font-bold text-red-500 uppercase tracking-wide">
+              <div className="rounded-2xl border border-rose-200 bg-rose-50/50 p-4">
+                <Label className="mb-2 block text-sm font-semibold uppercase tracking-[0.08em] text-rose-700">
                   Düzeltme Seçimi
                 </Label>
                 <select
-                  className="w-full h-12 px-4 bg-white border-2 border-gray-300 rounded-2xl font-bold outline-none focus:border-blue-500 transition-all"
+                  className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium outline-none transition focus:border-cyan-500"
                   value={actualResult}
                   onChange={(e) => setActualResult(e.target.value)}
                 >
-                  <option value="">Doğru Etiketi Seçin...</option>
+                  <option value="">Doğru etiketi seçin...</option>
                   {[
                     "No_DR",
                     "Mild",
@@ -331,36 +425,35 @@ export function ImageAnalysisCard({
               </div>
             )}
 
-            {/* Doktor Notları */}
-            <div className="space-y-2">
-              <Label className="text-sm font-bold text-slate-600 uppercase tracking-wide">
-                Doktor Notları
-              </Label>
-              <Textarea
-                placeholder="Klinik gözlemlerinizi buraya girin..."
-                className="min-h-[120px] rounded-2xl border-2 border-gray-300 bg-white/90 focus:bg-white transition-all text-lg font-medium"
-                value={doctorNote}
-                onChange={(e) => setDoctorNote(e.target.value)}
-              />
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2 rounded-2xl border border-slate-200 bg-white p-4">
+                <Label className="text-sm font-semibold uppercase tracking-[0.08em] text-slate-700">
+                  Doktor Notları
+                </Label>
+                <Textarea
+                  placeholder="Klinik gözlemlerinizi buraya girin..."
+                  className="min-h-[120px] rounded-xl border-slate-300 bg-white text-base"
+                  value={doctorNote}
+                  onChange={(e) => setDoctorNote(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2 rounded-2xl border border-slate-200 bg-white p-4">
+                <Label className="text-sm font-semibold uppercase tracking-[0.08em] text-slate-700">
+                  Hastanın Kullanması Gereken İlaçlar
+                </Label>
+                <Textarea
+                  placeholder="İlaç adını, dozunu ve kullanım süresini belirtin..."
+                  className="min-h-[120px] rounded-xl border-slate-300 bg-white text-base"
+                  value={ilaclar}
+                  onChange={(e) => setIlaclar(e.target.value)}
+                />
+              </div>
             </div>
 
-            {/* İlaçlar */}
-            <div className="space-y-2">
-              <Label className="text-sm font-bold text-slate-600 uppercase tracking-wide">
-                Hastanın Kullanması Gereken İlaçlar
-              </Label>
-              <Textarea
-                placeholder="Hastanın kullanması gereken ilaçları miktari ve süresini buraya girin..."
-                className="min-h-[120px] rounded-2xl border-2 border-gray-300 bg-white/90 focus:bg-white transition-all text-lg font-medium"
-                value={ilaclar}
-                onChange={(e) => setIlaclar(e.target.value)}
-              />
-            </div>
-
-            {/* Kaydet ve PDF */}
-            <div className="flex gap-4 flex-col md:flex-row">
+            <div className="grid gap-3 md:grid-cols-2">
               <Button
-                className="flex-1 h-16 rounded-2xl bg-gradient-to-r from-green-400 to-teal-500 hover:from-blue-500 hover:to-purple-500 text-white font-extrabold text-xl shadow-lg transition-all hover:scale-[1.02] flex items-center justify-center gap-3"
+                className="h-12 rounded-xl bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-700"
                 onClick={handleFinalSave}
                 disabled={
                   isLoading ||
@@ -369,15 +462,15 @@ export function ImageAnalysisCard({
                 }
               >
                 {isLoading ? (
-                  <Loader2 className="animate-spin h-6 w-6" />
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                 ) : (
-                  <Save className="h-6 w-6" />
+                  <Save className="mr-2 h-5 w-5" />
                 )}
                 Kaydet
               </Button>
 
               <Button
-                className="flex-1 h-16 rounded-2xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-extrabold text-xl shadow-lg transition-all hover:scale-[1.02]"
+                className="h-12 rounded-xl bg-slate-800 text-sm font-semibold text-white hover:bg-slate-900"
                 onClick={handlePreviewPDF}
               >
                 PDF Görüntüle

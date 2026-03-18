@@ -8,12 +8,14 @@ datasource db {
 }
 
 model Doctor {
-  id        String   @id @default(cuid())
-  name      String
-  email     String   @unique
-  password  String
-  createdAt DateTime @default(now())
-  patients  Patient[]
+  id             String            @id @default(cuid())
+  name           String
+  email          String            @unique
+  password       String
+  createdAt      DateTime          @default(now())
+  patients       Patient[]
+  settings       DoctorSettings?
+  calendarEvents CalendarEvent[]
 }
 
 model Patient {
@@ -47,4 +49,27 @@ model Analysis {
   ilaclar           String?  @db.VarChar(200)
   drFeedback        String?
   patient           Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+}
+
+model DoctorSettings {
+  id        String   @id @default(cuid())
+  doctorId  String   @unique
+  settings  Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  doctor    Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+}
+
+model CalendarEvent {
+  id        String   @id @default(cuid())
+  doctorId  String
+  dateKey   String
+  time      String
+  title     String
+  note      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  doctor    Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@index([doctorId, dateKey])
 }

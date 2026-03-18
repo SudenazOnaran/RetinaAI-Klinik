@@ -8,6 +8,7 @@ import {
 import {
   LayoutDashboard,
   Users,
+  CalendarDays,
   Settings,
   UserRound,
   ChevronRight,
@@ -18,6 +19,7 @@ import Link from "next/link";
 const menuItems = [
   { href: "/dashboard", label: "Panel", icon: LayoutDashboard },
   { href: "/dashboard/hastalar", label: "Hasta Kayıtları", icon: Users },
+  { href: "/dashboard/takvim", label: "Takvim", icon: CalendarDays },
   {
     href: "/dashboard/profil-bilgileri",
     label: "Profil Bilgileri",
