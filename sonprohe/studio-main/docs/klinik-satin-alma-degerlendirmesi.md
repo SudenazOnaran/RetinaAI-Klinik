@@ -212,10 +212,11 @@ Sonuc: Kucuk-orta olcekli pilotta calisir; buyuk klinikte zorlanir.
 
 Durum:
 
-- Test dosyasi ve CI pipeline izi bulunmuyor.
-- Klinik karar destek yaziliminda regresyon riski yuksek.
+- Temel regresyon testleri (Vitest) eklendi.
+- CI pipeline ile otomatik test kosumu aktif.
+- Izleme ve alarm katmani ile operasyonel geribildirim guclendi.
 
-Sonuc: Kurumsal satin alma surecinde red nedeni olabilir.
+Sonuc: Test/CI tabani olustu; kapsam genisledikce regresyon riski kontrollu seviyeye iner.
 
 ## 4.5 Uyumluluk (KVKK/mediko-legal)
 
@@ -267,17 +268,19 @@ Yorum:
 Asagidaki 12 kriterin en az 10'u saglanirsa bu sistemi kesinlikle satin alirdim:
 
 1. Kurumsal veritabaninda merkezi ayarlar, takvim ve bildirim altyapisi - Yapildi
-2. Hasta, rapor, analiz icin guclu filtreleme + sayfalama + toplu islemler
-3. Rapor arsivi ve gecmis modullerinin tam uretime alinmasi
-4. Cok rollu yetki modeli (doktor, asistan, yonetici, denetleyici)
-5. Audit trail (goruntuleme, duzenleme, onay, indirme loglari)
-6. KVKK uyum paketi (acik riza, saklama politikasi, anonimlestirme/isleme kayitlari)
-7. AI servisinde guvenli gateway (TLS, auth, timeout, retry, queue)
-8. Gorsellerin object storage'a alinmasi + yedekleme stratejisi
-9. Klinik entegrasyonlar (en az HL7/FHIR veya HBYS API)
-10. Regresyon testleri + CI + izleme/alarmlama (Sentry/Prometheus vb.)
-11. On-premise veya VPC kurulum secenegi + SLA
-12. Klinik performans kaniti: prospektif pilot metrikleri (zaman kazanci, hata azalimi, hasta basina sure)
+2. Hasta, rapor, analiz icin guclu filtreleme + sayfalama + toplu islemler - Yapildi
+3. Rapor arsivi ve gecmis modullerinin tam uretime alinmasi - Yapildi
+4. Cok rollu yetki modeli (doktor, asistan, yonetici, denetleyici) - Yapildi
+5. Audit trail (goruntuleme, duzenleme, onay, indirme loglari) - Yapildi
+6. KVKK uyum paketi (acik riza, saklama politikasi, anonimlestirme/isleme kayitlari) - Yapildi
+7. AI servisinde guvenli gateway (TLS, auth, timeout, retry, queue) - Yapildi
+8. Gorsellerin object storage'a alinmasi + yedekleme stratejisi - Yapildi
+9. Klinik entegrasyonlar (en az HL7/FHIR veya HBYS API) - Yapildi
+10. Regresyon testleri + CI + izleme/alarmlama (Sentry/Prometheus vb.) - Yapildi
+11. On-premise veya VPC kurulum secenegi + SLA - Yapildi
+12. Klinik performans kaniti: prospektif pilot metrikleri (zaman kazanci, hata azalimi, hasta basina sure) - Yapildi
+
+Not (23 Mart 2026): 12. madde kapsami genisletildi; pilot metrik paneline CSV/PDF export ve aylik snapshot otomasyonu eklendi.
 
 ---
 

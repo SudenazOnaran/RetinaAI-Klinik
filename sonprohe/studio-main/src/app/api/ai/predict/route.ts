@@ -1,0 +1,115 @@
+import { NextResponse } from "next/server";
+import { getCurrentDoctorSession } from "@/lib/auth-session";
+import { enqueueAiRequest, callAiServiceWithRetry } from "@/lib/ai-gateway";
+import { logAuditEvent } from "@/lib/audit-log";
+import { createMonitoringAlert } from "@/lib/monitoring-alerts";
+
+export const runtime = "nodejs";
+
+type PredictSuccess = {
+  success: true;
+  pytorch: {
+    label: string;
+    confidence: number;
+  };
+};
+
+export async function POST(req: Request) {
+  const session = await getCurrentDoctorSession();
+  if (!session) {
+    return NextResponse.json({ error: "Oturum bulunamadi" }, { status: 401 });
+  }
+
+  const body = await req.formData();
+  const file = body.get("image");
+  const patientId = String(body.get("patientId") || "").trim() || null;
+
+  if (!(file instanceof File)) {
+    return NextResponse.json(
+      { success: false, error: "Gorsel dosyasi bulunamadi." },
+      { status: 400 },
+    );
+  }
+
+  const upstreamForm = new FormData();
+  upstreamForm.append("image", file, file.name || "image.jpg");
+
+  const roiMask = body.get("roiMask");
+  if (roiMask instanceof File) {
+    upstreamForm.append("roiMask", roiMask, roiMask.name || "roi-mask.png");
+  }
+
+  try {
+    const aiData = (await callAiServiceWithRetry(
+      upstreamForm,
+    )) as PredictSuccess;
+
+    await logAuditEvent({
+      doctorId: session.id,
+      role: session.role,
+      action: "VIEW",
+      entityType: "ANALYSIS",
+      entityId: patientId,
+      description: "AI analiz istegi basariyla tamamlandi",
+      metadata: {
+        patientId,
+      },
+    });
+
+    return NextResponse.json(aiData, { status: 200 });
+  } catch (error) {
+    const arrayBuffer = await file.arrayBuffer();
+    const imageBase64 = Buffer.from(arrayBuffer).toString("base64");
+    const message = error instanceof Error ? error.message : "AI servis hatasi";
+
+    const queueId = await enqueueAiRequest({
+      doctorId: session.id,
+      endpoint: "/predict",
+      error: message,
+      payload: {
+        patientId,
+        fileName: file.name || "image.jpg",
+        mimeType: file.type || "application/octet-stream",
+        imageBase64,
+        queuedByDoctorId: session.id,
+      },
+    });
+
+    await createMonitoringAlert({
+      doctorId: session.id,
+      source: "AI_GATEWAY",
+      severity: "CRITICAL",
+      title: "AI servisi ulasilamiyor",
+      detail: "AI analiz istegi kuyruga alindi",
+      metadata: {
+        queueId,
+        reason: message,
+        patientId,
+      },
+    });
+
+    await logAuditEvent({
+      doctorId: session.id,
+      role: session.role,
+      action: "EDIT",
+      entityType: "SYSTEM",
+      entityId: queueId,
+      description: "AI istegi kuyruga alindi",
+      metadata: {
+        reason: message,
+        patientId,
+      },
+    });
+
+    return NextResponse.json(
+      {
+        success: false,
+        queued: true,
+        queueId,
+        error:
+          "AI servisine su an ulasilamadi. Istek kuyruga alindi, daha sonra tekrar denenebilir.",
+      },
+      { status: 202 },
+    );
+  }
+}

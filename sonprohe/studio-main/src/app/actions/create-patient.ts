@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getCurrentDoctorSession } from "@/lib/auth-session";
+import { logAuditEvent } from "@/lib/audit-log";
 
 export async function createPatientAction(formData: {
   fullName: string;
@@ -28,6 +29,19 @@ export async function createPatientAction(formData: {
         diabetesYears: formData.diabetesYears,
         hba1c: formData.hba1c,
         risk: "Yok", // Şemandaki default değer
+      },
+    });
+
+    await logAuditEvent({
+      doctorId: doctor.id,
+      role: doctor.role,
+      action: "CREATE",
+      entityType: "PATIENT",
+      entityId: patient.id,
+      description: "Yeni hasta kaydi olusturuldu",
+      metadata: {
+        fullName: formData.fullName,
+        tcNo: formData.tcNo,
       },
     });
 

@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getCurrentDoctorSession } from "@/lib/auth-session";
+import { logAuditEvent } from "@/lib/audit-log";
 
 export async function updatePatientAction(formData: FormData) {
   const doctor = await getCurrentDoctorSession();
@@ -29,6 +30,20 @@ export async function updatePatientAction(formData: FormData) {
   if (updated.count === 0) {
     throw new Error("Hasta kaydı bulunamadı veya yetkiniz yok");
   }
+
+  await logAuditEvent({
+    doctorId: doctor.id,
+    role: doctor.role,
+    action: "EDIT",
+    entityType: "PATIENT",
+    entityId: id,
+    description: "Hasta demografik ve klinik alanlari guncellendi",
+    metadata: {
+      age: Number(formData.get("age")),
+      diabetesYears: diabetesYearsRaw === "" ? null : Number(diabetesYearsRaw),
+      hba1c: hba1cRaw === "" ? null : Number(hba1cRaw),
+    },
+  });
 
   revalidatePath("/dashboard/hastalar");
   revalidatePath(`/dashboard/hastalar/${id}`);

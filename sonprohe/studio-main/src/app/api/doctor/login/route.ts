@@ -20,7 +20,12 @@ export async function POST(req: Request) {
     }
     const response = NextResponse.json({
       success: true,
-      doctor: { id: doctor.id, name: doctor.name, email: doctor.email },
+      doctor: {
+        id: doctor.id,
+        name: doctor.name,
+        email: doctor.email,
+        role: doctor.role,
+      },
     });
 
     response.cookies.set({
@@ -29,6 +34,7 @@ export async function POST(req: Request) {
         id: doctor.id,
         name: doctor.name,
         email: doctor.email,
+        role: doctor.role,
       }),
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",

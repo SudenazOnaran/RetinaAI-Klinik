@@ -1,18 +1,42 @@
 import { RetinaSettings } from "@/lib/retina-settings";
 
 const HIGH_RISK_LABELS = new Set([
+  "high",
+  "high_risk",
+  "yuksek",
+  "yuksek_risk",
+  "yuksekrisk",
   "severe",
   "proliferative_dr",
   "agir_evre",
+  "agir",
+  "agir_risk",
   "çok_ileri_evre",
   "cok_ileri_evre",
 ]);
 
-const MEDIUM_RISK_LABELS = new Set(["moderate", "orta", "orta_risk"]);
+const MEDIUM_RISK_LABELS = new Set([
+  "medium",
+  "medium_risk",
+  "moderate",
+  "orta",
+  "orta_risk",
+]);
 
 function normalizeRiskLabel(value: string | null | undefined): string {
   if (!value) return "";
-  return value.trim().toLowerCase().replace(/\s+/g, "_");
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ı/g, "i")
+    .replace(/ç/g, "c")
+    .replace(/ğ/g, "g")
+    .replace(/ö/g, "o")
+    .replace(/ş/g, "s")
+    .replace(/ü/g, "u");
 }
 
 export function isHighRiskLabel(value: string | null | undefined): boolean {

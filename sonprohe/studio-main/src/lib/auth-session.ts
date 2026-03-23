@@ -1,11 +1,13 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { DOCTOR_SESSION_COOKIE } from "@/lib/auth-constants";
+import { DoctorRole, normalizeDoctorRole } from "@/lib/roles";
 
 type DoctorSession = {
   id: string;
   name: string;
   email: string;
+  role: DoctorRole;
   iat: number;
 };
 
@@ -13,6 +15,7 @@ type DoctorIdentity = {
   id: string;
   name: string;
   email: string;
+  role?: DoctorRole;
 };
 
 function getSessionSecret() {
@@ -42,6 +45,7 @@ export function createDoctorSessionToken(doctor: DoctorIdentity) {
     id: doctor.id,
     name: doctor.name,
     email: doctor.email,
+    role: normalizeDoctorRole(doctor.role),
     iat: Date.now(),
   };
 
@@ -67,7 +71,10 @@ export function verifyDoctorSessionToken(token?: string | null) {
   try {
     const parsed = JSON.parse(fromBase64Url(payload)) as DoctorSession;
     if (!parsed?.id || !parsed?.name || !parsed?.email) return null;
-    return parsed;
+    return {
+      ...parsed,
+      role: normalizeDoctorRole(parsed.role),
+    };
   } catch {
     return null;
   }

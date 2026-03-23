@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -10,7 +11,6 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ImageAnalysisCard } from "@/components/dashboard/image-analysis-card";
 import { UpdatePatientDialog } from "@/components/dashboard/update-patient-dialog";
 import {
   Table,
@@ -36,12 +36,27 @@ import {
   previewRetinaReportPdf,
 } from "@/lib/retina-report-pdf";
 import { loadRetinaSettingsFromStorage } from "@/lib/retina-settings";
+import { ManualReportCard } from "@/components/dashboard/manual-report-card";
 
 export default function PatientDetailClient({ patient }: { patient: any }) {
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<
-    "analysis" | "reports" | "progress"
-  >("analysis");
+    "report-create" | "reports" | "progress"
+  >("report-create");
   const [editOpen, setEditOpen] = useState(false);
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab === "reports") {
+      setActiveTab("reports");
+      return;
+    }
+    if (tab === "progression") {
+      setActiveTab("progress");
+      return;
+    }
+    setActiveTab("report-create");
+  }, [searchParams]);
 
   const reports = patient.analyses ?? [];
 
@@ -53,6 +68,82 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
     } catch {
       return [];
     }
+  };
+
+  const parseStructuredReport = (value: string | null | undefined) => {
+    if (!value) return null;
+    try {
+      const parsed = JSON.parse(value);
+      if (parsed?.version === "manual_report_v2") {
+        return parsed;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  };
+
+  const getReportDoctorNote = (report: any) => {
+    const structured = parseStructuredReport(report?.doctorNote);
+    if (!structured) return report?.doctorNote ?? "-";
+
+    const sections = structured.sections ?? {};
+    return [
+      `Rapor Başlığı: ${structured.reportTitle || "-"}`,
+      `Klinik Öykü (Anamnez): ${sections.anamnesis || "-"}`,
+      `Muayene Bulguları: ${sections.examFindings || "-"}`,
+      `Laboratuvar Sonuçları: ${sections.labResults || "-"}`,
+      `Teşhis / Klinik Değerlendirme: ${sections.clinicalAssessment || "-"}`,
+      `AI Özeti: ${structured.aiSummary || "-"}`,
+    ].join("\n");
+  };
+
+  const getLegacyFieldValue = (
+    note: string | null | undefined,
+    label: string,
+  ) => {
+    if (!note) return null;
+    const prefix = `${label}:`;
+    const line = note
+      .split("\n")
+      .map((v) => v.trim())
+      .find((v) => v.startsWith(prefix));
+    if (!line) return null;
+    return line.slice(prefix.length).trim() || null;
+  };
+
+  const getReportSectionValue = (
+    report: any,
+    sectionKey:
+      | "anamnesis"
+      | "examFindings"
+      | "labResults"
+      | "clinicalAssessment"
+      | "treatmentRecommendations",
+    legacyLabel: string,
+    fallback = "-",
+  ) => {
+    const structured = parseStructuredReport(report?.doctorNote);
+    const structuredValue = structured?.sections?.[sectionKey];
+    if (typeof structuredValue === "string" && structuredValue.trim()) {
+      return structuredValue;
+    }
+
+    const legacyValue = getLegacyFieldValue(report?.doctorNote, legacyLabel);
+    if (legacyValue) return legacyValue;
+
+    return fallback;
+  };
+
+  const getTreatmentText = (report: any) => {
+    const sectionValue = getReportSectionValue(
+      report,
+      "treatmentRecommendations",
+      "Tedavi ve Öneriler",
+      "",
+    );
+    if (sectionValue) return sectionValue;
+    return report?.ilaclar || "-";
   };
 
   const normalizeDiagnosisKey = (value: unknown) => {
@@ -109,6 +200,10 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
     const normalized = normalizeDiagnosisKey(value);
 
     if (!normalized) return null;
+    if (normalized === "dusuk_risk") return "Mild";
+    if (normalized === "orta_risk") return "Moderate";
+    if (normalized === "yuksek_risk") return "Severe";
+    if (normalized === "kritik_risk") return "Proliferative_DR";
     if (normalized === "no_dr") return "No_DR";
     if (normalized === "mild") return "Mild";
     if (normalized === "moderate") return "Moderate";
@@ -210,6 +305,7 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
       confidence: Number(confidences[idx] ?? 0),
     }));
 
+    const structured = parseStructuredReport(report.doctorNote);
     const payload = {
       patientId: patient.id,
       patientInfo: {
@@ -224,12 +320,34 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
       odirResults,
       clinicalFinalResult: resolveEffectiveDiagnosis(report),
       doctorNote: report.doctorNote,
-      medications: report.ilaclar,
+      medications: getTreatmentText(report),
       originalImage: report.originalImage,
       heatmapUrl: report.heatmapUrl,
+      reportTitle: structured?.reportTitle,
+      reportDateLabel: structured?.reportDate,
     };
 
     const settings = loadRetinaSettingsFromStorage();
+
+    try {
+      await fetch("/api/audit/log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "DOWNLOAD",
+          entityType: "REPORT",
+          entityId: report.id,
+          description: "Hasta detayindan PDF rapor indirildi/önizlendi",
+          metadata: {
+            patientId: patient.id,
+            autoOpenPreview: settings.report.autoOpenPreview,
+          },
+        }),
+      });
+    } catch {
+      // Log hatasi PDF akisina engel olmasin.
+    }
+
     if (settings.report.autoOpenPreview) {
       await previewRetinaReportPdf(payload);
     } else {
@@ -267,11 +385,15 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
 
       <div className="flex gap-4">
         <Button
-          className="bg-[var(--retina-primary)] text-white hover:bg-[var(--retina-primary-deep)]"
-          variant={activeTab === "analysis" ? "default" : "outline"}
-          onClick={() => setActiveTab("analysis")}
+          className={
+            activeTab === "report-create"
+              ? "bg-[var(--retina-primary)] text-white hover:bg-[var(--retina-primary-deep)]"
+              : "border-[#cfd8d7] bg-white text-[#476775] hover:bg-[#eef3f2]"
+          }
+          variant={activeTab === "report-create" ? "default" : "outline"}
+          onClick={() => setActiveTab("report-create")}
         >
-          Yeni Analiz
+          Rapor Oluştur
         </Button>
         <Button
           className="border-[#cfd8d7] bg-white text-[#476775] hover:bg-[#eef3f2]"
@@ -289,116 +411,60 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
         </Button>
       </div>
 
-      {activeTab === "analysis" ? (
-        <ImageAnalysisCard
-          patientId={patient.id}
-          patientInfo={{
-            fullName: patient.fullName,
-            tcNo: patient.tcNo,
-            age: patient.age,
-          }}
-          doctorName={patient?.doctor?.name}
-        />
+      {activeTab === "report-create" ? (
+        <div className="space-y-4">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+            Bu sayfada klinik rapor ve AI görsel analiz tek akışta çalışır. AI
+            analizi Rapor Oluştur kartının içindedir ve sonuçlar aynı kaydetme
+            işlemiyle rapora eklenir.
+          </div>
+
+          <ManualReportCard
+            patientId={patient.id}
+            patientInfo={{
+              fullName: patient.fullName,
+              tcNo: patient.tcNo,
+              age: patient.age,
+              gender: patient.gender,
+              risk: patient.risk,
+            }}
+            doctorName={patient?.doctor?.name}
+          />
+        </div>
       ) : activeTab === "reports" ? (
         <Card className="border border-[#d8e0df] bg-white shadow-sm">
           <CardHeader className="border-b border-slate-100">
-            <CardTitle>Geçmiş Analizler</CardTitle>
+            <CardTitle>Geçmiş Raporlar</CardTitle>
             <CardDescription>{reports.length} kayıt bulundu</CardDescription>
           </CardHeader>
 
-          <CardContent className="overflow-x-auto">
-            <Table className="min-w-[900px]">
-              <TableHeader className="bg-slate-100">
-                <TableRow className="h-12">
-                  <TableHead className="px-4 py-2 text-left">Tarih</TableHead>
-                  <TableHead className="px-4 py-2 text-left">
-                    AI Diyabetik Retinopati Sonucu
-                  </TableHead>
-                  <TableHead className="px-4 py-2 text-left">
-                    Güven Oranı
-                  </TableHead>
-                  <TableHead>Doktor Geri Bildirimi</TableHead>
-                  <TableHead className="px-4 py-2 text-left">
-                    AI Diğer Hastalıkların Risk Tahmini
-                  </TableHead>
-                  <TableHead className="px-4 py-2 text-left">
-                    Güven Oranı
-                  </TableHead>
-                  <TableHead className="px-4 py-2 text-left">
-                    Fundus Görüntüsü
-                  </TableHead>
-                  <TableHead className="px-4 py-2 text-left">
-                    Isı Haritası
-                  </TableHead>
-                  <TableHead className="px-4 py-2 text-left">
-                    Doktor Yorumu
-                  </TableHead>
-                  <TableHead className="px-4 py-2 text-left">
-                    Hastanın İlaçları
-                  </TableHead>
-                  <TableHead className="px-4 py-2 text-left">PDF</TableHead>
-                </TableRow>
-              </TableHeader>
+          <CardContent className="space-y-4 pt-4">
+            {[...reports]
+              .sort(
+                (a: any, b: any) =>
+                  new Date(b.createdAt).getTime() -
+                  new Date(a.createdAt).getTime(),
+              )
+              .map((r: any) => {
+                const odirLabels = parseJsonArray(r.aiOdriLabels);
+                const odirConfs = parseJsonArray(r.aiOdriConfidences);
 
-              <TableBody>
-                {reports.map((r: any) => (
-                  <TableRow key={r.id} className="h-16 hover:bg-slate-50">
-                    <TableCell className="px-4 py-2">
-                      {format(new Date(r.createdAt), "dd MMM yyyy", {
-                        locale: tr,
-                      })}
-                    </TableCell>
-                    <TableCell className="px-4 py-2">
-                      <Badge>{formatDiagnosisLabel(r.aiResult || "-")}</Badge>
-                    </TableCell>
-                    <TableCell className="px-4 py-2">
-                      %{Math.round(r.confidence * 100)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge>
-                        {formatDiagnosisLabel(resolveEffectiveDiagnosis(r))}
-                      </Badge>
-                    </TableCell>
-
-                    <TableCell className="px-4 py-2">
-                      <Badge>
-                        {r.aiOdriLabels
-                          ? JSON.parse(r.aiOdriLabels).join(", ")
-                          : "—"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="px-4 py-2">
-                      <Badge>
-                        {r.aiOdriConfidences
-                          ? JSON.parse(r.aiOdriConfidences)
-                              .map((c: number) => `${Math.round(c * 100)}%`)
-                              .join(", ")
-                          : "—"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="px-4 py-2">
-                      {r.originalImage && (
-                        <img
-                          src={r.originalImage}
-                          className="w-16 h-16 rounded border border-slate-200"
-                        />
-                      )}
-                    </TableCell>
-                    <TableCell className="px-4 py-2">
-                      {r.heatmapUrl && (
-                        <img
-                          src={r.heatmapUrl}
-                          className="w-16 h-16 rounded border border-slate-200"
-                        />
-                      )}
-                    </TableCell>
-                    <TableCell className="px-4 py-2 max-w-[250px] text-xs">
-                      {r.doctorNote ?? "—"}
-                    </TableCell>
-                    <TableCell className="px-4 py-2">
-                      <Badge>{r.ilaclar}</Badge>
-                    </TableCell>
-                    <TableCell className="px-4 py-2">
+                return (
+                  <div
+                    key={r.id}
+                    className="rounded-xl border border-slate-200 bg-slate-50/40 p-4"
+                  >
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          Tarih
+                        </span>
+                        <Badge className="bg-slate-700 text-white">
+                          {format(new Date(r.createdAt), "dd MMM yyyy", {
+                            locale: tr,
+                          })}
+                        </Badge>
+                      </div>
                       <Button
                         size="sm"
                         variant="outline"
@@ -406,11 +472,138 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
                       >
                         PDF Görüntüle
                       </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                      <div className="rounded-lg border border-slate-200 bg-white p-3">
+                        <p className="text-xs font-semibold text-slate-500">
+                          Klinik Öykü (Anamnez)
+                        </p>
+                        <p className="mt-1 text-sm text-slate-800">
+                          {getReportSectionValue(
+                            r,
+                            "anamnesis",
+                            "Klinik Öykü (Anamnez)",
+                          )}
+                        </p>
+                      </div>
+
+                      <div className="rounded-lg border border-slate-200 bg-white p-3">
+                        <p className="text-xs font-semibold text-slate-500">
+                          Muayene Bulguları
+                        </p>
+                        <p className="mt-1 text-sm text-slate-800">
+                          {getReportSectionValue(
+                            r,
+                            "examFindings",
+                            "Muayene Bulguları",
+                          )}
+                        </p>
+                      </div>
+
+                      <div className="rounded-lg border border-slate-200 bg-white p-3">
+                        <p className="text-xs font-semibold text-slate-500">
+                          Laboratuvar Sonuçları
+                        </p>
+                        <p className="mt-1 text-sm text-slate-800">
+                          {getReportSectionValue(
+                            r,
+                            "labResults",
+                            "Laboratuvar Sonuçları",
+                          )}
+                        </p>
+                      </div>
+
+                      <div className="rounded-lg border border-slate-200 bg-white p-3">
+                        <p className="text-xs font-semibold text-slate-500">
+                          Teşhis / Klinik Değerlendirme
+                        </p>
+                        <p className="mt-1 text-sm text-slate-800">
+                          {getReportSectionValue(
+                            r,
+                            "clinicalAssessment",
+                            "Teşhis / Klinik Değerlendirme",
+                            formatDiagnosisLabel(
+                              resolveEffectiveDiagnosis(r) || "-",
+                            ),
+                          )}
+                        </p>
+                      </div>
+
+                      <div className="rounded-lg border border-slate-200 bg-white p-3">
+                        <p className="text-xs font-semibold text-slate-500">
+                          Tedavi ve Öneriler
+                        </p>
+                        <p className="mt-1 text-sm text-slate-800">
+                          {getTreatmentText(r)}
+                        </p>
+                      </div>
+
+                      <div className="rounded-lg border border-slate-200 bg-white p-3">
+                        <p className="text-xs font-semibold text-slate-500">
+                          AI/DR Risk Tahmini - Güven
+                        </p>
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                          <Badge>
+                            {formatDiagnosisLabel(
+                              resolveEffectiveDiagnosis(r) || "-",
+                            )}
+                          </Badge>
+                          <Badge variant="outline">
+                            %{Math.round(Number(r.confidence ?? 0) * 100)}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      <div className="rounded-lg border border-slate-200 bg-white p-3 md:col-span-2 xl:col-span-1">
+                        <p className="text-xs font-semibold text-slate-500">
+                          AI Diğer Hastalık Risk Tahmini - Güven
+                        </p>
+                        <p className="mt-1 text-sm text-slate-800">
+                          {odirLabels.length > 0
+                            ? odirLabels
+                                .map(
+                                  (label: string, i: number) =>
+                                    `${label} (%${Math.round(Number(odirConfs[i] ?? 0) * 100)})`,
+                                )
+                                .join(", ")
+                            : "-"}
+                        </p>
+                      </div>
+
+                      <div className="rounded-lg border border-slate-200 bg-white p-3">
+                        <p className="text-xs font-semibold text-slate-500">
+                          Fundus Görseli
+                        </p>
+                        {r.originalImage ? (
+                          <img
+                            src={r.originalImage}
+                            alt="Fundus"
+                            className="mt-2 h-24 w-24 rounded border border-slate-200 object-cover"
+                          />
+                        ) : (
+                          <p className="mt-1 text-sm text-slate-500">-</p>
+                        )}
+                      </div>
+
+                      <div className="rounded-lg border border-slate-200 bg-white p-3">
+                        <p className="text-xs font-semibold text-slate-500">
+                          Isı Haritası
+                        </p>
+                        {r.heatmapUrl ? (
+                          <img
+                            src={r.heatmapUrl}
+                            alt="Isı Haritası"
+                            className="mt-2 h-24 w-24 rounded border border-slate-200 object-cover"
+                          />
+                        ) : (
+                          <p className="mt-1 text-sm text-slate-500">-</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
           </CardContent>
         </Card>
       ) : (

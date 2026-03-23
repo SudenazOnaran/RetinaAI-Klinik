@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { getCurrentDoctorSession } from "@/lib/auth-session";
+import { logAuditEvent } from "@/lib/audit-log";
 import PatientDetailClient from "./patient-detail-client"; // Dosya yolunu kontrol et
 
 export default async function HastaDetayPage({
@@ -30,6 +31,15 @@ export default async function HastaDetayPage({
   });
 
   if (!patient) notFound();
+
+  await logAuditEvent({
+    doctorId: doctor.id,
+    role: doctor.role,
+    action: "VIEW",
+    entityType: "PATIENT",
+    entityId: patient.id,
+    description: "Hasta detay sayfasi goruntulendi",
+  });
 
   return <PatientDetailClient patient={patient} />;
 }

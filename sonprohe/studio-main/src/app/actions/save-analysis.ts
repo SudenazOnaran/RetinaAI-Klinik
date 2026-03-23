@@ -2,6 +2,8 @@
 
 import { prisma } from "@/lib/prisma";
 import { getCurrentDoctorSession } from "@/lib/auth-session";
+import { logAuditEvent } from "@/lib/audit-log";
+import { saveDataObject } from "@/lib/object-storage";
 
 export async function saveAnalysisAction({
   patientId,
@@ -56,13 +58,31 @@ export async function saveAnalysisAction({
     }
 
     // 🔹 1. Analysis tablosuna kaydet
+    const storedOriginalImage = originalImage
+      ? await saveDataObject({
+          doctorId: doctor.id,
+          patientId,
+          category: "original",
+          dataUrlOrBase64: originalImage,
+        })
+      : null;
+
+    const storedHeatmapImage = heatmapUrl
+      ? await saveDataObject({
+          doctorId: doctor.id,
+          patientId,
+          category: "heatmap",
+          dataUrlOrBase64: heatmapUrl,
+        })
+      : null;
+
     const savedAnalysis = await prisma.analysis.create({
       data: {
         patientId,
         aiResult, // AI'nın bulduğu ham sonuç
         confidence,
-        heatmapUrl,
-        originalImage,
+        heatmapUrl: storedHeatmapImage?.url,
+        originalImage: storedOriginalImage?.url,
         doctorNote,
         ilaclar,
         aiOdriLabels: aiOdriLabels ? JSON.stringify(aiOdriLabels) : null,
@@ -87,6 +107,27 @@ export async function saveAnalysisAction({
       where: { id: patientId },
       data: {
         risk: finalRiskStatus, // Artık hasta listesinde bu görünecek
+      },
+    });
+
+    await logAuditEvent({
+      doctorId: doctor.id,
+      role: doctor.role,
+      action: sanitizedFeedback ? "APPROVE" : "EDIT",
+      entityType: "ANALYSIS",
+      entityId: savedAnalysis.id,
+      description: sanitizedFeedback
+        ? "Doktor geri bildirimi ile analiz onayi kaydedildi"
+        : "Yeni analiz kaydi olusturuldu",
+      metadata: {
+        patientId,
+        finalRiskStatus,
+        aiResult,
+        confidence,
+        objectStorage: {
+          original: storedOriginalImage?.url ?? null,
+          heatmap: storedHeatmapImage?.url ?? null,
+        },
       },
     });
 

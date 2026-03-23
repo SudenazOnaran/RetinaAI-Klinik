@@ -6,6 +6,7 @@ import io
 import base64
 import time
 import threading
+import os
 import numpy as np
 import cv2
 import torch
@@ -180,6 +181,9 @@ DR_TEMPERATURE = 1.6
 MC_DROPOUT_SAMPLES = 10
 OOD_CONFIDENCE_THRESHOLD = 0.55
 OOD_ENTROPY_THRESHOLD = 1.15
+
+AI_GATEWAY_SHARED_SECRET = os.environ.get("AI_GATEWAY_SHARED_SECRET", "retina-ai-gateway-dev-secret")
+FLASK_DEBUG = os.environ.get("FLASK_DEBUG", "0") == "1"
 
 # =========================
 # Preprocess fonksiyonu
@@ -385,6 +389,13 @@ def _compute_localization_metrics(cam_map, roi_mask_np):
 # =========================
 @app.route("/predict", methods=["POST"])
 def predict():
+    gateway_key = request.headers.get("X-AI-Gateway-Key", "")
+    if gateway_key != AI_GATEWAY_SHARED_SECRET:
+        return jsonify({
+            "success": False,
+            "error": "Yetkisiz AI erisimi.",
+        }), 401
+
     client_ip = (request.headers.get("X-Forwarded-For", "") or request.remote_addr or "unknown").split(",")[0].strip()
     if _is_rate_limited(client_ip):
         return jsonify({
@@ -457,4 +468,4 @@ def predict():
         }), 500
 
 if __name__ == "__main__":
-    app.run(port=5000, debug=True)
+    app.run(port=5000, debug=FLASK_DEBUG)

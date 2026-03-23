@@ -28,6 +28,22 @@ type RetinaReportPdfInput = {
   heatmapUrl?: string | null;
 };
 
+type StructuredReport = {
+  version?: string;
+  reportTitle?: string;
+  reportDate?: string;
+  doctorName?: string;
+  doctorNotes?: string;
+  sections?: {
+    anamnesis?: string;
+    examFindings?: string;
+    labResults?: string;
+    clinicalAssessment?: string;
+    treatmentRecommendations?: string;
+  };
+  aiSummary?: string;
+};
+
 function loadImage(src: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const img = new Image();
@@ -132,19 +148,84 @@ function escapeHtml(value: string) {
     .replace(/'/g, "&#39;");
 }
 
+function parseStructuredReport(doctorNote?: string) {
+  if (!doctorNote) return null;
+  try {
+    const parsed = JSON.parse(doctorNote) as StructuredReport;
+    if (parsed?.version === "manual_report_v2") {
+      return parsed;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function getLegacyFieldValue(doctorNote: string | undefined, label: string) {
+  if (!doctorNote) return null;
+  const prefix = `${label}:`;
+  const line = doctorNote
+    .split("\n")
+    .map((v) => v.trim())
+    .find((v) => v.startsWith(prefix));
+  if (!line) return null;
+  return line.slice(prefix.length).trim() || null;
+}
+
 async function buildRetinaReportPdf(input: RetinaReportPdfInput) {
+  const structured = parseStructuredReport(input.doctorNote);
+
+  const anamnesisText =
+    structured?.sections?.anamnesis ||
+    getLegacyFieldValue(input.doctorNote, "Klinik Öykü (Anamnez)") ||
+    "Belirtilmedi";
+  const examFindingsText =
+    structured?.sections?.examFindings ||
+    getLegacyFieldValue(input.doctorNote, "Muayene Bulguları") ||
+    "Belirtilmedi";
+  const labResultsText =
+    structured?.sections?.labResults ||
+    getLegacyFieldValue(input.doctorNote, "Laboratuvar Sonuçları") ||
+    "Belirtilmedi";
+  const clinicalAssessmentText =
+    structured?.sections?.clinicalAssessment ||
+    getLegacyFieldValue(input.doctorNote, "Teşhis / Klinik Değerlendirme") ||
+    formatLabel(input.clinicalFinalResult ?? input.aiResult);
+  const treatmentText =
+    structured?.sections?.treatmentRecommendations ||
+    getLegacyFieldValue(input.doctorNote, "Tedavi ve Öneriler") ||
+    input.medications ||
+    "Belirtilmedi";
+  const aiSummaryText =
+    structured?.aiSummary ||
+    getLegacyFieldValue(input.doctorNote, "AI Özeti") ||
+    "Belirtilmedi";
+  const doctorNotesText =
+    structured?.doctorNotes ||
+    getLegacyFieldValue(input.doctorNote, "Doktor Notları") ||
+    input.specialComments ||
+    "Belirtilmedi";
+
   const settings = loadRetinaSettingsFromStorage();
   const reportSettings = settings.report;
   const doctorDisplayName =
     settings.doctor.signatureName ||
     settings.doctor.fullName ||
+    structured?.doctorName ||
     input.doctorName ||
     "Doktor Adı Belirtilmedi";
-  const reportTitle = settings.clinic.reportHeader || "RETINA ANALİZ RAPORU";
+  const reportTitle =
+    structured?.reportTitle ||
+    settings.clinic.reportHeader ||
+    "RETINA ANALİZ RAPORU";
   const clinicName = settings.clinic.clinicName || "RETINA AI";
   const bodyLineHeight = reportSettings.compactPdf ? 26 : 32;
 
-  const reportDate = input.reportDate ? new Date(input.reportDate) : new Date();
+  const reportDateSource =
+    structured?.reportDate && !Number.isNaN(Date.parse(structured.reportDate))
+      ? structured.reportDate
+      : input.reportDate;
+  const reportDate = reportDateSource ? new Date(reportDateSource) : new Date();
   const reportNo = `RPT-${reportDate.toISOString().slice(0, 10).replace(/-/g, "")}-${input.patientId.slice(-6).toUpperCase()}`;
   const priority = getClinicalPriority(input.aiResult, input.confidence);
   const priorityColors = getPriorityColor(priority);
@@ -162,12 +243,26 @@ async function buildRetinaReportPdf(input: RetinaReportPdfInput) {
   canvas.width = 1240;
   canvas.height = reportSettings.compactPdf ? 2900 : 3300;
 
+  // A4 page height projected onto canvas coordinates.
+  const pageHeightInCanvas = (841.89 * canvas.width) / 595.28;
+
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   let y = 90;
   const left = 80;
   const contentWidth = canvas.width - left * 2;
+
+  const ensureSectionFitsOnePage = (
+    requiredHeight: number,
+    topPadding = 24,
+  ) => {
+    const pageStart = Math.floor(y / pageHeightInCanvas) * pageHeightInCanvas;
+    const pageBottom = pageStart + pageHeightInCanvas;
+    if (y + requiredHeight > pageBottom) {
+      y = pageBottom + topPadding;
+    }
+  };
 
   ctx.fillStyle = "#F2F7FF";
   ctx.fillRect(canvas.width - 360, 40, 280, 90);
@@ -274,14 +369,14 @@ async function buildRetinaReportPdf(input: RetinaReportPdfInput) {
 
   ctx.fillStyle = "#0A2540";
   ctx.font = "bold 30px Arial";
-  ctx.fillText("3) Klinik Özet", left, y);
+  ctx.fillText("3) Klinik Form Bulguları", left, y);
   y += 42;
 
   ctx.fillStyle = "#1F2937";
   ctx.font = "22px Arial";
   y = wrapCanvasText(
     ctx,
-    `Nihai Sonuç: ${finalResult}`,
+    `Klinik Öykü (Anamnez): ${anamnesisText}`,
     left,
     y,
     contentWidth,
@@ -289,7 +384,7 @@ async function buildRetinaReportPdf(input: RetinaReportPdfInput) {
   );
   y = wrapCanvasText(
     ctx,
-    `AI Güven Oranı: %${(input.confidence * 100).toFixed(1)}`,
+    `Muayene Bulguları: ${examFindingsText}`,
     left,
     y,
     contentWidth,
@@ -297,7 +392,23 @@ async function buildRetinaReportPdf(input: RetinaReportPdfInput) {
   );
   y = wrapCanvasText(
     ctx,
-    `Öncelik: ${priority}`,
+    `Laboratuvar Sonuçları: ${labResultsText}`,
+    left,
+    y,
+    contentWidth,
+    bodyLineHeight,
+  );
+  y = wrapCanvasText(
+    ctx,
+    `Teşhis / Klinik Değerlendirme: ${clinicalAssessmentText}`,
+    left,
+    y,
+    contentWidth,
+    bodyLineHeight,
+  );
+  y = wrapCanvasText(
+    ctx,
+    `Tedavi ve Öneriler: ${treatmentText}`,
     left,
     y,
     contentWidth,
@@ -307,13 +418,13 @@ async function buildRetinaReportPdf(input: RetinaReportPdfInput) {
   y += 22;
   ctx.fillStyle = "#0A2540";
   ctx.font = "bold 30px Arial";
-  ctx.fillText("4) AI Bulguları ve Klinik Yorum", left, y);
+  ctx.fillText("4) AI Bulguları ve Risk Sonuçları", left, y);
   y += 42;
 
   ctx.fillStyle = "#1F2937";
   ctx.font = "22px Arial";
   ctx.fillText(
-    `Retinopati Sonucu: ${formatLabel(input.aiResult)} (Güven: %${(input.confidence * 100).toFixed(1)})`,
+    `AI/DR Risk Tahmini - Güven: ${formatLabel(input.aiResult)} (%${(input.confidence * 100).toFixed(1)})`,
     left,
     y,
   );
@@ -321,7 +432,15 @@ async function buildRetinaReportPdf(input: RetinaReportPdfInput) {
 
   y = wrapCanvasText(
     ctx,
-    `Klinik Nihai Sonuç: ${finalResult}`,
+    `Teşhis / Klinik Değerlendirme (Nihai): ${finalResult}`,
+    left,
+    y,
+    contentWidth,
+    bodyLineHeight,
+  );
+  y = wrapCanvasText(
+    ctx,
+    `AI Özeti: ${aiSummaryText}`,
     left,
     y,
     contentWidth,
@@ -331,7 +450,7 @@ async function buildRetinaReportPdf(input: RetinaReportPdfInput) {
   y += 8;
   ctx.fillStyle = "#1F2937";
   ctx.font = "bold 22px Arial";
-  ctx.fillText("ODIR / Risk Sıralaması (Yüksekten Düşüğe)", left, y);
+  ctx.fillText("AI Diğer Hastalık Risk Tahmini - Güven", left, y);
   y += 34;
 
   ctx.font = "20px Arial";
@@ -369,39 +488,19 @@ async function buildRetinaReportPdf(input: RetinaReportPdfInput) {
   y += 26;
   ctx.fillStyle = "#0A2540";
   ctx.font = "bold 30px Arial";
-  ctx.fillText("5) Doktor Değerlendirmesi ve Plan", left, y);
+  ctx.fillText("5) Ek Doktor Notları", left, y);
   y += 42;
 
   if (reportSettings.includeDoctorNotes) {
     ctx.fillStyle = "#1F2937";
     ctx.font = "bold 22px Arial";
-    ctx.fillText("Doktor Notu", left, y);
+    ctx.fillText("Doktor Notları", left, y);
     y += 32;
 
     ctx.font = "20px Arial";
     y = wrapCanvasText(
       ctx,
-      input.doctorNote || "Belirtilmedi",
-      left,
-      y,
-      contentWidth,
-      bodyLineHeight,
-    );
-
-    y += 20;
-  }
-
-  if (reportSettings.includeMedications) {
-    ctx.fillStyle = "#0A2540";
-    ctx.font = "bold 22px Arial";
-    ctx.fillText("Tedavi / İlaç Planı", left, y);
-    y += 32;
-
-    ctx.fillStyle = "#1F2937";
-    ctx.font = "20px Arial";
-    y = wrapCanvasText(
-      ctx,
-      input.medications || "Belirtilmedi",
+      doctorNotesText,
       left,
       y,
       contentWidth,
@@ -431,6 +530,12 @@ async function buildRetinaReportPdf(input: RetinaReportPdfInput) {
   y += 24;
   ctx.fillStyle = "#0A2540";
   ctx.font = "bold 30px Arial";
+
+  const retinaImageHeight = reportSettings.compactPdf ? 300 : 360;
+  const retinaImageWidth = reportSettings.compactPdf ? 430 : 500;
+  const imageSectionHeight = retinaImageHeight + 240;
+  ensureSectionFitsOnePage(imageSectionHeight, 36);
+
   ctx.fillText("6) Görüntü Kanıtları", left, y);
   y += 34;
 
@@ -441,16 +546,12 @@ async function buildRetinaReportPdf(input: RetinaReportPdfInput) {
 
   if (input.originalImage) {
     const retinaImage = await loadImage(input.originalImage);
-    const imageHeight = reportSettings.compactPdf ? 300 : 360;
-    const imageWidth = reportSettings.compactPdf ? 430 : 500;
-    ctx.drawImage(retinaImage, left, y, imageWidth, imageHeight);
+    ctx.drawImage(retinaImage, left, y, retinaImageWidth, retinaImageHeight);
   }
 
   if (reportSettings.includeHeatmap) {
     const heatmapX = reportSettings.compactPdf ? left + 520 : left + 580;
     const heatmapYTitle = reportSettings.compactPdf ? y - 18 : y - 24;
-    const imageHeight = reportSettings.compactPdf ? 300 : 360;
-    const imageWidth = reportSettings.compactPdf ? 430 : 500;
 
     ctx.fillStyle = "#0A2540";
     ctx.font = "bold 22px Arial";
@@ -458,7 +559,13 @@ async function buildRetinaReportPdf(input: RetinaReportPdfInput) {
 
     if (input.heatmapUrl) {
       const heatmapImage = await loadImage(input.heatmapUrl);
-      ctx.drawImage(heatmapImage, heatmapX, y, imageWidth, imageHeight);
+      ctx.drawImage(
+        heatmapImage,
+        heatmapX,
+        y,
+        retinaImageWidth,
+        retinaImageHeight,
+      );
     }
   }
 
@@ -499,14 +606,14 @@ async function buildRetinaReportPdf(input: RetinaReportPdfInput) {
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const scale = pageWidth / canvas.width;
-  const pageHeightInCanvas = pageHeight / scale;
+  const pageHeightInCanvasForSplit = pageHeight / scale;
 
   let renderedHeight = 0;
   let pageIndex = 0;
 
   while (renderedHeight < canvas.height) {
     const sliceHeight = Math.min(
-      pageHeightInCanvas,
+      pageHeightInCanvasForSplit,
       canvas.height - renderedHeight,
     );
 

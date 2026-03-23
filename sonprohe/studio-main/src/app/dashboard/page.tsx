@@ -84,6 +84,8 @@ export default async function DashboardPage() {
           select: {
             createdAt: true,
             confidence: true,
+            aiResult: true,
+            drFeedback: true,
           },
         },
       },
@@ -101,13 +103,18 @@ export default async function DashboardPage() {
     ? Math.round((highRiskCount / totalPatients) * 100)
     : 0;
 
-  const dashboardAlertPatients = alertPatients.map((patient) => ({
-    id: patient.id,
-    fullName: patient.fullName,
-    risk: patient.risk,
-    latestAnalysisAt: patient.analyses[0]?.createdAt.toISOString() ?? null,
-    latestConfidence: patient.analyses[0]?.confidence ?? null,
-  }));
+  const dashboardAlertPatients = alertPatients.map((patient) => {
+    const latest = patient.analyses[0];
+    const finalRisk = latest?.drFeedback || latest?.aiResult || patient.risk;
+
+    return {
+      id: patient.id,
+      fullName: patient.fullName,
+      risk: finalRisk,
+      latestAnalysisAt: latest?.createdAt.toISOString() ?? null,
+      latestConfidence: latest?.confidence ?? null,
+    };
+  });
 
   return (
     <div className="clinic-app-bg min-h-screen p-4 md:p-6">
@@ -215,8 +222,10 @@ export default async function DashboardPage() {
                       asChild
                       className="text-slate-700"
                     >
-                      <Link href={`/dashboard/hastalar/${patient.id}`}>
-                        İncele <ChevronRight className="ml-1 h-3 w-3" />
+                      <Link
+                        href={`/dashboard/hastalar/${patient.id}?tab=report-create`}
+                      >
+                        Rapor Oluştur <ChevronRight className="ml-1 h-3 w-3" />
                       </Link>
                     </Button>
                   </div>

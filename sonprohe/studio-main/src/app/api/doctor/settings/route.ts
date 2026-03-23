@@ -1,11 +1,35 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentDoctorSession } from "@/lib/auth-session";
+import { isRoleAllowed } from "@/lib/roles";
 import {
   getDefaultRetinaSettings,
   normalizeRetinaSettings,
   RetinaSettings,
 } from "@/lib/retina-settings";
+
+async function ensureDoctorSettingsTable() {
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "DoctorSettings" (
+      "id" TEXT NOT NULL,
+      "doctorId" TEXT NOT NULL,
+      "settings" JSONB NOT NULL,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT "DoctorSettings_pkey" PRIMARY KEY ("id")
+    );
+  `);
+
+  await prisma.$executeRawUnsafe(`
+    CREATE UNIQUE INDEX IF NOT EXISTS "DoctorSettings_doctorId_key"
+    ON "DoctorSettings"("doctorId");
+  `);
+}
+
+type DoctorSettingsRow = {
+  settings: unknown;
+  updatedAt: Date;
+};
 
 export async function GET() {
   const session = await getCurrentDoctorSession();
@@ -13,21 +37,20 @@ export async function GET() {
     return NextResponse.json({ error: "Oturum bulunamadi" }, { status: 401 });
   }
 
-  const prismaRuntime = prisma as unknown as {
-    doctorSettings: {
-      findUnique: (
-        args: unknown,
-      ) => Promise<{ settings: unknown; updatedAt: Date } | null>;
-      upsert: (
-        args: unknown,
-      ) => Promise<{ settings: unknown; updatedAt: Date }>;
-    };
-  };
+  if (!isRoleAllowed(session.role, ["DOCTOR", "MANAGER"])) {
+    return NextResponse.json({ error: "Yetkiniz yok" }, { status: 403 });
+  }
 
-  const row = await prismaRuntime.doctorSettings.findUnique({
-    where: { doctorId: session.id },
-    select: { settings: true, updatedAt: true },
-  });
+  await ensureDoctorSettingsTable();
+
+  const rows = await prisma.$queryRaw<DoctorSettingsRow[]>`
+    SELECT "settings", "updatedAt"
+    FROM "DoctorSettings"
+    WHERE "doctorId" = ${session.id}
+    LIMIT 1
+  `;
+
+  const row = rows[0] ?? null;
 
   const settings = normalizeRetinaSettings(
     (row?.settings as Partial<RetinaSettings> | undefined) ??
@@ -47,29 +70,38 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: "Oturum bulunamadi" }, { status: 401 });
   }
 
+  if (!isRoleAllowed(session.role, ["DOCTOR", "MANAGER"])) {
+    return NextResponse.json({ error: "Yetkiniz yok" }, { status: 403 });
+  }
+
   const body = (await req.json()) as { settings?: Partial<RetinaSettings> };
   const normalized = normalizeRetinaSettings(body.settings);
 
-  const prismaRuntime = prisma as unknown as {
-    doctorSettings: {
-      upsert: (
-        args: unknown,
-      ) => Promise<{ settings: unknown; updatedAt: Date }>;
-    };
-  };
+  await ensureDoctorSettingsTable();
 
-  const saved = await prismaRuntime.doctorSettings.upsert({
-    where: { doctorId: session.id },
-    update: { settings: normalized },
-    create: {
-      doctorId: session.id,
-      settings: normalized,
-    },
-    select: {
-      settings: true,
-      updatedAt: true,
-    },
-  });
+  const rows = await prisma.$queryRaw<DoctorSettingsRow[]>`
+    INSERT INTO "DoctorSettings" (
+      "id",
+      "doctorId",
+      "settings",
+      "createdAt",
+      "updatedAt"
+    )
+    VALUES (
+      ${session.id},
+      ${session.id},
+      ${JSON.stringify(normalized)}::jsonb,
+      CURRENT_TIMESTAMP,
+      CURRENT_TIMESTAMP
+    )
+    ON CONFLICT ("doctorId")
+    DO UPDATE SET
+      "settings" = EXCLUDED."settings",
+      "updatedAt" = CURRENT_TIMESTAMP
+    RETURNING "settings", "updatedAt"
+  `;
+
+  const saved = rows[0];
 
   return NextResponse.json({
     success: true,

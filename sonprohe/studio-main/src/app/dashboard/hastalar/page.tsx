@@ -7,6 +7,7 @@ import HastalarClient from "./HastalarClient";
 import { Card, CardContent } from "@/components/ui/card";
 import { User, Activity, AlertTriangle, Plus } from "lucide-react";
 import { isHighRiskLabel } from "@/lib/risk-alerts";
+import { DashboardReportsQuickAccess } from "@/components/dashboard/dashboard-reports-quick-access";
 
 export default async function HastalarPage() {
   const doctor = await getCurrentDoctorSession();
@@ -16,7 +17,7 @@ export default async function HastalarPage() {
 
   // 🚀 VERİTABANI SORGULARI (Parallel Fetching)
   // Hem hasta listesini hem de toplam analiz sayısını aynı anda çekiyoruz.
-  const [patients, totalAnalyses] = await Promise.all([
+  const [patients, totalAnalyses, recentReports] = await Promise.all([
     prisma.patient.findMany({
       where: { doctorId: doctor.id },
       orderBy: { createdAt: "desc" },
@@ -27,6 +28,28 @@ export default async function HastalarPage() {
       },
     }),
     prisma.analysis.count({ where: { patient: { doctorId: doctor.id } } }),
+    prisma.analysis.findMany({
+      where: {
+        patient: {
+          doctorId: doctor.id,
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 120,
+      select: {
+        id: true,
+        aiResult: true,
+        drFeedback: true,
+        confidence: true,
+        createdAt: true,
+        patient: {
+          select: {
+            id: true,
+            fullName: true,
+          },
+        },
+      },
+    }),
   ]);
 
   // Ortak risk sınıflandırıcısı ile hesaplanır (Severe, Proliferative_DR, Ağır Evre, Çok İleri Evre vb.)
@@ -35,6 +58,15 @@ export default async function HastalarPage() {
   const serializedPatients = patients.map((patient) => ({
     ...patient,
     createdAt: patient.createdAt.toISOString(),
+  }));
+
+  const quickReports = recentReports.map((row) => ({
+    id: row.id,
+    patientId: row.patient.id,
+    patientName: row.patient.fullName,
+    diagnosis: row.drFeedback || row.aiResult || "No_DR",
+    confidence: row.confidence,
+    createdAt: row.createdAt.toISOString(),
   }));
 
   return (

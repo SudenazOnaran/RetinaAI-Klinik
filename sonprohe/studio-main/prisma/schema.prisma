@@ -7,11 +7,19 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum DoctorRole {
+  DOCTOR
+  ASSISTANT
+  MANAGER
+  AUDITOR
+}
+
 model Doctor {
   id             String            @id @default(cuid())
   name           String
   email          String            @unique
   password       String
+  role           DoctorRole        @default(DOCTOR)
   createdAt      DateTime          @default(now())
   patients       Patient[]
   settings       DoctorSettings?

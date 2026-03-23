@@ -3,12 +3,14 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Eye, UserPlus } from "lucide-react";
+import { DoctorRole } from "@/lib/roles";
 
 export default function RegisterPage() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [role, setRole] = useState<DoctorRole>("DOCTOR");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -27,7 +29,7 @@ export default function RegisterPage() {
       const res = await fetch("/api/doctor/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ name, email, password, role }),
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -91,6 +93,22 @@ export default function RegisterPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                 />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">
+                  Rol
+                </label>
+                <select
+                  className="w-full rounded-lg border border-[var(--retina-border)] px-3 py-2.5 outline-none focus:border-[var(--retina-primary)]"
+                  value={role}
+                  onChange={(e) => setRole(e.target.value as DoctorRole)}
+                >
+                  <option value="DOCTOR">Doktor</option>
+                  <option value="ASSISTANT">Asistan</option>
+                  <option value="MANAGER">Yönetici</option>
+                  <option value="AUDITOR">Denetleyici</option>
+                </select>
               </div>
 
               {error && (
