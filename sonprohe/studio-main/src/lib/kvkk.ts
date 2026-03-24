@@ -18,60 +18,7 @@ export type ProcessingLogRow = {
   createdAt: Date;
 };
 
-let ensured = false;
-
-export async function ensureKvkkTables() {
-  if (ensured) return;
-
-  await prisma.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS "KvkkConsent" (
-      "id" TEXT NOT NULL,
-      "doctorId" TEXT NOT NULL,
-      "patientId" TEXT NOT NULL,
-      "consentGiven" BOOLEAN NOT NULL DEFAULT FALSE,
-      "consentVersion" TEXT NOT NULL DEFAULT 'v1',
-      "consentAt" TIMESTAMP(3),
-      "note" TEXT,
-      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      CONSTRAINT "KvkkConsent_pkey" PRIMARY KEY ("id")
-    );
-  `);
-
-  await prisma.$executeRawUnsafe(`
-    CREATE UNIQUE INDEX IF NOT EXISTS "KvkkConsent_doctorId_patientId_key"
-    ON "KvkkConsent"("doctorId", "patientId");
-  `);
-
-  await prisma.$executeRawUnsafe(`
-    CREATE INDEX IF NOT EXISTS "KvkkConsent_doctorId_updatedAt_idx"
-    ON "KvkkConsent"("doctorId", "updatedAt" DESC);
-  `);
-
-  await prisma.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS "KvkkProcessingLog" (
-      "id" TEXT NOT NULL,
-      "doctorId" TEXT NOT NULL,
-      "patientId" TEXT,
-      "action" TEXT NOT NULL,
-      "detail" TEXT NOT NULL,
-      "metadata" JSONB,
-      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      CONSTRAINT "KvkkProcessingLog_pkey" PRIMARY KEY ("id")
-    );
-  `);
-
-  await prisma.$executeRawUnsafe(`
-    CREATE INDEX IF NOT EXISTS "KvkkProcessingLog_doctorId_createdAt_idx"
-    ON "KvkkProcessingLog"("doctorId", "createdAt" DESC);
-  `);
-
-  ensured = true;
-}
-
 export async function getKvkkConsents(doctorId: string) {
-  await ensureKvkkTables();
-
   return prisma.$queryRaw<ConsentRow[]>`
     SELECT
       "patientId",
@@ -93,8 +40,6 @@ export async function upsertKvkkConsent(input: {
   consentVersion: string;
   note?: string;
 }) {
-  await ensureKvkkTables();
-
   const id = randomUUID();
   const note = input.note?.trim() || null;
 
@@ -147,7 +92,6 @@ export async function appendKvkkProcessingLog(input: {
   detail: string;
   metadata?: Record<string, unknown>;
 }) {
-  await ensureKvkkTables();
   const id = randomUUID();
   const metadataJson = JSON.stringify(input.metadata || {});
 
@@ -174,8 +118,6 @@ export async function appendKvkkProcessingLog(input: {
 }
 
 export async function getKvkkProcessingLogs(doctorId: string, limit = 50) {
-  await ensureKvkkTables();
-
   return prisma.$queryRaw<ProcessingLogRow[]>`
     SELECT
       "id",

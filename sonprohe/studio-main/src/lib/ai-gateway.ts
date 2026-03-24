@@ -9,42 +9,12 @@ type QueuePayload = {
   queuedByDoctorId: string;
 };
 
-let ensured = false;
-
-export async function ensureAiQueueTable() {
-  if (ensured) return;
-
-  await prisma.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS "AiRequestQueue" (
-      "id" TEXT NOT NULL,
-      "doctorId" TEXT NOT NULL,
-      "status" TEXT NOT NULL,
-      "endpoint" TEXT NOT NULL,
-      "payload" JSONB NOT NULL,
-      "error" TEXT,
-      "attempts" INTEGER NOT NULL DEFAULT 0,
-      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      CONSTRAINT "AiRequestQueue_pkey" PRIMARY KEY ("id")
-    );
-  `);
-
-  await prisma.$executeRawUnsafe(`
-    CREATE INDEX IF NOT EXISTS "AiRequestQueue_status_createdAt_idx"
-    ON "AiRequestQueue"("status", "createdAt" ASC);
-  `);
-
-  ensured = true;
-}
-
 export async function enqueueAiRequest(input: {
   doctorId: string;
   endpoint: string;
   payload: QueuePayload;
   error?: string;
 }) {
-  await ensureAiQueueTable();
-
   const id = randomUUID();
   const payloadJson = JSON.stringify(input.payload);
 
@@ -81,7 +51,13 @@ function getAiServiceUrl() {
 }
 
 function getAiGatewaySecret() {
-  return process.env.AI_GATEWAY_SHARED_SECRET || "retina-ai-gateway-dev-secret";
+  const secret = process.env.AI_GATEWAY_SHARED_SECRET;
+  if (!secret || !secret.trim()) {
+    throw new Error(
+      "AI_GATEWAY_SHARED_SECRET tanimli degil. AI gecidi guvenlik nedeniyle calismiyor.",
+    );
+  }
+  return secret;
 }
 
 function getTimeoutMs() {
@@ -96,7 +72,7 @@ function getRetryCount() {
   return Math.min(5, value);
 }
 
-function shouldUseTlsEnforcement(url: URL) {
+function shouldUseTlsEnforcement() {
   if (process.env.NODE_ENV !== "production") return false;
   if (process.env.AI_ALLOW_HTTP_IN_PROD === "1") return false;
   return true;
@@ -108,7 +84,7 @@ async function delay(ms: number) {
 
 export async function callAiServiceWithRetry(formData: FormData) {
   const url = new URL(getAiServiceUrl());
-  if (shouldUseTlsEnforcement(url) && url.protocol !== "https:") {
+  if (shouldUseTlsEnforcement() && url.protocol !== "https:") {
     throw new Error("AI servisi production ortaminda HTTPS kullanmalidir.");
   }
 

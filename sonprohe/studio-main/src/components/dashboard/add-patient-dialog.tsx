@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createPatient } from "@/app/actions/create-patient";
+import { createPatientAction } from "@/app/actions/create-patient";
 
 interface AddPatientDialogProps {
   open: boolean;
@@ -37,7 +37,12 @@ export function AddPatientDialog({
 
         <form
           action={async (formData) => {
-            await createPatient(formData);
+            await createPatientAction({
+              fullName: String(formData.get("fullName") || ""),
+              tcNo: String(formData.get("tcNo") || ""),
+              age: Number(formData.get("age") || 0),
+              gender: "Belirtilmedi",
+            });
             onOpenChange(false);
             router.refresh();
           }}

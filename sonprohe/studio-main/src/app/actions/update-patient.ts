@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getCurrentDoctorSession } from "@/lib/auth-session";
 import { logAuditEvent } from "@/lib/audit-log";
+import { validateUpdatePatientClinicalInput } from "@/lib/patient-validation";
 
 export async function updatePatientAction(formData: FormData) {
   const doctor = await getCurrentDoctorSession();
@@ -16,14 +17,26 @@ export async function updatePatientAction(formData: FormData) {
   const diabetesYearsRaw = formData.get("diabetesYears");
   const hba1cRaw = formData.get("hba1c");
 
+  const parsed = validateUpdatePatientClinicalInput({
+    age: Number(formData.get("age")),
+    diabetesYears: diabetesYearsRaw === "" ? null : Number(diabetesYearsRaw),
+    hba1c: hba1cRaw === "" ? null : Number(hba1cRaw),
+  });
+
+  if (!parsed.success) {
+    throw new Error(
+      parsed.error.issues[0]?.message ?? "Gecersiz guncelleme verisi",
+    );
+  }
+
+  const validated = parsed.data;
+
   const updated = await prisma.patient.updateMany({
     where: { id, doctorId: doctor.id },
     data: {
-      age: Number(formData.get("age")),
-
-      diabetesYears: diabetesYearsRaw === "" ? null : Number(diabetesYearsRaw),
-
-      hba1c: hba1cRaw === "" ? null : Number(hba1cRaw),
+      age: validated.age,
+      diabetesYears: validated.diabetesYears,
+      hba1c: validated.hba1c,
     },
   });
 
@@ -39,9 +52,9 @@ export async function updatePatientAction(formData: FormData) {
     entityId: id,
     description: "Hasta demografik ve klinik alanlari guncellendi",
     metadata: {
-      age: Number(formData.get("age")),
-      diabetesYears: diabetesYearsRaw === "" ? null : Number(diabetesYearsRaw),
-      hba1c: hba1cRaw === "" ? null : Number(hba1cRaw),
+      age: validated.age,
+      diabetesYears: validated.diabetesYears,
+      hba1c: validated.hba1c,
     },
   });
 

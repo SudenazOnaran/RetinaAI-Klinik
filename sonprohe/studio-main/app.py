@@ -16,15 +16,51 @@ from torchvision import models, transforms
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from PIL import Image, UnidentifiedImageError
+from dotenv import load_dotenv
 import random
 from collections import defaultdict, deque
 from werkzeug.exceptions import RequestEntityTooLarge
 
+try:
+    import redis
+except ImportError:  # pragma: no cover - optional dependency for local-only mode
+    redis = None
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(BASE_DIR, ".env"), override=False)
+load_dotenv(os.path.join(BASE_DIR, ".env.local"), override=True)
+
 # =========================
 # Flask setup
 # =========================
+
+
+def _parse_allowed_cors_origins() -> list[str]:
+    raw = os.environ.get("AI_CORS_ALLOWED_ORIGINS", "")
+    if raw.strip():
+        return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+    # Fail-closed to local development origins when env is not configured.
+    return [
+        "http://localhost:9002",
+        "http://127.0.0.1:9002",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
+
+
 app = Flask(__name__)
-CORS(app)
+ALLOWED_CORS_ORIGINS = _parse_allowed_cors_origins()
+CORS(
+    app,
+    resources={
+        r"/predict": {
+            "origins": ALLOWED_CORS_ORIGINS,
+            "methods": ["POST", "OPTIONS"],
+            "allow_headers": ["Content-Type", "X-AI-Gateway-Key"],
+        }
+    },
+)
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Device:", DEVICE)
 
@@ -42,14 +78,78 @@ ALLOWED_MIME_TYPES = {
 }
 
 # Basic in-memory IP rate limiter
-RATE_LIMIT_WINDOW_SECONDS = 60
-RATE_LIMIT_MAX_REQUESTS = 30
+RATE_LIMIT_WINDOW_SECONDS = int(os.environ.get("AI_RATE_LIMIT_WINDOW_SECONDS", "60"))
+RATE_LIMIT_MAX_REQUESTS = int(os.environ.get("AI_RATE_LIMIT_MAX_REQUESTS", "30"))
+RATE_LIMIT_REDIS_URL = os.environ.get("AI_RATE_LIMIT_REDIS_URL", "").strip()
+RATE_LIMIT_REDIS_PREFIX = os.environ.get("AI_RATE_LIMIT_REDIS_PREFIX", "ai:ratelimit")
+
+_RATE_LIMIT_REDIS_SCRIPT = """
+local key = KEYS[1]
+local window_start = tonumber(ARGV[1])
+local now_score = tonumber(ARGV[2])
+local member = ARGV[3]
+local ttl = tonumber(ARGV[4])
+local limit = tonumber(ARGV[5])
+
+redis.call('ZREMRANGEBYSCORE', key, '-inf', window_start)
+local count = redis.call('ZCARD', key)
+if count >= limit then
+  return 1
+end
+
+redis.call('ZADD', key, now_score, member)
+redis.call('EXPIRE', key, ttl)
+return 0
+"""
+
+_rate_limit_backend = "memory"
+_rate_limit_redis_client = None
+if RATE_LIMIT_REDIS_URL:
+    if redis is None:
+        print("Rate limiter: redis backend is configured but 'redis' package is missing. Falling back to memory backend.")
+    else:
+        try:
+            _rate_limit_redis_client = redis.Redis.from_url(
+                RATE_LIMIT_REDIS_URL,
+                decode_responses=True,
+                socket_timeout=0.5,
+                socket_connect_timeout=0.5,
+            )
+            _rate_limit_redis_client.ping()
+            _rate_limit_backend = "redis"
+        except Exception as err:
+            print(f"Rate limiter: redis backend unavailable ({err}). Falling back to memory backend.")
+            _rate_limit_redis_client = None
+
 _rate_limit_store = defaultdict(deque)
 _rate_limit_lock = threading.Lock()
+print(f"Rate limiter backend: {_rate_limit_backend}")
 
 
 def _is_rate_limited(client_ip: str) -> bool:
     now = time.time()
+
+    if _rate_limit_backend == "redis" and _rate_limit_redis_client is not None:
+        key = f"{RATE_LIMIT_REDIS_PREFIX}:{client_ip}"
+        window_start = now - RATE_LIMIT_WINDOW_SECONDS
+        member = f"{now}:{random.randint(1000, 9999)}"
+
+        try:
+            limited = _rate_limit_redis_client.eval(
+                _RATE_LIMIT_REDIS_SCRIPT,
+                1,
+                key,
+                str(window_start),
+                str(now),
+                member,
+                str(RATE_LIMIT_WINDOW_SECONDS),
+                str(RATE_LIMIT_MAX_REQUESTS),
+            )
+            return bool(int(limited))
+        except Exception:
+            # Degrade gracefully to local in-memory limiter when Redis becomes unreachable.
+            pass
+
     with _rate_limit_lock:
         bucket = _rate_limit_store[client_ip]
         while bucket and now - bucket[0] > RATE_LIMIT_WINDOW_SECONDS:
@@ -182,7 +282,11 @@ MC_DROPOUT_SAMPLES = 10
 OOD_CONFIDENCE_THRESHOLD = 0.55
 OOD_ENTROPY_THRESHOLD = 1.15
 
-AI_GATEWAY_SHARED_SECRET = os.environ.get("AI_GATEWAY_SHARED_SECRET", "retina-ai-gateway-dev-secret")
+AI_GATEWAY_SHARED_SECRET = os.environ.get("AI_GATEWAY_SHARED_SECRET")
+if not AI_GATEWAY_SHARED_SECRET:
+    raise RuntimeError(
+        "AI_GATEWAY_SHARED_SECRET tanimli degil. Guvenlik nedeniyle servis baslatilmadi."
+    )
 FLASK_DEBUG = os.environ.get("FLASK_DEBUG", "0") == "1"
 
 # =========================

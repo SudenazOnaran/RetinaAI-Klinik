@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Eye, LogIn } from "lucide-react";
 
 export default function LoginPage() {
@@ -26,7 +26,33 @@ export default function LoginPage() {
       if (res.ok && data.success) {
         router.replace("/dashboard");
       } else {
-        setError(data.error || "Giriş başarısız");
+        if (
+          data.errorCode === "PASSWORD_RESET_REQUIRED" ||
+          data.errorCode === "TEMP_PASSWORD_EXPIRED"
+        ) {
+          const emailParam = encodeURIComponent(email);
+          const reasonParam = encodeURIComponent(data.errorCode);
+          router.push(
+            `/reset-password?email=${emailParam}&reason=${reasonParam}`,
+          );
+          return;
+        }
+
+        if (res.status === 429) {
+          const retry = Number(data.retryAfterSeconds || 0);
+          if (Number.isFinite(retry) && retry > 0) {
+            const minutes = Math.ceil(retry / 60);
+            setError(
+              `Cok fazla hatali deneme algilandi. Lutfen ${minutes} dakika sonra tekrar deneyin.`,
+            );
+          } else {
+            setError(
+              "Cok fazla hatali deneme algilandi. Lutfen daha sonra tekrar deneyin.",
+            );
+          }
+        } else {
+          setError(data.error || "Giriş başarısız");
+        }
       }
     } catch {
       setError("Sunucu hatası");
@@ -106,16 +132,14 @@ export default function LoginPage() {
                 <LogIn className="h-4 w-4" />
                 {isLoading ? "Giriş yapılıyor..." : "Giriş Yap"}
               </button>
-            </div>
 
-            <div className="mt-6 text-sm text-slate-600">
-              Hesabınız yok mu?{" "}
-              <Link
-                href="/register"
-                className="font-semibold text-[var(--retina-secondary)] hover:text-[var(--retina-secondary-soft)]"
-              >
-                Kayıt Ol
-              </Link>
+              <p className="text-center text-xs text-slate-500">
+                Ilk giriste veya gecici sifre suresi dolduysa{" "}
+                <Link href="/reset-password" className="underline">
+                  buradan sifreyi yenileyin
+                </Link>
+                .
+              </p>
             </div>
           </form>
         </div>

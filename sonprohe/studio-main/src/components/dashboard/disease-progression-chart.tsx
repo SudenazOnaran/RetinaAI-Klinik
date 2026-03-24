@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { format } from 'date-fns';
-import { tr } from 'date-fns/locale';
+import { format } from "date-fns";
+import { tr } from "date-fns/locale";
 import {
   Line,
   LineChart,
@@ -11,9 +11,13 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-} from 'recharts';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../ui/card';
-import type { AnalysisHistoryItem } from '@/app/dashboard/hastalar/[id]/page';
+} from "recharts";
+import { Card } from "../ui/card";
+
+type AnalysisHistoryItem = {
+  date: string | Date;
+  label: string;
+};
 
 interface DiseaseProgressionChartProps {
   data: AnalysisHistoryItem[];
@@ -28,15 +32,17 @@ const drLevelMapping: { [key: string]: number } = {
 };
 
 const drLevelLabels: { [key: number]: string } = {
-  0: 'Yok',
-  1: 'Hafif',
-  2: 'Orta',
-  3: 'Ciddi',
-  4: 'Proliferatif',
+  0: "Yok",
+  1: "Hafif",
+  2: "Orta",
+  3: "Ciddi",
+  4: "Proliferatif",
 };
 
-export function DiseaseProgressionChart({ data }: DiseaseProgressionChartProps) {
-  const chartData = data.map(item => ({
+export function DiseaseProgressionChart({
+  data,
+}: DiseaseProgressionChartProps) {
+  const chartData = data.map((item) => ({
     date: new Date(item.date),
     level: drLevelMapping[item.label],
     label: item.label,
@@ -46,7 +52,9 @@ export function DiseaseProgressionChart({ data }: DiseaseProgressionChartProps) 
     if (active && payload && payload.length) {
       return (
         <Card className="p-3 shadow-lg">
-          <p className="font-semibold">{format(new Date(label), 'dd MMMM yyyy', { locale: tr })}</p>
+          <p className="font-semibold">
+            {format(new Date(label), "dd MMMM yyyy", { locale: tr })}
+          </p>
           <p className="text-primary">{`Seviye: ${payload[0].payload.label}`}</p>
         </Card>
       );
@@ -68,8 +76,8 @@ export function DiseaseProgressionChart({ data }: DiseaseProgressionChartProps) 
         <CartesianGrid strokeDasharray="3 3" />
         <XAxis
           dataKey="date"
-          tickFormatter={(date) => format(date, 'dd/MM/yy')}
-          domain={['dataMin', 'dataMax']}
+          tickFormatter={(date) => format(date, "dd/MM/yy")}
+          domain={["dataMin", "dataMax"]}
           type="number"
           scale="time"
         />
@@ -92,5 +100,3 @@ export function DiseaseProgressionChart({ data }: DiseaseProgressionChartProps) 
     </ResponsiveContainer>
   );
 }
-
-    

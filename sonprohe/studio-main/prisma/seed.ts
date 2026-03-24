@@ -1,54 +1,70 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
 async function main() {
+  const passwordHash = await bcrypt.hash("ChangeMe123!", 10);
+
+  const doctor = await prisma.doctor.upsert({
+    where: { email: "seed.manager@retina.local" },
+    update: {},
+    create: {
+      name: "Seed Manager",
+      email: "seed.manager@retina.local",
+      password: passwordHash,
+      role: "MANAGER",
+    },
+    select: { id: true },
+  });
+
   await prisma.patient.createMany({
     data: [
       {
-        fullName: 'Ali Vural',
-        tcNo: '98765432109',
+        doctorId: doctor.id,
+        fullName: "Ali Vural",
+        tcNo: "98765432109",
         age: 71,
-        risk: 'Yüksek',
-        createdAt: new Date('2024-01-15'),
-        lastCheckup: new Date('2024-06-20'),
+        risk: "Yüksek",
+        createdAt: new Date("2024-01-15"),
       },
       {
-        fullName: 'Zeynep Aksoy',
-        tcNo: '45678912345',
+        doctorId: doctor.id,
+        fullName: "Zeynep Aksoy",
+        tcNo: "45678912345",
         age: 34,
-        risk: null, // Analiz yapılmadı
-        createdAt: new Date('2024-03-08'),
-        lastCheckup: null,
+        risk: "Yok",
+        createdAt: new Date("2024-03-08"),
       },
       {
-        fullName: 'Mehmet Karaca',
-        tcNo: '32165498701',
+        doctorId: doctor.id,
+        fullName: "Mehmet Karaca",
+        tcNo: "32165498701",
         age: 58,
-        risk: 'Orta',
-        createdAt: new Date('2024-02-01'),
-        lastCheckup: new Date('2024-05-30'),
+        risk: "Orta",
+        createdAt: new Date("2024-02-01"),
       },
       {
-        fullName: 'Ayşe Demir',
-        tcNo: '78912345670',
+        doctorId: doctor.id,
+        fullName: "Ayşe Demir",
+        tcNo: "78912345670",
         age: 46,
-        risk: 'Düşük',
-        createdAt: new Date('2024-04-12'),
-        lastCheckup: new Date('2024-06-05'),
+        risk: "Düşük",
+        createdAt: new Date("2024-04-12"),
       },
       {
-        fullName: 'Hasan Yıldız',
-        tcNo: '65498732144',
+        doctorId: doctor.id,
+        fullName: "Hasan Yıldız",
+        tcNo: "65498732144",
         age: 63,
-        risk: null, // Analiz yapılmadı
-        createdAt: new Date('2024-05-02'),
-        lastCheckup: null,
+        risk: "Yok",
+        createdAt: new Date("2024-05-02"),
       },
     ],
+    skipDuplicates: true,
   });
 
-  console.log('✅ Örnek hastalar başarıyla eklendi');
+  console.log("✅ Örnek hastalar başarıyla eklendi");
 }
 
 main()

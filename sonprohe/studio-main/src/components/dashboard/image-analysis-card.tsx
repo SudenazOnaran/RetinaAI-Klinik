@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -42,7 +43,7 @@ export type AiAnalysisDraft = {
 };
 
 type ImageAnalysisCardProps = {
-  patientId: string;
+  patientId?: string;
   patientInfo?: PatientReportInfo;
   doctorName?: string;
   compact?: boolean;
@@ -89,7 +90,9 @@ export function ImageAnalysisCard({
     try {
       const fd = new FormData();
       fd.append("image", file);
-      fd.append("patientId", patientId);
+      if (patientId) {
+        fd.append("patientId", patientId);
+      }
 
       const res = await fetch("/api/ai/predict", {
         method: "POST",
@@ -202,11 +205,18 @@ export function ImageAnalysisCard({
           </div>
         ) : (
           <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-950">
-            <img
-              src={previewUrl}
-              alt="Preview"
-              className={`w-full object-contain ${compact ? "h-[240px] md:h-[280px]" : "h-[320px] md:h-[420px]"}`}
-            />
+            <div
+              className={`relative w-full ${compact ? "h-[240px] md:h-[280px]" : "h-[320px] md:h-[420px]"}`}
+            >
+              <Image
+                src={previewUrl}
+                alt="Preview"
+                fill
+                unoptimized
+                sizes="(max-width: 768px) 100vw, 900px"
+                className="object-contain"
+              />
+            </div>
             <Button
               variant="destructive"
               size="icon"
@@ -220,29 +230,51 @@ export function ImageAnalysisCard({
 
         {result && (
           <div className="space-y-4">
-            <div className="rounded-2xl border border-cyan-100 bg-gradient-to-br from-cyan-700 to-blue-700 p-5 text-white shadow-lg">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-100">
-                AI Sonucu Özeti
-              </p>
-              <p className="mt-3 text-3xl font-bold leading-tight">
-                {String(result.pytorch?.label || "No_DR").replace("_", " ")}
-              </p>
-              <p className="mt-4 rounded-lg bg-white/15 px-3 py-2 text-sm font-medium">
-                Güven: %
-                {(Number(result.pytorch?.confidence || 0) * 100).toFixed(1)}
-              </p>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-2xl border border-cyan-100 bg-gradient-to-br from-cyan-700 to-blue-700 p-5 text-white shadow-lg">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-100">
+                  AI Sonucu Özeti
+                </p>
+                <p className="mt-3 text-3xl font-bold leading-tight">
+                  {String(result.pytorch?.label || "No_DR").replace("_", " ")}
+                </p>
+                <p className="mt-4 rounded-lg bg-white/15 px-3 py-2 text-sm font-medium">
+                  Güven: %
+                  {(Number(result.pytorch?.confidence || 0) * 100).toFixed(1)}
+                </p>
 
-              {Array.isArray(result.odir?.results) &&
-              result.odir.results.length > 0 ? (
-                <div className="mt-3 rounded-lg bg-white/10 px-3 py-2 text-xs text-cyan-100">
-                  Ek riskler:{" "}
-                  {result.odir.results
-                    .slice(0, 3)
-                    .map(
-                      (r: any) =>
-                        `${r.label} (%${(Number(r.confidence || 0) * 100).toFixed(0)})`,
-                    )
-                    .join(", ")}
+                {Array.isArray(result.odir?.results) &&
+                result.odir.results.length > 0 ? (
+                  <div className="mt-3 rounded-lg bg-white/10 px-3 py-2 text-xs text-cyan-100">
+                    Ek riskler:{" "}
+                    {result.odir.results
+                      .slice(0, 3)
+                      .map(
+                        (r: any) =>
+                          `${r.label} (%${(Number(r.confidence || 0) * 100).toFixed(0)})`,
+                      )
+                      .join(", ")}
+                  </div>
+                ) : null}
+              </div>
+
+              {result.heatmapPlus ? (
+                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-950 shadow-lg">
+                  <div className="border-b border-slate-800 bg-slate-900/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-cyan-200">
+                    Heatmap (Grad-CAM++)
+                  </div>
+                  <div
+                    className={`relative w-full ${compact ? "h-[220px] md:h-[250px]" : "h-[260px] md:h-[300px]"}`}
+                  >
+                    <Image
+                      src={result.heatmapPlus}
+                      alt="Analiz Heatmap"
+                      fill
+                      unoptimized
+                      sizes="(max-width: 768px) 100vw, 900px"
+                      className="object-contain"
+                    />
+                  </div>
                 </div>
               ) : null}
             </div>
@@ -346,11 +378,18 @@ export function ImageAnalysisCard({
                     <div className="border-b border-slate-800 bg-slate-900/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-cyan-200">
                       Grad-CAM++
                     </div>
-                    <img
-                      src={result.heatmapPlus}
-                      alt="Grad-CAM Plus Plus Heatmap"
-                      className={`w-full object-contain ${compact ? "h-[220px] md:h-[250px]" : "h-[280px] md:h-[320px]"}`}
-                    />
+                    <div
+                      className={`relative w-full ${compact ? "h-[220px] md:h-[250px]" : "h-[280px] md:h-[320px]"}`}
+                    >
+                      <Image
+                        src={result.heatmapPlus}
+                        alt="Grad-CAM Plus Plus Heatmap"
+                        fill
+                        unoptimized
+                        sizes="(max-width: 768px) 100vw, 900px"
+                        className="object-contain"
+                      />
+                    </div>
                   </div>
                 ) : null}
               </CollapsibleContent>

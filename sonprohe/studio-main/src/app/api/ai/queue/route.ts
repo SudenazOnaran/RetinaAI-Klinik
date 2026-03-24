@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentDoctorSession } from "@/lib/auth-session";
 import { isRoleAllowed } from "@/lib/roles";
-import { ensureAiQueueTable } from "@/lib/ai-gateway";
 import { prisma } from "@/lib/prisma";
 
 type QueueRow = {
@@ -23,8 +22,6 @@ export async function GET(req: Request) {
   if (!isRoleAllowed(session.role, ["DOCTOR", "MANAGER", "AUDITOR"])) {
     return NextResponse.json({ error: "Yetkiniz yok" }, { status: 403 });
   }
-
-  await ensureAiQueueTable();
 
   const { searchParams } = new URL(req.url);
   const limit = Math.max(

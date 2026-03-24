@@ -29,7 +29,7 @@ export async function getAnalysisReports() {
       },
     });
     return { success: true, data: reports };
-  } catch (error) {
+  } catch {
     return { success: false, error: "Raporlar yüklenemedi." };
   }
 }

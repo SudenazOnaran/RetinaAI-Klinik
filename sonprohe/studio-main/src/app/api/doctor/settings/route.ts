@@ -8,24 +8,6 @@ import {
   RetinaSettings,
 } from "@/lib/retina-settings";
 
-async function ensureDoctorSettingsTable() {
-  await prisma.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS "DoctorSettings" (
-      "id" TEXT NOT NULL,
-      "doctorId" TEXT NOT NULL,
-      "settings" JSONB NOT NULL,
-      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      CONSTRAINT "DoctorSettings_pkey" PRIMARY KEY ("id")
-    );
-  `);
-
-  await prisma.$executeRawUnsafe(`
-    CREATE UNIQUE INDEX IF NOT EXISTS "DoctorSettings_doctorId_key"
-    ON "DoctorSettings"("doctorId");
-  `);
-}
-
 type DoctorSettingsRow = {
   settings: unknown;
   updatedAt: Date;
@@ -40,8 +22,6 @@ export async function GET() {
   if (!isRoleAllowed(session.role, ["DOCTOR", "MANAGER"])) {
     return NextResponse.json({ error: "Yetkiniz yok" }, { status: 403 });
   }
-
-  await ensureDoctorSettingsTable();
 
   const rows = await prisma.$queryRaw<DoctorSettingsRow[]>`
     SELECT "settings", "updatedAt"
@@ -76,8 +56,6 @@ export async function PUT(req: Request) {
 
   const body = (await req.json()) as { settings?: Partial<RetinaSettings> };
   const normalized = normalizeRetinaSettings(body.settings);
-
-  await ensureDoctorSettingsTable();
 
   const rows = await prisma.$queryRaw<DoctorSettingsRow[]>`
     INSERT INTO "DoctorSettings" (

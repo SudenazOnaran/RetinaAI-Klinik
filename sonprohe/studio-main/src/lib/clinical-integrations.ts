@@ -38,34 +38,6 @@ export type IntegrationEventRow = {
   patientFullName: string;
 };
 
-export async function ensureIntegrationTables() {
-  await prisma.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS "IntegrationEvent" (
-      "id" TEXT NOT NULL,
-      "doctorId" TEXT NOT NULL,
-      "patientId" TEXT NOT NULL,
-      "target" TEXT NOT NULL,
-      "status" TEXT NOT NULL,
-      "httpStatus" INTEGER,
-      "errorMessage" TEXT,
-      "requestPayload" JSONB,
-      "responsePayload" JSONB,
-      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      CONSTRAINT "IntegrationEvent_pkey" PRIMARY KEY ("id")
-    );
-  `);
-
-  await prisma.$executeRawUnsafe(`
-    CREATE INDEX IF NOT EXISTS "IntegrationEvent_doctorId_createdAt_idx"
-    ON "IntegrationEvent"("doctorId", "createdAt" DESC);
-  `);
-
-  await prisma.$executeRawUnsafe(`
-    CREATE INDEX IF NOT EXISTS "IntegrationEvent_patientId_idx"
-    ON "IntegrationEvent"("patientId");
-  `);
-}
-
 export async function getPatientForIntegration(
   doctorId: string,
   patientId: string,
@@ -399,8 +371,6 @@ export async function writeIntegrationEvent(input: {
   requestPayload?: unknown;
   responsePayload?: unknown;
 }) {
-  await ensureIntegrationTables();
-
   await prisma.$executeRaw`
     INSERT INTO "IntegrationEvent" (
       "id",
@@ -433,8 +403,6 @@ export async function getRecentIntegrationEvents(
   doctorId: string,
   limit = 30,
 ): Promise<IntegrationEventRow[]> {
-  await ensureIntegrationTables();
-
   const rows = await prisma.$queryRaw<IntegrationEventRow[]>`
     SELECT
       ie."id",

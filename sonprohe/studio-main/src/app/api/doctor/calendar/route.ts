@@ -21,27 +21,6 @@ function isValidTime(value: string | undefined): value is string {
   return /^\d{2}:\d{2}$/.test(value);
 }
 
-async function ensureCalendarTable() {
-  await prisma.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS "CalendarEvent" (
-      "id" TEXT NOT NULL,
-      "doctorId" TEXT NOT NULL,
-      "dateKey" TEXT NOT NULL,
-      "time" TEXT NOT NULL,
-      "title" TEXT NOT NULL,
-      "note" TEXT NOT NULL,
-      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      CONSTRAINT "CalendarEvent_pkey" PRIMARY KEY ("id")
-    );
-  `);
-
-  await prisma.$executeRawUnsafe(`
-    CREATE INDEX IF NOT EXISTS "CalendarEvent_doctorId_dateKey_idx"
-    ON "CalendarEvent"("doctorId", "dateKey");
-  `);
-}
-
 type CalendarEventRow = {
   id: string;
   dateKey: string;
@@ -64,8 +43,6 @@ export async function GET(req: Request) {
 
   const { searchParams } = new URL(req.url);
   const month = searchParams.get("month");
-
-  await ensureCalendarTable();
 
   const events =
     month && /^\d{4}-\d{2}$/.test(month)
@@ -110,7 +87,6 @@ export async function POST(req: Request) {
     );
   }
 
-  await ensureCalendarTable();
   const eventId = randomUUID();
 
   const rows = await prisma.$queryRaw<CalendarEventRow[]>`
@@ -158,8 +134,6 @@ export async function DELETE(req: Request) {
   if (!id) {
     return NextResponse.json({ error: "Kayit id gerekli" }, { status: 400 });
   }
-
-  await ensureCalendarTable();
 
   const rows = await prisma.$queryRaw<Array<{ id: string }>>`
     DELETE FROM "CalendarEvent"

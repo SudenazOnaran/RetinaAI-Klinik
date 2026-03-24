@@ -13,36 +13,33 @@ type MonitoringAlertRow = {
   createdAt: Date;
 };
 
-let ensured = false;
+type HealthMetricAlerts = Array<{
+  key: "p95LatencyMs" | "errorRatePercent" | "queueDepth";
+  severity: AlertSeverity;
+  value: number;
+  threshold: number;
+}>;
 
-export async function ensureMonitoringAlertTable() {
-  if (ensured) return;
+function toFiniteNumber(value: string | undefined, fallback: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
 
-  await prisma.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS "MonitoringAlert" (
-      "id" TEXT NOT NULL,
-      "doctorId" TEXT,
-      "source" TEXT NOT NULL,
-      "severity" TEXT NOT NULL,
-      "title" TEXT NOT NULL,
-      "detail" TEXT NOT NULL,
-      "metadata" JSONB,
-      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      CONSTRAINT "MonitoringAlert_pkey" PRIMARY KEY ("id")
-    );
-  `);
-
-  await prisma.$executeRawUnsafe(`
-    CREATE INDEX IF NOT EXISTS "MonitoringAlert_createdAt_idx"
-    ON "MonitoringAlert"("createdAt" DESC);
-  `);
-
-  await prisma.$executeRawUnsafe(`
-    CREATE INDEX IF NOT EXISTS "MonitoringAlert_doctorId_createdAt_idx"
-    ON "MonitoringAlert"("doctorId", "createdAt" DESC);
-  `);
-
-  ensured = true;
+function readMonitoringThresholds() {
+  return {
+    p95LatencyMs: Math.max(
+      100,
+      toFiniteNumber(process.env.MONITORING_P95_LATENCY_MS, 1200),
+    ),
+    errorRatePercent: Math.max(
+      0,
+      toFiniteNumber(process.env.MONITORING_ERROR_RATE_PERCENT, 5),
+    ),
+    queueDepth: Math.max(
+      1,
+      toFiniteNumber(process.env.MONITORING_QUEUE_DEPTH_THRESHOLD, 25),
+    ),
+  };
 }
 
 export async function createMonitoringAlert(input: {
@@ -53,8 +50,6 @@ export async function createMonitoringAlert(input: {
   detail: string;
   metadata?: Record<string, unknown>;
 }) {
-  await ensureMonitoringAlertTable();
-
   await prisma.$executeRaw`
     INSERT INTO "MonitoringAlert" (
       "id",
@@ -83,8 +78,6 @@ export async function getMonitoringAlerts(input?: {
   doctorId?: string;
   limit?: number;
 }) {
-  await ensureMonitoringAlertTable();
-
   const limit = Math.max(1, Math.min(200, input?.limit ?? 50));
 
   const rows = input?.doctorId
@@ -106,16 +99,77 @@ export async function getMonitoringAlerts(input?: {
 }
 
 export async function checkSystemHealth() {
+  const startedAt = Date.now();
+  const thresholds = readMonitoringThresholds();
+
   try {
     const result = await prisma.$queryRaw<Array<{ now: Date }>>`
       SELECT NOW() as "now"
     `;
 
+    const queueStats = await prisma.$queryRaw<Array<{ pendingCount: number }>>`
+      SELECT COUNT(*)::int as "pendingCount"
+      FROM "AiRequestQueue"
+      WHERE "status" IN ('PENDING', 'RETRY')
+    `;
+
+    const integrationStats = await prisma.$queryRaw<
+      Array<{ totalCount: number; failedCount: number }>
+    >`
+      SELECT
+        COUNT(*)::int as "totalCount",
+        COUNT(*) FILTER (WHERE "status" <> 'SUCCESS')::int as "failedCount"
+      FROM "IntegrationEvent"
+      WHERE "createdAt" >= NOW() - INTERVAL '1 hour'
+    `;
+
+    const latencyMs = Date.now() - startedAt;
+    const totalCount = Number(integrationStats[0]?.totalCount || 0);
+    const failedCount = Number(integrationStats[0]?.failedCount || 0);
+    const errorRatePercent =
+      totalCount > 0
+        ? Number(((failedCount / totalCount) * 100).toFixed(2))
+        : 0;
+    const queueDepth = Number(queueStats[0]?.pendingCount || 0);
+
+    const metricAlerts: HealthMetricAlerts = [];
+    if (latencyMs >= thresholds.p95LatencyMs) {
+      metricAlerts.push({
+        key: "p95LatencyMs",
+        severity: "WARNING",
+        value: latencyMs,
+        threshold: thresholds.p95LatencyMs,
+      });
+    }
+    if (errorRatePercent >= thresholds.errorRatePercent) {
+      metricAlerts.push({
+        key: "errorRatePercent",
+        severity: "CRITICAL",
+        value: errorRatePercent,
+        threshold: thresholds.errorRatePercent,
+      });
+    }
+    if (queueDepth >= thresholds.queueDepth) {
+      metricAlerts.push({
+        key: "queueDepth",
+        severity: "CRITICAL",
+        value: queueDepth,
+        threshold: thresholds.queueDepth,
+      });
+    }
+
     return {
-      ok: true,
+      ok: metricAlerts.length === 0,
       db: "up" as const,
       timestamp: new Date().toISOString(),
       dbNow: result[0]?.now?.toISOString() ?? null,
+      metrics: {
+        p95LatencyMs: latencyMs,
+        errorRatePercent,
+        queueDepth,
+      },
+      thresholds,
+      alerts: metricAlerts,
     };
   } catch (error) {
     return {
@@ -123,6 +177,20 @@ export async function checkSystemHealth() {
       db: "down" as const,
       timestamp: new Date().toISOString(),
       error: error instanceof Error ? error.message : "db check failed",
+      metrics: {
+        p95LatencyMs: Date.now() - startedAt,
+        errorRatePercent: null,
+        queueDepth: null,
+      },
+      thresholds,
+      alerts: [
+        {
+          key: "p95LatencyMs" as const,
+          severity: "CRITICAL" as const,
+          value: Date.now() - startedAt,
+          threshold: thresholds.p95LatencyMs,
+        },
+      ],
     };
   }
 }

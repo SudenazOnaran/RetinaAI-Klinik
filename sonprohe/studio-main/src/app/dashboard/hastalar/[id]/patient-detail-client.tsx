@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -81,21 +82,6 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
     } catch {
       return null;
     }
-  };
-
-  const getReportDoctorNote = (report: any) => {
-    const structured = parseStructuredReport(report?.doctorNote);
-    if (!structured) return report?.doctorNote ?? "-";
-
-    const sections = structured.sections ?? {};
-    return [
-      `Rapor Başlığı: ${structured.reportTitle || "-"}`,
-      `Klinik Öykü (Anamnez): ${sections.anamnesis || "-"}`,
-      `Muayene Bulguları: ${sections.examFindings || "-"}`,
-      `Laboratuvar Sonuçları: ${sections.labResults || "-"}`,
-      `Teşhis / Klinik Değerlendirme: ${sections.clinicalAssessment || "-"}`,
-      `AI Özeti: ${structured.aiSummary || "-"}`,
-    ].join("\n");
   };
 
   const getLegacyFieldValue = (
@@ -576,9 +562,12 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
                           Fundus Görseli
                         </p>
                         {r.originalImage ? (
-                          <img
+                          <Image
                             src={r.originalImage}
                             alt="Fundus"
+                            width={96}
+                            height={96}
+                            unoptimized
                             className="mt-2 h-24 w-24 rounded border border-slate-200 object-cover"
                           />
                         ) : (
@@ -591,9 +580,12 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
                           Isı Haritası
                         </p>
                         {r.heatmapUrl ? (
-                          <img
+                          <Image
                             src={r.heatmapUrl}
                             alt="Isı Haritası"
+                            width={96}
+                            height={96}
+                            unoptimized
                             className="mt-2 h-24 w-24 rounded border border-slate-200 object-cover"
                           />
                         ) : (

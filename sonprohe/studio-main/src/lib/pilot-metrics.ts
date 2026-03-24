@@ -46,8 +46,6 @@ export type PilotMetricSnapshotRow = {
   generatedAt: Date;
 };
 
-let ensured = false;
-
 export function computePilotImprovementPercent(input: {
   baselineValue: number;
   currentValue: number;
@@ -71,58 +69,6 @@ export function computePilotImprovementPercent(input: {
   return ((current - baseline) / baseline) * 100;
 }
 
-export async function ensurePilotMetricTable() {
-  if (ensured) return;
-
-  await prisma.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS "PilotMetricEvent" (
-      "id" TEXT NOT NULL,
-      "doctorId" TEXT NOT NULL,
-      "metricKey" TEXT NOT NULL,
-      "metricLabel" TEXT NOT NULL,
-      "direction" TEXT NOT NULL,
-      "baselineValue" DOUBLE PRECISION NOT NULL,
-      "currentValue" DOUBLE PRECISION NOT NULL,
-      "unit" TEXT NOT NULL,
-      "sampleSize" INTEGER NOT NULL DEFAULT 0,
-      "periodStart" TIMESTAMP(3) NOT NULL,
-      "periodEnd" TIMESTAMP(3) NOT NULL,
-      "note" TEXT,
-      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      CONSTRAINT "PilotMetricEvent_pkey" PRIMARY KEY ("id")
-    );
-  `);
-
-  await prisma.$executeRawUnsafe(`
-    CREATE INDEX IF NOT EXISTS "PilotMetricEvent_doctorId_metricKey_createdAt_idx"
-    ON "PilotMetricEvent"("doctorId", "metricKey", "createdAt" DESC);
-  `);
-
-  await prisma.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS "PilotMetricSnapshot" (
-      "id" TEXT NOT NULL,
-      "doctorId" TEXT NOT NULL,
-      "snapshotMonth" TEXT NOT NULL,
-      "summaryJson" JSONB NOT NULL,
-      "eventCount" INTEGER NOT NULL DEFAULT 0,
-      "generatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      CONSTRAINT "PilotMetricSnapshot_pkey" PRIMARY KEY ("id")
-    );
-  `);
-
-  await prisma.$executeRawUnsafe(`
-    CREATE UNIQUE INDEX IF NOT EXISTS "PilotMetricSnapshot_doctorId_snapshotMonth_key"
-    ON "PilotMetricSnapshot"("doctorId", "snapshotMonth");
-  `);
-
-  await prisma.$executeRawUnsafe(`
-    CREATE INDEX IF NOT EXISTS "PilotMetricSnapshot_doctorId_generatedAt_idx"
-    ON "PilotMetricSnapshot"("doctorId", "generatedAt" DESC);
-  `);
-
-  ensured = true;
-}
-
 export async function createPilotMetricEvent(input: {
   doctorId: string;
   metricKey: PilotMetricKey;
@@ -136,8 +82,6 @@ export async function createPilotMetricEvent(input: {
   periodEnd: Date;
   note?: string;
 }) {
-  await ensurePilotMetricTable();
-
   const id = randomUUID();
   await prisma.$executeRaw`
     INSERT INTO "PilotMetricEvent" (
@@ -173,8 +117,6 @@ export async function createPilotMetricEvent(input: {
 }
 
 export async function getPilotMetricEvents(doctorId: string, limit = 100) {
-  await ensurePilotMetricTable();
-
   return prisma.$queryRaw<PilotMetricRow[]>`
     SELECT
       "id",
@@ -240,8 +182,6 @@ export async function createPilotMetricSnapshot(input: {
   doctorId: string;
   snapshotMonth?: string;
 }) {
-  await ensurePilotMetricTable();
-
   const snapshotMonth = normalizeSnapshotMonth(input.snapshotMonth);
   const events = await getPilotMetricEvents(input.doctorId, 300);
   if (events.length === 0) {
@@ -282,8 +222,6 @@ export async function createPilotMetricSnapshot(input: {
 }
 
 export async function getPilotMetricSnapshots(doctorId: string, limit = 12) {
-  await ensurePilotMetricTable();
-
   const rows = await prisma.$queryRaw<
     Array<{
       id: string;
@@ -322,8 +260,6 @@ export async function getPilotMetricSnapshots(doctorId: string, limit = 12) {
 export async function createMonthlyPilotSnapshotsForAllDoctors(
   snapshotMonth?: string,
 ) {
-  await ensurePilotMetricTable();
-
   const month = normalizeSnapshotMonth(snapshotMonth);
   const doctors = await prisma.$queryRaw<Array<{ doctorId: string }>>`
     SELECT DISTINCT "doctorId"

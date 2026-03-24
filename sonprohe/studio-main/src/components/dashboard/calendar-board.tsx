@@ -43,11 +43,6 @@ function toDateKey(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-function fromDateKey(dateKey: string): Date {
-  const [y, m, d] = dateKey.split("-").map(Number);
-  return new Date(y || 1970, (m || 1) - 1, d || 1);
-}
-
 function isSameDay(a: Date, b: Date): boolean {
   return toDateKey(a) === toDateKey(b);
 }

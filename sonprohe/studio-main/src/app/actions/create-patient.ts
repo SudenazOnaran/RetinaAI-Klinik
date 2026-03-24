@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getCurrentDoctorSession } from "@/lib/auth-session";
 import { logAuditEvent } from "@/lib/audit-log";
+import { validateCreatePatientInput } from "@/lib/patient-validation";
 
 export async function createPatientAction(formData: {
   fullName: string;
@@ -19,15 +20,40 @@ export async function createPatientAction(formData: {
       return { success: false, error: "Oturum bulunamadı." };
     }
 
+    const parsed = validateCreatePatientInput(formData);
+    if (!parsed.success) {
+      return {
+        success: false,
+        error: parsed.error.issues[0]?.message ?? "Gecersiz hasta verisi.",
+      };
+    }
+
+    const normalized = parsed.data;
+
+    const existing = await prisma.patient.findFirst({
+      where: {
+        doctorId: doctor.id,
+        tcNo: normalized.tcNo,
+      },
+      select: { id: true },
+    });
+
+    if (existing) {
+      return {
+        success: false,
+        error: "Bu TC No ile kayitli hasta zaten mevcut.",
+      };
+    }
+
     const patient = await prisma.patient.create({
       data: {
         doctorId: doctor.id,
-        fullName: formData.fullName,
-        tcNo: formData.tcNo,
-        age: formData.age,
-        gender: formData.gender,
-        diabetesYears: formData.diabetesYears,
-        hba1c: formData.hba1c,
+        fullName: normalized.fullName,
+        tcNo: normalized.tcNo,
+        age: normalized.age,
+        gender: normalized.gender,
+        diabetesYears: normalized.diabetesYears ?? null,
+        hba1c: normalized.hba1c ?? null,
         risk: "Yok", // Şemandaki default değer
       },
     });
@@ -40,8 +66,8 @@ export async function createPatientAction(formData: {
       entityId: patient.id,
       description: "Yeni hasta kaydi olusturuldu",
       metadata: {
-        fullName: formData.fullName,
-        tcNo: formData.tcNo,
+        patientId: patient.id,
+        tcNoMasked: `*******${normalized.tcNo.slice(-4)}`,
       },
     });
 

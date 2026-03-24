@@ -19,11 +19,13 @@ type DoctorIdentity = {
 };
 
 function getSessionSecret() {
-  return (
-    process.env.SESSION_SECRET ??
-    process.env.NEXTAUTH_SECRET ??
-    "retina-clinic-dev-secret"
-  );
+  const secret = process.env.SESSION_SECRET ?? process.env.NEXTAUTH_SECRET;
+  if (!secret || !secret.trim()) {
+    throw new Error(
+      "SESSION_SECRET (veya NEXTAUTH_SECRET) tanimli degil. Uygulama guvenlik nedeniyle baslatilmiyor.",
+    );
+  }
+  return secret;
 }
 
 function toBase64Url(input: string) {

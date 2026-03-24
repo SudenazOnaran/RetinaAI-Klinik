@@ -12,9 +12,13 @@
 
 # testing
 /coverage
+/playwright-report
+/test-results
 
 # next.js
 /.next/
+/.next-build/
+/.next-dev/
 /out/
 
 # production
@@ -40,7 +44,12 @@ next-env.d.ts
 .genkit/*
 .env*
 .venv
+__pycache__/
+storage/objects/
 # firebase
 firebase-debug.log
 firestore-debug.log
 /src/generated/prisma
+
+# local editor settings
+.vscode/

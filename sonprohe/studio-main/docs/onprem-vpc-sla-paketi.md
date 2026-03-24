@@ -62,8 +62,10 @@ Bu degerler ortam degiskenleri ile degistirilebilir:
 ## 5) Yedekleme ve Geri Donus
 
 - Object storage yedegi API uzerinden tetiklenebilir: `POST /api/storage/backup`.
+- Object storage restore API: `POST /api/storage/backup/restore` (`dryRun` destekli).
 - Veritabani yedegi kurum standardi (snapshot veya pg_dump) ile gunluk alinmalidir.
 - Kurtarma testleri ayda en az 1 kez yapilmali ve raporlanmalidir.
+- Tatbikat proseduru: `docs/backup-restore-tatbikat.md`.
 
 ## 6) Guvenlik Baslangic Ceklisti
 

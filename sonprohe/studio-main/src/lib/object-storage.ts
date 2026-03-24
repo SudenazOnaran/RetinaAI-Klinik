@@ -48,6 +48,22 @@ async function ensureStorageDirs() {
   await fs.mkdir(BACKUPS_DIR, { recursive: true });
 }
 
+async function countFilesRecursive(dirPath: string): Promise<number> {
+  const entries = await fs.readdir(dirPath, { withFileTypes: true });
+  let count = 0;
+
+  for (const entry of entries) {
+    const fullPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      count += await countFilesRecursive(fullPath);
+    } else if (entry.isFile()) {
+      count += 1;
+    }
+  }
+
+  return count;
+}
+
 export async function saveDataObject(input: SaveObjectInput) {
   await ensureStorageDirs();
 
@@ -109,5 +125,85 @@ export async function createObjectStorageBackup() {
   return {
     backupDir,
     manifest,
+  };
+}
+
+export async function listObjectStorageBackups() {
+  await ensureStorageDirs();
+  const entries = await fs.readdir(BACKUPS_DIR, { withFileTypes: true });
+
+  const dirs = entries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort((a, b) => b.localeCompare(a));
+
+  return dirs.map((name) => path.join(BACKUPS_DIR, name));
+}
+
+export async function restoreObjectStorageBackup(input?: {
+  backupDir?: string;
+  dryRun?: boolean;
+}) {
+  await ensureStorageDirs();
+
+  const availableBackups = await listObjectStorageBackups();
+  const selectedBackupDir = input?.backupDir || availableBackups[0];
+
+  if (!selectedBackupDir) {
+    throw new Error("Restore icin uygun backup bulunamadi");
+  }
+
+  const normalized = selectedBackupDir.replace(/\\/g, "/");
+  const backupsNormalized = BACKUPS_DIR.replace(/\\/g, "/");
+
+  if (!normalized.startsWith(backupsNormalized)) {
+    throw new Error("Gecersiz backup dizini");
+  }
+
+  const sourceObjectsDir = path.join(selectedBackupDir, "objects");
+  const destinationObjectsDir = OBJECTS_DIR;
+  const dryRun = Boolean(input?.dryRun);
+
+  await fs.access(sourceObjectsDir);
+
+  let manifestCreatedAt: string | null = null;
+  try {
+    const manifestRaw = await fs.readFile(
+      path.join(selectedBackupDir, "manifest.json"),
+      "utf8",
+    );
+    const manifest = JSON.parse(manifestRaw) as { createdAt?: string };
+    manifestCreatedAt = manifest.createdAt || null;
+  } catch {
+    manifestCreatedAt = null;
+  }
+
+  const fileCount = await countFilesRecursive(sourceObjectsDir);
+  const restoreStartedAt = Date.now();
+
+  if (!dryRun) {
+    await fs.cp(sourceObjectsDir, destinationObjectsDir, {
+      recursive: true,
+      force: true,
+    });
+  }
+
+  const restoreEndedAt = Date.now();
+
+  return {
+    backupDir: selectedBackupDir,
+    dryRun,
+    fileCount,
+    durationMs: restoreEndedAt - restoreStartedAt,
+    restoredAt: new Date(restoreEndedAt).toISOString(),
+    manifestCreatedAt,
+    rpoHours: manifestCreatedAt
+      ? Number(
+          (
+            (restoreEndedAt - new Date(manifestCreatedAt).getTime()) /
+            (1000 * 60 * 60)
+          ).toFixed(2),
+        )
+      : null,
   };
 }

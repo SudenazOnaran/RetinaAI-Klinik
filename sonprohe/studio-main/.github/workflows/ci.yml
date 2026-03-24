@@ -9,6 +9,25 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/retina_ai
+      SESSION_SECRET: ci-session-secret
+      AI_GATEWAY_SHARED_SECRET: ci-ai-secret
+      INTERNAL_HEALTH_TOKEN: ci-health-token
+      PILOT_METRICS_CRON_SECRET: ci-cron-secret
+      DEPLOYMENT_PROFILE: ON_PREM
+      AI_SERVICE_URL: http://127.0.0.1:5000/predict
+      AI_CORS_ALLOWED_ORIGINS: http://127.0.0.1:9002
+      MONITORING_P95_LATENCY_MS: "1200"
+      MONITORING_ERROR_RATE_PERCENT: "5"
+      MONITORING_QUEUE_DEPTH_THRESHOLD: "25"
+      SLA_UPTIME_TARGET_PERCENT: "99.5"
+      SLA_P1_RESPONSE_MINUTES: "15"
+      SLA_P1_RESOLUTION_HOURS: "4"
+      SLA_P2_RESPONSE_HOURS: "4"
+      SLA_BACKUP_FREQUENCY_HOURS: "24"
+      SLA_RPO_HOURS: "24"
+      SLA_RTO_HOURS: "8"
 
     steps:
       - name: Checkout
@@ -24,5 +43,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run regression tests
-        run: npm run test
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run release gate
+        run: npm run release:check

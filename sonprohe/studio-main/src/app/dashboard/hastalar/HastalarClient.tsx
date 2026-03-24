@@ -1,14 +1,18 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Search,
-  Calendar,
   ChevronRight,
   Trash2,
   RefreshCw,
+  Siren,
+  FileText,
+  Plus,
+  ShieldCheck,
+  ArrowUpRight,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +27,8 @@ type Patient = {
   fullName: string;
   tcNo: string;
   createdAt: string;
+  latestAnalysisAt?: string | null;
+  latestConfidence?: number | null;
   risk?: string;
   aiResult?: string;
   drFeedback?: string | (string | null)[];
@@ -71,40 +77,6 @@ function getEffectiveRisk(patient: Patient): string {
       : undefined;
 
   return cleanFeedback || patient.aiResult || patient.risk || "Yok";
-}
-
-function getRiskBucket(patient: Patient): RiskFilter {
-  const analysesCount = Number(patient._count?.analyses || 0);
-  if (analysesCount === 0) return "none";
-
-  const normalized = normalizeRisk(getEffectiveRisk(patient));
-
-  if (!normalized || normalized === "yok") return "none";
-  if (
-    [
-      "severe",
-      "proliferative_dr",
-      "agir_evre",
-      "cok_ileri_evre",
-      "yuksek_risk",
-      "kritik_risk",
-    ].includes(normalized)
-  )
-    return "high";
-  if (["moderate", "orta_evre", "orta", "orta_risk"].includes(normalized))
-    return "medium";
-  if (
-    [
-      "mild",
-      "hafif_evre",
-      "healthy",
-      "saglikli",
-      "no_dr",
-      "dusuk_risk",
-    ].includes(normalized)
-  )
-    return "low";
-  return "none";
 }
 
 function getRiskStyle(risk: string) {
@@ -186,108 +158,181 @@ function getRiskStyle(risk: string) {
   };
 }
 
-export default function HastalarClient({ patients }: { patients: Patient[] }) {
+function getEmergencyTag(patient: Patient) {
+  const analysesCount = Number(patient._count?.analyses || 0);
+  if (analysesCount === 0) {
+    return {
+      label: "IZLEM",
+      className: "bg-slate-100 text-slate-600 border-slate-200",
+      isEmergency: false,
+    };
+  }
+
+  const normalized = normalizeRisk(getEffectiveRisk(patient));
+  const emergencyLabels = [
+    "severe",
+    "proliferative_dr",
+    "agir_evre",
+    "cok_ileri_evre",
+    "yuksek_risk",
+    "kritik_risk",
+  ];
+
+  if (emergencyLabels.includes(normalized)) {
+    return {
+      label: "ACIL",
+      className: "bg-rose-100 text-rose-700 border-rose-200",
+      isEmergency: true,
+    };
+  }
+
+  return {
+    label: "RUTIN",
+    className: "bg-emerald-100 text-emerald-700 border-emerald-200",
+    isEmergency: false,
+  };
+}
+
+function formatConfidence(confidence?: number | null) {
+  if (typeof confidence !== "number" || Number.isNaN(confidence)) return "-";
+  return `%${(confidence * 100).toFixed(1)}`;
+}
+
+function formatDateCell(dateValue?: string | null) {
+  if (!dateValue) return "-";
+  return new Date(dateValue).toLocaleDateString("tr-TR");
+}
+
+type HastalarClientProps = {
+  patients: Patient[];
+  totalFiltered: number;
+  page: number;
+  totalPages: number;
+  pageSize: (typeof PAGE_SIZE_OPTIONS)[number];
+  initialFilters: {
+    search: string;
+    riskFilter: RiskFilter;
+    analysisFilter: AnalysisFilter;
+    dateFrom: string;
+    dateTo: string;
+    sort: SortKey;
+  };
+};
+
+export default function HastalarClient({
+  patients,
+  totalFiltered,
+  page,
+  totalPages,
+  pageSize,
+  initialFilters,
+}: HastalarClientProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
 
-  const [search, setSearch] = useState("");
-  const [riskFilter, setRiskFilter] = useState<RiskFilter>("all");
-  const [analysisFilter, setAnalysisFilter] = useState<AnalysisFilter>("all");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [sort, setSort] = useState<SortKey>("createdAt_desc");
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] =
-    useState<(typeof PAGE_SIZE_OPTIONS)[number]>(10);
+  const [search, setSearch] = useState(initialFilters.search);
+  const [riskFilter, setRiskFilter] = useState<RiskFilter>(
+    initialFilters.riskFilter,
+  );
+  const [analysisFilter, setAnalysisFilter] = useState<AnalysisFilter>(
+    initialFilters.analysisFilter,
+  );
+  const [dateFrom, setDateFrom] = useState(initialFilters.dateFrom);
+  const [dateTo, setDateTo] = useState(initialFilters.dateTo);
+  const [sort, setSort] = useState<SortKey>(initialFilters.sort);
+  const [searchDebounced, setSearchDebounced] = useState(initialFilters.search);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkRiskValue, setBulkRiskValue] = useState("Moderate");
   const [isBulkBusy, setIsBulkBusy] = useState(false);
 
-  const filteredPatients = useMemo(() => {
-    const query = search.trim().toLowerCase();
+  useEffect(() => {
+    setSearch(initialFilters.search);
+    setSearchDebounced(initialFilters.search);
+    setRiskFilter(initialFilters.riskFilter);
+    setAnalysisFilter(initialFilters.analysisFilter);
+    setDateFrom(initialFilters.dateFrom);
+    setDateTo(initialFilters.dateTo);
+    setSort(initialFilters.sort);
+    setSelectedIds([]);
+  }, [initialFilters]);
 
-    const byFilter = patients.filter((patient) => {
-      const nameMatch = patient.fullName.toLowerCase().includes(query);
-      const tcMatch = patient.tcNo.includes(query);
-      const queryOk = query.length === 0 || nameMatch || tcMatch;
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setSearchDebounced(search.trim());
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [search]);
 
-      const riskBucket = getRiskBucket(patient);
-      const riskOk = riskFilter === "all" || riskBucket === riskFilter;
+  const updateQuery = (
+    patch: Partial<{
+      search: string;
+      risk: RiskFilter;
+      analysis: AnalysisFilter;
+      dateFrom: string;
+      dateTo: string;
+      sort: SortKey;
+      page: number;
+      pageSize: (typeof PAGE_SIZE_OPTIONS)[number];
+    }>,
+  ) => {
+    const params = new URLSearchParams(searchParams.toString());
 
-      const analysesCount = Number(patient._count?.analyses || 0);
-      const analysisOk =
-        analysisFilter === "all" ||
-        (analysisFilter === "none" && analysesCount === 0) ||
-        (analysisFilter === "1-3" &&
-          analysesCount >= 1 &&
-          analysesCount <= 3) ||
-        (analysisFilter === "4+" && analysesCount >= 4);
-
-      const createdDate = new Date(patient.createdAt);
-      const fromOk =
-        !dateFrom || createdDate >= new Date(`${dateFrom}T00:00:00`);
-      const toOk = !dateTo || createdDate <= new Date(`${dateTo}T23:59:59`);
-
-      return queryOk && riskOk && analysisOk && fromOk && toOk;
-    });
-
-    return byFilter.sort((a, b) => {
-      if (sort === "createdAt_desc") {
-        return (
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        );
+    const setOrDelete = (key: string, value: string | number | undefined) => {
+      if (value === undefined || String(value).trim() === "") {
+        params.delete(key);
+      } else {
+        params.set(key, String(value));
       }
-      if (sort === "createdAt_asc") {
-        return (
-          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-        );
-      }
-      if (sort === "fullName_asc") {
-        return a.fullName.localeCompare(b.fullName, "tr");
-      }
-      if (sort === "fullName_desc") {
-        return b.fullName.localeCompare(a.fullName, "tr");
-      }
-      return Number(b._count?.analyses || 0) - Number(a._count?.analyses || 0);
-    });
-  }, [patients, search, riskFilter, analysisFilter, dateFrom, dateTo, sort]);
+    };
 
-  const totalPages = Math.max(1, Math.ceil(filteredPatients.length / pageSize));
-  const safePage = Math.min(page, totalPages);
+    if (patch.search !== undefined) setOrDelete("search", patch.search);
+    if (patch.risk !== undefined)
+      setOrDelete("risk", patch.risk === "all" ? "" : patch.risk);
+    if (patch.analysis !== undefined)
+      setOrDelete("analysis", patch.analysis === "all" ? "" : patch.analysis);
+    if (patch.dateFrom !== undefined) setOrDelete("dateFrom", patch.dateFrom);
+    if (patch.dateTo !== undefined) setOrDelete("dateTo", patch.dateTo);
+    if (patch.sort !== undefined)
+      setOrDelete("sort", patch.sort === "createdAt_desc" ? "" : patch.sort);
+    if (patch.page !== undefined)
+      setOrDelete("page", patch.page <= 1 ? "" : patch.page);
+    if (patch.pageSize !== undefined)
+      setOrDelete("pageSize", patch.pageSize === 10 ? "" : patch.pageSize);
 
-  const pagedPatients = useMemo(() => {
-    const start = (safePage - 1) * pageSize;
-    return filteredPatients.slice(start, start + pageSize);
-  }, [filteredPatients, safePage, pageSize]);
+    router.replace(`?${params.toString()}`);
+  };
 
-  const selectedOnPageCount = pagedPatients.filter((p) =>
+  useEffect(() => {
+    updateQuery({ search: searchDebounced, page: 1 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchDebounced]);
+
+  const selectedOnPageCount = patients.filter((p) =>
     selectedIds.includes(p.id),
   ).length;
   const isAllPageSelected =
-    pagedPatients.length > 0 && selectedOnPageCount === pagedPatients.length;
+    patients.length > 0 && selectedOnPageCount === patients.length;
+  const emergencyOnPageCount = patients.filter(
+    (p) => getEmergencyTag(p).isEmergency,
+  ).length;
+  const noAnalysisOnPageCount = patients.filter(
+    (p) => Number(p._count?.analyses || 0) === 0,
+  ).length;
 
   const clearSelection = () => setSelectedIds([]);
 
   const toggleSelectPage = (checked: boolean) => {
     if (!checked) {
       setSelectedIds((prev) =>
-        prev.filter((id) => !pagedPatients.some((p) => p.id === id)),
+        prev.filter((id) => !patients.some((p) => p.id === id)),
       );
       return;
     }
 
     setSelectedIds((prev) =>
-      Array.from(new Set([...prev, ...pagedPatients.map((p) => p.id)])),
+      Array.from(new Set([...prev, ...patients.map((p) => p.id)])),
     );
-  };
-
-  const toggleSelectFiltered = (checked: boolean) => {
-    if (!checked) {
-      clearSelection();
-      return;
-    }
-
-    setSelectedIds(filteredPatients.map((p) => p.id));
   };
 
   const togglePatient = (patientId: string, checked: boolean) => {
@@ -363,27 +408,43 @@ export default function HastalarClient({ patients }: { patients: Patient[] }) {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 lg:grid-cols-6">
+      <div className="sr-only" aria-live="polite">
+        Toplam {totalFiltered} sonuc. Sayfada {patients.length} kayit, secili{" "}
+        {selectedIds.length} kayit.
+      </div>
+
+      <section
+        className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 lg:grid-cols-6"
+        aria-label="Hasta filtreleme ve toplu islem alani"
+      >
         <div className="relative lg:col-span-2">
+          <label htmlFor="patients-search" className="sr-only">
+            Ad veya TC ile ara
+          </label>
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <Input
+            id="patients-search"
             placeholder="Ad veya TC ile ara"
             className="pl-9"
             value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
+            onChange={(e) => setSearch(e.target.value)}
+            aria-describedby="patients-filter-summary"
           />
         </div>
 
+        <label htmlFor="risk-filter" className="sr-only">
+          Risk filtresi
+        </label>
         <select
-          className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm"
+          id="risk-filter"
+          className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--retina-primary)]"
           value={riskFilter}
           onChange={(e) => {
-            setRiskFilter(e.target.value as RiskFilter);
-            setPage(1);
+            const value = e.target.value as RiskFilter;
+            setRiskFilter(value);
+            updateQuery({ risk: value, page: 1 });
           }}
+          aria-label="Risk filtresi"
         >
           <option value="all">Tüm riskler</option>
           <option value="high">Yüksek risk</option>
@@ -392,13 +453,19 @@ export default function HastalarClient({ patients }: { patients: Patient[] }) {
           <option value="none">Analiz bekliyor</option>
         </select>
 
+        <label htmlFor="analysis-filter" className="sr-only">
+          Analiz sayisi filtresi
+        </label>
         <select
-          className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm"
+          id="analysis-filter"
+          className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--retina-primary)]"
           value={analysisFilter}
           onChange={(e) => {
-            setAnalysisFilter(e.target.value as AnalysisFilter);
-            setPage(1);
+            const value = e.target.value as AnalysisFilter;
+            setAnalysisFilter(value);
+            updateQuery({ analysis: value, page: 1 });
           }}
+          aria-label="Analiz sayisi filtresi"
         >
           <option value="all">Tüm analiz sayıları</option>
           <option value="none">Analizsiz</option>
@@ -406,29 +473,50 @@ export default function HastalarClient({ patients }: { patients: Patient[] }) {
           <option value="4+">4+ analiz</option>
         </select>
 
+        <label htmlFor="date-from-filter" className="sr-only">
+          Baslangic tarihi
+        </label>
         <Input
+          id="date-from-filter"
           type="date"
           value={dateFrom}
           onChange={(e) => {
-            setDateFrom(e.target.value);
-            setPage(1);
+            const value = e.target.value;
+            setDateFrom(value);
+            updateQuery({ dateFrom: value, page: 1 });
           }}
+          aria-label="Baslangic tarihi"
         />
 
+        <label htmlFor="date-to-filter" className="sr-only">
+          Bitis tarihi
+        </label>
         <Input
+          id="date-to-filter"
           type="date"
           value={dateTo}
           onChange={(e) => {
-            setDateTo(e.target.value);
-            setPage(1);
+            const value = e.target.value;
+            setDateTo(value);
+            updateQuery({ dateTo: value, page: 1 });
           }}
+          aria-label="Bitis tarihi"
         />
 
         <div className="lg:col-span-2">
+          <label htmlFor="sort-filter" className="sr-only">
+            Siralama
+          </label>
           <select
-            className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm"
+            id="sort-filter"
+            className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--retina-primary)]"
             value={sort}
-            onChange={(e) => setSort(e.target.value as SortKey)}
+            onChange={(e) => {
+              const value = e.target.value as SortKey;
+              setSort(value);
+              updateQuery({ sort: value, page: 1 });
+            }}
+            aria-label="Siralama"
           >
             <option value="createdAt_desc">En yeni kayıtlar</option>
             <option value="createdAt_asc">En eski kayıtlar</option>
@@ -440,20 +528,23 @@ export default function HastalarClient({ patients }: { patients: Patient[] }) {
 
         <div className="lg:col-span-2 flex items-center gap-2 text-sm">
           <Checkbox
-            checked={
-              filteredPatients.length > 0 &&
-              selectedIds.length === filteredPatients.length
-            }
-            onCheckedChange={(value) => toggleSelectFiltered(Boolean(value))}
+            checked={isAllPageSelected}
+            onCheckedChange={(value) => toggleSelectPage(Boolean(value))}
+            aria-label="Sayfadaki tum kayitlari sec"
           />
-          <span>Filtredeki tümünü seç ({filteredPatients.length})</span>
+          <span>Sayfadaki tümünü seç ({patients.length})</span>
         </div>
 
         <div className="lg:col-span-4 flex flex-wrap items-center gap-2">
+          <label htmlFor="bulk-risk-value" className="sr-only">
+            Toplu risk degeri
+          </label>
           <select
+            id="bulk-risk-value"
             className="h-10 min-w-[170px] rounded-md border border-slate-300 bg-white px-3 text-sm"
             value={bulkRiskValue}
             onChange={(e) => setBulkRiskValue(e.target.value)}
+            aria-label="Toplu risk degeri"
           >
             <option value="No_DR">Toplu risk: No_DR</option>
             <option value="Mild">Toplu risk: Mild</option>
@@ -468,6 +559,7 @@ export default function HastalarClient({ patients }: { patients: Patient[] }) {
             variant="outline"
             disabled={selectedIds.length === 0 || isBulkBusy}
             onClick={runBulkRiskUpdate}
+            aria-label="Secili hastalarin riskini guncelle"
           >
             <RefreshCw className="mr-2 h-4 w-4" /> Seçilileri Güncelle
           </Button>
@@ -476,6 +568,7 @@ export default function HastalarClient({ patients }: { patients: Patient[] }) {
             variant="destructive"
             disabled={selectedIds.length === 0 || isBulkBusy}
             onClick={runBulkDelete}
+            aria-label="Secili hastalari sil"
           >
             <Trash2 className="mr-2 h-4 w-4" /> Seçilileri Sil
           </Button>
@@ -484,154 +577,360 @@ export default function HastalarClient({ patients }: { patients: Patient[] }) {
             Seçili: {selectedIds.length}
           </span>
         </div>
+      </section>
+
+      <div className="rounded-xl border border-rose-200 bg-gradient-to-r from-rose-50 via-rose-50 to-amber-50 p-4">
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          <Badge className="border-rose-300 bg-rose-100 text-rose-700">
+            <Siren className="mr-1 h-3.5 w-3.5" /> Acil: {emergencyOnPageCount}
+          </Badge>
+          <Badge className="border-slate-300 bg-white text-slate-700">
+            Analiz bekleyen: {noAnalysisOnPageCount}
+          </Badge>
+          <span className="text-rose-800">
+            Kritik hastalar oncelikli takip ve hizli rapor olusturma akisina
+            alinsin.
+          </span>
+        </div>
       </div>
 
-      <div className="rounded-lg border border-slate-200">
-        <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3 text-sm">
-          <div className="flex items-center gap-2">
-            <Checkbox
-              checked={isAllPageSelected}
-              onCheckedChange={(v) => toggleSelectPage(Boolean(v))}
-            />
-            <span>Sayfadaki tümünü seç ({pagedPatients.length})</span>
-          </div>
-          <span>Toplam sonuç: {filteredPatients.length}</span>
-        </div>
-
-        <div className="grid gap-4 p-4">
-          {pagedPatients.length > 0 ? (
-            pagedPatients.map((patient) => {
-              const effectiveRisk = getEffectiveRisk(patient);
-              const analysisCount = Number(patient._count?.analyses || 0);
-              const riskInfo =
-                analysisCount === 0
-                  ? getRiskStyle("Analiz Yapılmadı")
-                  : getRiskStyle(effectiveRisk);
-              const checked = selectedIds.includes(patient.id);
-
-              return (
-                <div
-                  key={patient.id}
-                  className="group relative flex flex-col items-center justify-between rounded-2xl border border-[#d8e0df] bg-white p-5 md:flex-row"
-                >
-                  <div className="flex items-center gap-3 w-full md:w-auto">
-                    <Checkbox
-                      checked={checked}
-                      onCheckedChange={(v) =>
-                        togglePatient(patient.id, Boolean(v))
-                      }
-                    />
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#dceaf2] text-sm font-bold text-[#5f90ad]">
-                      {patient.fullName
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")
-                        .substring(0, 2)
-                        .toUpperCase()}
-                    </div>
-                    <div>
-                      <h3 className="text-base font-bold text-slate-800">
-                        {patient.fullName}
-                      </h3>
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 mt-1">
-                        <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 tracking-wider border border-slate-200">
-                          {patient.tcNo}
-                        </span>
-                        <span className="inline-flex items-center gap-1 text-slate-400">
-                          <Calendar size={12} />
-                          {new Date(patient.createdAt).toLocaleDateString(
-                            "tr-TR",
-                          )}
-                        </span>
-                        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-600 border border-slate-200">
-                          Analiz: {analysisCount}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 w-full md:w-auto mt-4 md:mt-0 justify-between md:justify-end">
-                    <Badge
-                      variant="outline"
-                      className={`px-3 py-1 text-xs font-bold tracking-wide ${riskInfo.className}`}
-                    >
-                      {riskInfo.label}
-                    </Badge>
-
-                    <Button
-                      asChild
-                      size="sm"
-                      className="rounded-full border border-[#cfd8d7] bg-[#f7f9f8] text-[#476775] hover:bg-[#e8eff2] hover:text-[#2f4957] shadow-sm"
-                    >
-                      <Link
-                        href={`/dashboard/hastalar/${patient.id}?tab=report-create`}
-                        className="flex items-center gap-1 px-4"
-                      >
-                        Rapor Oluştur <ChevronRight size={14} />
-                      </Link>
-                    </Button>
-                  </div>
-                </div>
-              );
-            })
-          ) : (
-            <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-[#cfd8d7] bg-white py-20">
-              <div className="h-16 w-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
-                <Search className="text-slate-400 h-8 w-8" />
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_290px]">
+        <div className="space-y-4 pb-20 xl:pb-0">
+          <div className="rounded-lg border border-slate-200">
+            <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  checked={isAllPageSelected}
+                  onCheckedChange={(v) => toggleSelectPage(Boolean(v))}
+                  aria-label="Tablodaki tum kayitlari sec"
+                />
+                <span>Sayfadaki tumunu sec ({patients.length})</span>
               </div>
-              <p className="text-lg font-medium text-slate-600">
-                Sonuç bulunamadı
-              </p>
-              <p className="text-sm text-slate-400">
-                Filtreleri genişletip tekrar deneyin.
-              </p>
+              <span id="patients-filter-summary">
+                Toplam sonuc: {totalFiltered}
+              </span>
             </div>
-          )}
+
+            {patients.length > 0 ? (
+              <>
+                <div className="hidden md:block overflow-x-auto">
+                  <table
+                    className="w-full text-sm"
+                    aria-label="Hasta listesi tablosu"
+                  >
+                    <caption className="sr-only">
+                      Son analiz tarihi, guven skoru ve acil etiketi ile hasta
+                      listesi
+                    </caption>
+                    <thead className="bg-slate-50 text-slate-600">
+                      <tr>
+                        <th scope="col" className="w-10 px-3 py-3 text-left" />
+                        <th scope="col" className="px-3 py-3 text-left">
+                          Hasta
+                        </th>
+                        <th scope="col" className="px-3 py-3 text-left">
+                          Son Analiz Tarihi
+                        </th>
+                        <th scope="col" className="px-3 py-3 text-left">
+                          Son Guven Skoru
+                        </th>
+                        <th scope="col" className="px-3 py-3 text-left">
+                          Acil Etiket
+                        </th>
+                        <th scope="col" className="px-3 py-3 text-left">
+                          Risk Seviyesi
+                        </th>
+                        <th scope="col" className="px-3 py-3 text-right">
+                          Eylem
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {patients.map((patient) => {
+                        const effectiveRisk = getEffectiveRisk(patient);
+                        const analysisCount = Number(
+                          patient._count?.analyses || 0,
+                        );
+                        const riskInfo =
+                          analysisCount === 0
+                            ? getRiskStyle("Analiz Yapılmadı")
+                            : getRiskStyle(effectiveRisk);
+                        const emergencyTag = getEmergencyTag(patient);
+                        const checked = selectedIds.includes(patient.id);
+
+                        return (
+                          <tr
+                            key={patient.id}
+                            className="border-t border-slate-100 hover:bg-slate-50/70"
+                          >
+                            <td className="px-3 py-3">
+                              <Checkbox
+                                checked={checked}
+                                onCheckedChange={(v) =>
+                                  togglePatient(patient.id, Boolean(v))
+                                }
+                                aria-label={`${patient.fullName} kaydini sec`}
+                              />
+                            </td>
+                            <td className="px-3 py-3">
+                              <div className="font-semibold text-slate-800">
+                                {patient.fullName}
+                              </div>
+                              <div className="mt-1 text-xs text-slate-500">
+                                TC: {patient.tcNo}
+                              </div>
+                            </td>
+                            <td className="px-3 py-3 text-slate-700">
+                              {formatDateCell(patient.latestAnalysisAt)}
+                            </td>
+                            <td className="px-3 py-3 text-slate-700">
+                              {formatConfidence(patient.latestConfidence)}
+                            </td>
+                            <td className="px-3 py-3">
+                              <Badge
+                                variant="outline"
+                                className={`font-semibold ${emergencyTag.className}`}
+                              >
+                                {emergencyTag.label}
+                              </Badge>
+                            </td>
+                            <td className="px-3 py-3">
+                              <Badge
+                                variant="outline"
+                                className={`font-semibold ${riskInfo.className}`}
+                              >
+                                {riskInfo.label}
+                              </Badge>
+                            </td>
+                            <td className="px-3 py-3 text-right">
+                              <Button
+                                asChild
+                                size="sm"
+                                className="rounded-full border border-[#cfd8d7] bg-[#f7f9f8] text-[#476775] hover:bg-[#e8eff2] hover:text-[#2f4957] shadow-sm"
+                              >
+                                <Link
+                                  href={`/dashboard/hastalar/${patient.id}?tab=report-create`}
+                                  className="inline-flex items-center gap-1 px-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--retina-primary)]"
+                                >
+                                  Rapor Olustur <ChevronRight size={14} />
+                                </Link>
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="grid gap-3 p-4 md:hidden">
+                  {patients.map((patient) => {
+                    const effectiveRisk = getEffectiveRisk(patient);
+                    const analysisCount = Number(patient._count?.analyses || 0);
+                    const riskInfo =
+                      analysisCount === 0
+                        ? getRiskStyle("Analiz Yapılmadı")
+                        : getRiskStyle(effectiveRisk);
+                    const emergencyTag = getEmergencyTag(patient);
+                    const checked = selectedIds.includes(patient.id);
+
+                    return (
+                      <div
+                        key={patient.id}
+                        className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                      >
+                        <div className="flex items-start gap-3">
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={(v) =>
+                              togglePatient(patient.id, Boolean(v))
+                            }
+                            aria-label={`${patient.fullName} kaydini sec`}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-base font-semibold text-slate-800">
+                              {patient.fullName}
+                            </p>
+                            <p className="mt-1 text-xs text-slate-500">
+                              TC: {patient.tcNo}
+                            </p>
+                          </div>
+                          <Badge
+                            variant="outline"
+                            className={emergencyTag.className}
+                          >
+                            {emergencyTag.label}
+                          </Badge>
+                        </div>
+                        <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
+                          <div className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
+                            Son analiz:{" "}
+                            {formatDateCell(patient.latestAnalysisAt)}
+                          </div>
+                          <div className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
+                            Guven: {formatConfidence(patient.latestConfidence)}
+                          </div>
+                        </div>
+                        <div className="mt-3 flex items-center justify-between">
+                          <Badge
+                            variant="outline"
+                            className={riskInfo.className}
+                          >
+                            {riskInfo.label}
+                          </Badge>
+                          <Button
+                            asChild
+                            size="sm"
+                            className="h-10 rounded-xl bg-[var(--retina-primary)] px-4 text-white"
+                          >
+                            <Link
+                              href={`/dashboard/hastalar/${patient.id}?tab=report-create`}
+                              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--retina-primary)]"
+                            >
+                              Rapor Olustur
+                            </Link>
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-[#cfd8d7] bg-white py-20">
+                <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100">
+                  <Search className="h-8 w-8 text-slate-400" />
+                </div>
+                <p className="text-lg font-medium text-slate-600">
+                  Sonuc bulunamadi
+                </p>
+                <p className="text-sm text-slate-400">
+                  Filtreleri genisletip tekrar deneyin.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 md:flex-row md:items-center md:justify-between">
+            <div className="text-sm text-slate-600">
+              Sayfa {page} / {totalPages}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-slate-600">Sayfa boyutu</span>
+              <select
+                className="h-10 rounded-md border border-slate-300 bg-white px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--retina-primary)]"
+                value={pageSize}
+                onChange={(e) => {
+                  updateQuery({
+                    pageSize: Number(
+                      e.target.value,
+                    ) as (typeof PAGE_SIZE_OPTIONS)[number],
+                    page: 1,
+                  });
+                }}
+                aria-label="Sayfa boyutu secimi"
+              >
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                className="h-10"
+                disabled={page <= 1}
+                onClick={() => updateQuery({ page: Math.max(1, page - 1) })}
+              >
+                Onceki
+              </Button>
+              <Button
+                variant="outline"
+                className="h-10"
+                disabled={page >= totalPages}
+                onClick={() =>
+                  updateQuery({ page: Math.min(totalPages, page + 1) })
+                }
+              >
+                Sonraki
+              </Button>
+            </div>
+          </div>
         </div>
+
+        <aside className="hidden xl:block">
+          <div
+            className="sticky top-24 space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+            aria-label="Hizli islemler"
+          >
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+              Hizli Islemler
+            </p>
+
+            <Button
+              asChild
+              className="h-11 w-full justify-between bg-[var(--retina-primary)] text-white"
+            >
+              <Link href="/dashboard/hastalar/yeni">
+                Yeni Hasta Kaydi <Plus className="h-4 w-4" />
+              </Link>
+            </Button>
+
+            <Button
+              asChild
+              variant="outline"
+              className="h-11 w-full justify-between"
+            >
+              <Link href="/dashboard/raporlar">
+                Rapor Gecmisi <FileText className="h-4 w-4" />
+              </Link>
+            </Button>
+
+            <Button
+              asChild
+              variant="outline"
+              className="h-11 w-full justify-between"
+            >
+              <Link href="/dashboard/kvkk">
+                KVKK Islemleri <ShieldCheck className="h-4 w-4" />
+              </Link>
+            </Button>
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+              Secili kayit: {selectedIds.length}
+              <div className="mt-1 text-[11px] text-slate-500">
+                Acil etiketi olan kayitlar rapor olustur akisi ile
+                onceliklendirilmeli.
+              </div>
+            </div>
+          </div>
+        </aside>
       </div>
 
-      <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 md:flex-row md:items-center md:justify-between">
-        <div className="text-sm text-slate-600">
-          Sayfa {safePage} / {totalPages}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-slate-600">Sayfa boyutu</span>
-          <select
-            className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm"
-            value={pageSize}
-            onChange={(e) => {
-              setPageSize(
-                Number(e.target.value) as (typeof PAGE_SIZE_OPTIONS)[number],
-              );
-              setPage(1);
-            }}
-          >
-            {PAGE_SIZE_OPTIONS.map((size) => (
-              <option key={size} value={size}>
-                {size}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="flex items-center gap-2">
+      <nav
+        className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 p-3 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur xl:hidden"
+        aria-label="Mobil hizli islemler"
+      >
+        <div className="mx-auto grid max-w-7xl grid-cols-2 gap-2">
           <Button
-            variant="outline"
-            disabled={safePage <= 1}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            asChild
+            className="h-12 rounded-xl bg-[var(--retina-primary)] text-white"
           >
-            Önceki
+            <Link href="/dashboard/hastalar/yeni">
+              <Plus className="mr-2 h-4 w-4" /> Yeni Hasta
+            </Link>
           </Button>
-          <Button
-            variant="outline"
-            disabled={safePage >= totalPages}
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-          >
-            Sonraki
+          <Button asChild variant="outline" className="h-12 rounded-xl">
+            <Link href="/dashboard/raporlar">
+              Raporlar <ArrowUpRight className="ml-2 h-4 w-4" />
+            </Link>
           </Button>
         </div>
-      </div>
+      </nav>
     </div>
   );
 }

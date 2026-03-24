@@ -27,10 +27,15 @@ export function middleware(req: NextRequest) {
   const token = req.cookies.get(DOCTOR_SESSION_COOKIE)?.value;
   const role = decodeSessionRole(token);
   const hasSession = Boolean(token);
+  const requestId = req.headers.get("x-request-id") || crypto.randomUUID();
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set("x-request-id", requestId);
 
   if (pathname.startsWith("/dashboard") && !hasSession) {
     const loginUrl = new URL("/login", req.url);
-    return NextResponse.redirect(loginUrl);
+    const response = NextResponse.redirect(loginUrl);
+    response.headers.set("x-request-id", requestId);
+    return response;
   }
 
   if (pathname.startsWith("/dashboard") && role) {
@@ -38,11 +43,19 @@ export function middleware(req: NextRequest) {
     if (!allowed) {
       const targetUrl = new URL("/dashboard", req.url);
       targetUrl.searchParams.set("forbidden", "1");
-      return NextResponse.redirect(targetUrl);
+      const response = NextResponse.redirect(targetUrl);
+      response.headers.set("x-request-id", requestId);
+      return response;
     }
   }
 
-  return NextResponse.next();
+  const response = NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  });
+  response.headers.set("x-request-id", requestId);
+  return response;
 }
 
 export const config = {

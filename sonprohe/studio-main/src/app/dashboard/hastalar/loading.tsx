@@ -1,12 +1,4 @@
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Card } from "@/components/ui/card";
 
 export default function Loading() {
