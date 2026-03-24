@@ -8,7 +8,6 @@ import {
   ChevronRight,
   Trash2,
   RefreshCw,
-  Siren,
   FileText,
   Plus,
   ShieldCheck,
@@ -47,6 +46,14 @@ type SortKey =
   | "analysis_desc";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
+const DEFAULT_FILTERS = {
+  search: "",
+  riskFilter: "all" as RiskFilter,
+  analysisFilter: "all" as AnalysisFilter,
+  dateFrom: "",
+  dateTo: "",
+  sort: "createdAt_desc" as SortKey,
+};
 
 function normalizeRisk(value?: string) {
   return String(value || "")
@@ -91,69 +98,69 @@ function getRiskStyle(risk: string) {
 
   if (["proliferative_dr", "cok_ileri_evre"].includes(normalized)) {
     return {
-      label: "COK YUKSEK RISK",
+      label: "ÇOK YÜKSEK RİSK",
       className: "bg-amber-100/80 text-amber-700 border-amber-200",
     };
   }
 
   if (["agir_evre", "severe"].includes(normalized)) {
     return {
-      label: "YUKSEK RISK",
+      label: "YÜKSEK RİSK",
       className: "bg-amber-100/80 text-amber-700 border-amber-200",
     };
   }
 
   if (["kritik_risk"].includes(normalized)) {
     return {
-      label: "COK YUKSEK RISK",
+      label: "ÇOK YÜKSEK RİSK",
       className: "bg-amber-100/80 text-amber-700 border-amber-200",
     };
   }
 
   if (["yuksek_risk"].includes(normalized)) {
     return {
-      label: "YUKSEK RISK",
+      label: "YÜKSEK RİSK",
       className: "bg-amber-100/80 text-amber-700 border-amber-200",
     };
   }
 
   if (["moderate", "orta_evre", "orta"].includes(normalized)) {
     return {
-      label: "ORTA RISK",
+      label: "ORTA RİSK",
       className: "bg-[#efe7da] text-[#8b6a49] border-[#d9cab5]",
     };
   }
 
   if (["orta_risk"].includes(normalized)) {
     return {
-      label: "ORTA RISK",
+      label: "ORTA RİSK",
       className: "bg-[#efe7da] text-[#8b6a49] border-[#d9cab5]",
     };
   }
 
   if (["mild", "hafif_evre"].includes(normalized)) {
     return {
-      label: "DUSUK RISK",
+      label: "DÜŞÜK RİSK",
       className: "bg-[#e8f2ef] text-[#5b8d82] border-[#cfe0dc]",
     };
   }
 
   if (["dusuk_risk"].includes(normalized)) {
     return {
-      label: "DUSUK RISK",
+      label: "DÜŞÜK RİSK",
       className: "bg-[#e8f2ef] text-[#5b8d82] border-[#cfe0dc]",
     };
   }
 
   if (["no_dr", "healthy", "saglikli", "yok"].includes(normalized)) {
     return {
-      label: "SAGLIKLI",
+      label: "SAĞLIKLI",
       className: "bg-[#dff0ea] text-[#4c8a7d] border-[#c5ddd6]",
     };
   }
 
   return {
-    label: "ANALIZ BEKLIYOR",
+    label: "ANALİZ BEKLİYOR",
     className: "bg-slate-100 text-slate-500 border-slate-200",
   };
 }
@@ -162,7 +169,7 @@ function getEmergencyTag(patient: Patient) {
   const analysesCount = Number(patient._count?.analyses || 0);
   if (analysesCount === 0) {
     return {
-      label: "IZLEM",
+      label: "DEĞERLENDİRME",
       className: "bg-slate-100 text-slate-600 border-slate-200",
       isEmergency: false,
     };
@@ -180,14 +187,14 @@ function getEmergencyTag(patient: Patient) {
 
   if (emergencyLabels.includes(normalized)) {
     return {
-      label: "ACIL",
+      label: "ACİL",
       className: "bg-rose-100 text-rose-700 border-rose-200",
       isEmergency: true,
     };
   }
 
   return {
-    label: "RUTIN",
+    label: "RUTİN",
     className: "bg-emerald-100 text-emerald-700 border-emerald-200",
     isEmergency: false,
   };
@@ -308,17 +315,39 @@ export default function HastalarClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchDebounced]);
 
+  const hasActiveFilters =
+    searchDebounced.length > 0 ||
+    riskFilter !== "all" ||
+    analysisFilter !== "all" ||
+    dateFrom.length > 0 ||
+    dateTo.length > 0 ||
+    sort !== "createdAt_desc";
+
+  const resetFilters = () => {
+    setSearch(DEFAULT_FILTERS.search);
+    setSearchDebounced(DEFAULT_FILTERS.search);
+    setRiskFilter(DEFAULT_FILTERS.riskFilter);
+    setAnalysisFilter(DEFAULT_FILTERS.analysisFilter);
+    setDateFrom(DEFAULT_FILTERS.dateFrom);
+    setDateTo(DEFAULT_FILTERS.dateTo);
+    setSort(DEFAULT_FILTERS.sort);
+
+    updateQuery({
+      search: DEFAULT_FILTERS.search,
+      risk: DEFAULT_FILTERS.riskFilter,
+      analysis: DEFAULT_FILTERS.analysisFilter,
+      dateFrom: DEFAULT_FILTERS.dateFrom,
+      dateTo: DEFAULT_FILTERS.dateTo,
+      sort: DEFAULT_FILTERS.sort,
+      page: 1,
+    });
+  };
+
   const selectedOnPageCount = patients.filter((p) =>
     selectedIds.includes(p.id),
   ).length;
   const isAllPageSelected =
     patients.length > 0 && selectedOnPageCount === patients.length;
-  const emergencyOnPageCount = patients.filter(
-    (p) => getEmergencyTag(p).isEmergency,
-  ).length;
-  const noAnalysisOnPageCount = patients.filter(
-    (p) => Number(p._count?.analyses || 0) === 0,
-  ).length;
 
   const clearSelection = () => setSelectedIds([]);
 
@@ -353,8 +382,8 @@ export default function HastalarClient({
       }
 
       toast({
-        title: "Toplu risk guncellendi",
-        description: `${res.updatedCount} hasta kaydi guncellendi.`,
+        title: "Toplu risk güncellendi",
+        description: `${res.updatedCount} hasta kaydı güncellendi.`,
       });
       clearSelection();
       router.refresh();
@@ -365,7 +394,7 @@ export default function HastalarClient({
         description:
           error instanceof Error
             ? error.message
-            : "Toplu guncelleme basarisiz.",
+            : "Toplu güncelleme başarısız.",
       });
     } finally {
       setIsBulkBusy(false);
@@ -389,8 +418,8 @@ export default function HastalarClient({
       }
 
       toast({
-        title: "Toplu silme tamamlandi",
-        description: `${res.deletedCount} hasta kaydi silindi.`,
+        title: "Toplu silme tamamlandı",
+        description: `${res.deletedCount} hasta kaydı silindi.`,
       });
       clearSelection();
       router.refresh();
@@ -399,7 +428,7 @@ export default function HastalarClient({
         variant: "destructive",
         title: "Hata",
         description:
-          error instanceof Error ? error.message : "Toplu silme basarisiz.",
+          error instanceof Error ? error.message : "Toplu silme başarısız.",
       });
     } finally {
       setIsBulkBusy(false);
@@ -409,190 +438,227 @@ export default function HastalarClient({
   return (
     <div className="space-y-6">
       <div className="sr-only" aria-live="polite">
-        Toplam {totalFiltered} sonuc. Sayfada {patients.length} kayit, secili{" "}
-        {selectedIds.length} kayit.
+        Toplam {totalFiltered} sonuç. Sayfada {patients.length} kayıt, seçili{" "}
+        {selectedIds.length} kayıt.
       </div>
 
       <section
-        className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 lg:grid-cols-6"
-        aria-label="Hasta filtreleme ve toplu islem alani"
+        className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5"
+        aria-label="Hasta filtreleme ve toplu işlem alanı"
       >
-        <div className="relative lg:col-span-2">
-          <label htmlFor="patients-search" className="sr-only">
-            Ad veya TC ile ara
-          </label>
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <Input
-            id="patients-search"
-            placeholder="Ad veya TC ile ara"
-            className="pl-9"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            aria-describedby="patients-filter-summary"
-          />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="sm:col-span-2 lg:col-span-1">
+            <label
+              htmlFor="patients-search"
+              className="mb-1 block text-xs font-medium text-slate-600"
+            >
+              Hasta Arama
+            </label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                id="patients-search"
+                placeholder="Ad veya TC ile ara"
+                className="pl-9"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                aria-describedby="patients-filter-summary"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label
+              htmlFor="risk-filter"
+              className="mb-1 block text-xs font-medium text-slate-600"
+            >
+              Risk
+            </label>
+            <select
+              id="risk-filter"
+              className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--retina-primary)]"
+              value={riskFilter}
+              onChange={(e) => {
+                const value = e.target.value as RiskFilter;
+                setRiskFilter(value);
+                updateQuery({ risk: value, page: 1 });
+              }}
+              aria-label="Risk filtresi"
+            >
+              <option value="all">Tüm riskler</option>
+              <option value="high">Yüksek risk</option>
+              <option value="medium">Orta risk</option>
+              <option value="low">Düşük risk</option>
+              <option value="none">Analiz bekliyor</option>
+            </select>
+          </div>
+
+          <div>
+            <label
+              htmlFor="analysis-filter"
+              className="mb-1 block text-xs font-medium text-slate-600"
+            >
+              Analiz Sayısı
+            </label>
+            <select
+              id="analysis-filter"
+              className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--retina-primary)]"
+              value={analysisFilter}
+              onChange={(e) => {
+                const value = e.target.value as AnalysisFilter;
+                setAnalysisFilter(value);
+                updateQuery({ analysis: value, page: 1 });
+              }}
+              aria-label="Analiz sayısı filtresi"
+            >
+              <option value="all">Tüm analiz sayıları</option>
+              <option value="none">Analizsiz</option>
+              <option value="1-3">1-3 analiz</option>
+              <option value="4+">4+ analiz</option>
+            </select>
+          </div>
+
+          <div>
+            <label
+              htmlFor="sort-filter"
+              className="mb-1 block text-xs font-medium text-slate-600"
+            >
+              Sıralama
+            </label>
+            <select
+              id="sort-filter"
+              className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--retina-primary)]"
+              value={sort}
+              onChange={(e) => {
+                const value = e.target.value as SortKey;
+                setSort(value);
+                updateQuery({ sort: value, page: 1 });
+              }}
+              aria-label="Sıralama"
+            >
+              <option value="createdAt_desc">En yeni kayıtlar</option>
+              <option value="createdAt_asc">En eski kayıtlar</option>
+              <option value="fullName_asc">Ada göre A-Z</option>
+              <option value="fullName_desc">Ada göre Z-A</option>
+              <option value="analysis_desc">Analiz sayısı fazla olandan</option>
+            </select>
+          </div>
         </div>
 
-        <label htmlFor="risk-filter" className="sr-only">
-          Risk filtresi
-        </label>
-        <select
-          id="risk-filter"
-          className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--retina-primary)]"
-          value={riskFilter}
-          onChange={(e) => {
-            const value = e.target.value as RiskFilter;
-            setRiskFilter(value);
-            updateQuery({ risk: value, page: 1 });
-          }}
-          aria-label="Risk filtresi"
-        >
-          <option value="all">Tüm riskler</option>
-          <option value="high">Yüksek risk</option>
-          <option value="medium">Orta risk</option>
-          <option value="low">Düşük risk</option>
-          <option value="none">Analiz bekliyor</option>
-        </select>
+        <div className="mt-3 grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+          <div>
+            <label
+              htmlFor="date-from-filter"
+              className="mb-1 block text-xs font-medium text-slate-600"
+            >
+              Başlangıç
+            </label>
+            <Input
+              id="date-from-filter"
+              type="date"
+              className="w-full"
+              value={dateFrom}
+              onChange={(e) => {
+                const value = e.target.value;
+                setDateFrom(value);
+                updateQuery({ dateFrom: value, page: 1 });
+              }}
+              aria-label="Başlangıç tarihi"
+            />
+          </div>
 
-        <label htmlFor="analysis-filter" className="sr-only">
-          Analiz sayisi filtresi
-        </label>
-        <select
-          id="analysis-filter"
-          className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--retina-primary)]"
-          value={analysisFilter}
-          onChange={(e) => {
-            const value = e.target.value as AnalysisFilter;
-            setAnalysisFilter(value);
-            updateQuery({ analysis: value, page: 1 });
-          }}
-          aria-label="Analiz sayisi filtresi"
-        >
-          <option value="all">Tüm analiz sayıları</option>
-          <option value="none">Analizsiz</option>
-          <option value="1-3">1-3 analiz</option>
-          <option value="4+">4+ analiz</option>
-        </select>
-
-        <label htmlFor="date-from-filter" className="sr-only">
-          Baslangic tarihi
-        </label>
-        <Input
-          id="date-from-filter"
-          type="date"
-          value={dateFrom}
-          onChange={(e) => {
-            const value = e.target.value;
-            setDateFrom(value);
-            updateQuery({ dateFrom: value, page: 1 });
-          }}
-          aria-label="Baslangic tarihi"
-        />
-
-        <label htmlFor="date-to-filter" className="sr-only">
-          Bitis tarihi
-        </label>
-        <Input
-          id="date-to-filter"
-          type="date"
-          value={dateTo}
-          onChange={(e) => {
-            const value = e.target.value;
-            setDateTo(value);
-            updateQuery({ dateTo: value, page: 1 });
-          }}
-          aria-label="Bitis tarihi"
-        />
-
-        <div className="lg:col-span-2">
-          <label htmlFor="sort-filter" className="sr-only">
-            Siralama
-          </label>
-          <select
-            id="sort-filter"
-            className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--retina-primary)]"
-            value={sort}
-            onChange={(e) => {
-              const value = e.target.value as SortKey;
-              setSort(value);
-              updateQuery({ sort: value, page: 1 });
-            }}
-            aria-label="Siralama"
-          >
-            <option value="createdAt_desc">En yeni kayıtlar</option>
-            <option value="createdAt_asc">En eski kayıtlar</option>
-            <option value="fullName_asc">Ada göre A-Z</option>
-            <option value="fullName_desc">Ada göre Z-A</option>
-            <option value="analysis_desc">Analiz sayısı fazla olandan</option>
-          </select>
-        </div>
-
-        <div className="lg:col-span-2 flex items-center gap-2 text-sm">
-          <Checkbox
-            checked={isAllPageSelected}
-            onCheckedChange={(value) => toggleSelectPage(Boolean(value))}
-            aria-label="Sayfadaki tum kayitlari sec"
-          />
-          <span>Sayfadaki tümünü seç ({patients.length})</span>
-        </div>
-
-        <div className="lg:col-span-4 flex flex-wrap items-center gap-2">
-          <label htmlFor="bulk-risk-value" className="sr-only">
-            Toplu risk degeri
-          </label>
-          <select
-            id="bulk-risk-value"
-            className="h-10 min-w-[170px] rounded-md border border-slate-300 bg-white px-3 text-sm"
-            value={bulkRiskValue}
-            onChange={(e) => setBulkRiskValue(e.target.value)}
-            aria-label="Toplu risk degeri"
-          >
-            <option value="No_DR">Toplu risk: No_DR</option>
-            <option value="Mild">Toplu risk: Mild</option>
-            <option value="Moderate">Toplu risk: Moderate</option>
-            <option value="Severe">Toplu risk: Severe</option>
-            <option value="Proliferative_DR">
-              Toplu risk: Proliferative_DR
-            </option>
-          </select>
+          <div>
+            <label
+              htmlFor="date-to-filter"
+              className="mb-1 block text-xs font-medium text-slate-600"
+            >
+              Bitiş
+            </label>
+            <Input
+              id="date-to-filter"
+              type="date"
+              className="w-full"
+              value={dateTo}
+              onChange={(e) => {
+                const value = e.target.value;
+                setDateTo(value);
+                updateQuery({ dateTo: value, page: 1 });
+              }}
+              aria-label="Bitiş tarihi"
+            />
+          </div>
 
           <Button
+            type="button"
             variant="outline"
-            disabled={selectedIds.length === 0 || isBulkBusy}
-            onClick={runBulkRiskUpdate}
-            aria-label="Secili hastalarin riskini guncelle"
+            className="h-10 border-[var(--retina-secondary)] text-[var(--retina-secondary)] transition-colors hover:bg-[var(--retina-secondary)] hover:text-white lg:justify-self-end"
+            onClick={resetFilters}
+            disabled={!hasActiveFilters}
+            aria-label="Filtreleri sıfırla"
           >
-            <RefreshCw className="mr-2 h-4 w-4" /> Seçilileri Güncelle
+            <RefreshCw className="mr-2 h-4 w-4" /> Filtreleri Sıfırla
           </Button>
+        </div>
 
-          <Button
-            variant="destructive"
-            disabled={selectedIds.length === 0 || isBulkBusy}
-            onClick={runBulkDelete}
-            aria-label="Secili hastalari sil"
-          >
-            <Trash2 className="mr-2 h-4 w-4" /> Seçilileri Sil
-          </Button>
+        <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4 text-sm">
+          <div className="flex items-center gap-2">
+            <Checkbox
+              checked={isAllPageSelected}
+              onCheckedChange={(value) => toggleSelectPage(Boolean(value))}
+              aria-label="Bu sayfadaki tüm kayıtları seç"
+            />
+            <span>Bu sayfadaki tüm kayıtları seç ({patients.length})</span>
+          </div>
+        </div>
 
-          <span className="text-xs text-slate-500">
-            Seçili: {selectedIds.length}
-          </span>
+        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--retina-secondary)]">
+            Toplu İşlemler
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <label htmlFor="bulk-risk-value" className="sr-only">
+              Toplu risk değeri
+            </label>
+            <select
+              id="bulk-risk-value"
+              className="h-10 min-w-[170px] rounded-md border border-slate-300 bg-white px-3 text-sm"
+              value={bulkRiskValue}
+              onChange={(e) => setBulkRiskValue(e.target.value)}
+              aria-label="Toplu risk değeri"
+            >
+              <option value="No_DR">Toplu risk: No_DR</option>
+              <option value="Mild">Toplu risk: Mild</option>
+              <option value="Moderate">Toplu risk: Moderate</option>
+              <option value="Severe">Toplu risk: Severe</option>
+              <option value="Proliferative_DR">
+                Toplu risk: Proliferative_DR
+              </option>
+            </select>
+
+            <Button
+              variant="outline"
+              disabled={selectedIds.length === 0 || isBulkBusy}
+              onClick={runBulkRiskUpdate}
+              aria-label="Seçili hastaların riskini güncelle"
+            >
+              <RefreshCw className="mr-2 h-4 w-4" /> Seçilileri Güncelle
+            </Button>
+
+            <Button
+              variant="destructive"
+              disabled={selectedIds.length === 0 || isBulkBusy}
+              onClick={runBulkDelete}
+              aria-label="Seçili hastaları sil"
+            >
+              <Trash2 className="mr-2 h-4 w-4" /> Seçilileri Sil
+            </Button>
+
+            <span className="ml-auto text-xs font-medium text-[var(--retina-secondary)]">
+              Seçili: {selectedIds.length}
+            </span>
+          </div>
         </div>
       </section>
-
-      <div className="rounded-xl border border-rose-200 bg-gradient-to-r from-rose-50 via-rose-50 to-amber-50 p-4">
-        <div className="flex flex-wrap items-center gap-3 text-sm">
-          <Badge className="border-rose-300 bg-rose-100 text-rose-700">
-            <Siren className="mr-1 h-3.5 w-3.5" /> Acil: {emergencyOnPageCount}
-          </Badge>
-          <Badge className="border-slate-300 bg-white text-slate-700">
-            Analiz bekleyen: {noAnalysisOnPageCount}
-          </Badge>
-          <span className="text-rose-800">
-            Kritik hastalar oncelikli takip ve hizli rapor olusturma akisina
-            alinsin.
-          </span>
-        </div>
-      </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_290px]">
         <div className="space-y-4 pb-20 xl:pb-0">
@@ -602,24 +668,24 @@ export default function HastalarClient({
                 <Checkbox
                   checked={isAllPageSelected}
                   onCheckedChange={(v) => toggleSelectPage(Boolean(v))}
-                  aria-label="Tablodaki tum kayitlari sec"
+                  aria-label="Bu sayfadaki tüm kayıtları seç"
                 />
-                <span>Sayfadaki tumunu sec ({patients.length})</span>
+                <span>Tümünü seç ({patients.length})</span>
               </div>
               <span id="patients-filter-summary">
-                Toplam sonuc: {totalFiltered}
+                Toplam sonuç: {totalFiltered}
               </span>
             </div>
 
             {patients.length > 0 ? (
               <>
-                <div className="hidden md:block overflow-x-auto">
+                <div className="hidden overflow-x-auto md:block">
                   <table
                     className="w-full text-sm"
                     aria-label="Hasta listesi tablosu"
                   >
                     <caption className="sr-only">
-                      Son analiz tarihi, guven skoru ve acil etiketi ile hasta
+                      Son analiz tarihi, güven skoru ve acil etiketi ile hasta
                       listesi
                     </caption>
                     <thead className="bg-slate-50 text-slate-600">
@@ -632,10 +698,10 @@ export default function HastalarClient({
                           Son Analiz Tarihi
                         </th>
                         <th scope="col" className="px-3 py-3 text-left">
-                          Son Guven Skoru
+                          Son Güven Skoru
                         </th>
                         <th scope="col" className="px-3 py-3 text-left">
-                          Acil Etiket
+                          Acil Etiketi
                         </th>
                         <th scope="col" className="px-3 py-3 text-left">
                           Risk Seviyesi
@@ -669,7 +735,7 @@ export default function HastalarClient({
                                 onCheckedChange={(v) =>
                                   togglePatient(patient.id, Boolean(v))
                                 }
-                                aria-label={`${patient.fullName} kaydini sec`}
+                                aria-label={`${patient.fullName} kaydını seç`}
                               />
                             </td>
                             <td className="px-3 py-3">
@@ -697,7 +763,7 @@ export default function HastalarClient({
                             <td className="px-3 py-3">
                               <Badge
                                 variant="outline"
-                                className={`font-semibold ${riskInfo.className}`}
+                                className={`inline-flex min-w-[132px] justify-center font-semibold ${riskInfo.className}`}
                               >
                                 {riskInfo.label}
                               </Badge>
@@ -706,13 +772,13 @@ export default function HastalarClient({
                               <Button
                                 asChild
                                 size="sm"
-                                className="rounded-full border border-[#cfd8d7] bg-[#f7f9f8] text-[#476775] hover:bg-[#e8eff2] hover:text-[#2f4957] shadow-sm"
+                                className="rounded-full border border-[#cfd8d7] bg-[#f7f9f8] text-[#476775] shadow-sm hover:bg-[#e8eff2] hover:text-[#2f4957]"
                               >
                                 <Link
                                   href={`/dashboard/hastalar/${patient.id}?tab=report-create`}
                                   className="inline-flex items-center gap-1 px-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--retina-primary)]"
                                 >
-                                  Rapor Olustur <ChevronRight size={14} />
+                                  Rapor Oluştur <ChevronRight size={14} />
                                 </Link>
                               </Button>
                             </td>
@@ -745,7 +811,7 @@ export default function HastalarClient({
                             onCheckedChange={(v) =>
                               togglePatient(patient.id, Boolean(v))
                             }
-                            aria-label={`${patient.fullName} kaydini sec`}
+                            aria-label={`${patient.fullName} kaydını seç`}
                           />
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-base font-semibold text-slate-800">
@@ -768,13 +834,13 @@ export default function HastalarClient({
                             {formatDateCell(patient.latestAnalysisAt)}
                           </div>
                           <div className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
-                            Guven: {formatConfidence(patient.latestConfidence)}
+                            Güven: {formatConfidence(patient.latestConfidence)}
                           </div>
                         </div>
                         <div className="mt-3 flex items-center justify-between">
                           <Badge
                             variant="outline"
-                            className={riskInfo.className}
+                            className={`inline-flex min-w-[132px] justify-center ${riskInfo.className}`}
                           >
                             {riskInfo.label}
                           </Badge>
@@ -787,7 +853,7 @@ export default function HastalarClient({
                               href={`/dashboard/hastalar/${patient.id}?tab=report-create`}
                               className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--retina-primary)]"
                             >
-                              Rapor Olustur
+                              Rapor Oluştur
                             </Link>
                           </Button>
                         </div>
@@ -802,10 +868,10 @@ export default function HastalarClient({
                   <Search className="h-8 w-8 text-slate-400" />
                 </div>
                 <p className="text-lg font-medium text-slate-600">
-                  Sonuc bulunamadi
+                  Sonuç bulunamadı
                 </p>
                 <p className="text-sm text-slate-400">
-                  Filtreleri genisletip tekrar deneyin.
+                  Filtreleri genişletip tekrar deneyin.
                 </p>
               </div>
             )}
@@ -829,7 +895,7 @@ export default function HastalarClient({
                     page: 1,
                   });
                 }}
-                aria-label="Sayfa boyutu secimi"
+                aria-label="Sayfa boyutu seçimi"
               >
                 {PAGE_SIZE_OPTIONS.map((size) => (
                   <option key={size} value={size}>
@@ -846,7 +912,7 @@ export default function HastalarClient({
                 disabled={page <= 1}
                 onClick={() => updateQuery({ page: Math.max(1, page - 1) })}
               >
-                Onceki
+                Önceki
               </Button>
               <Button
                 variant="outline"
@@ -865,18 +931,18 @@ export default function HastalarClient({
         <aside className="hidden xl:block">
           <div
             className="sticky top-24 space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-            aria-label="Hizli islemler"
+            aria-label="Hızlı işlemler"
           >
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-              Hizli Islemler
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--retina-secondary)]">
+              Hızlı İşlemler
             </p>
 
             <Button
               asChild
-              className="h-11 w-full justify-between bg-[var(--retina-primary)] text-white"
+              className="h-11 w-full justify-between bg-[var(--retina-primary)] text-white hover:bg-[var(--retina-primary-deep)] hover:text-white"
             >
               <Link href="/dashboard/hastalar/yeni">
-                Yeni Hasta Kaydi <Plus className="h-4 w-4" />
+                Yeni Hasta Kaydı <Plus className="h-4 w-4" />
               </Link>
             </Button>
 
@@ -886,7 +952,7 @@ export default function HastalarClient({
               className="h-11 w-full justify-between"
             >
               <Link href="/dashboard/raporlar">
-                Rapor Gecmisi <FileText className="h-4 w-4" />
+                Rapor Geçmişi <FileText className="h-4 w-4" />
               </Link>
             </Button>
 
@@ -896,24 +962,16 @@ export default function HastalarClient({
               className="h-11 w-full justify-between"
             >
               <Link href="/dashboard/kvkk">
-                KVKK Islemleri <ShieldCheck className="h-4 w-4" />
+                KVKK İşlemleri <ShieldCheck className="h-4 w-4" />
               </Link>
             </Button>
-
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-              Secili kayit: {selectedIds.length}
-              <div className="mt-1 text-[11px] text-slate-500">
-                Acil etiketi olan kayitlar rapor olustur akisi ile
-                onceliklendirilmeli.
-              </div>
-            </div>
           </div>
         </aside>
       </div>
 
       <nav
         className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 p-3 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur xl:hidden"
-        aria-label="Mobil hizli islemler"
+        aria-label="Mobil hızlı işlemler"
       >
         <div className="mx-auto grid max-w-7xl grid-cols-2 gap-2">
           <Button

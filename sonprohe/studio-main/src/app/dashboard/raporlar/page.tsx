@@ -55,32 +55,34 @@ export default async function ReportsPage() {
   }));
 
   return (
-    <div className="clinic-app-bg mx-auto max-w-5xl space-y-6 p-4 md:p-6">
-      <div className="rounded-2xl border border-[#d8e0df] bg-white px-6 py-5 shadow-sm">
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-          Rapor Merkezi
-        </h1>
-        <p className="mt-2 text-sm text-slate-600">
-          Bu sayfada tüm hastaların genel rapor özetini görüntüleyebilir, detay
-          butonuyla ilgili hastanın rapor geçmişine geçebilirsiniz.
-        </p>
+    <div className="clinic-app-bg min-h-screen p-4 md:p-6">
+      <div className="mx-auto max-w-7xl space-y-6">
+        <div className="rounded-2xl border border-[#d8e0df] bg-white px-6 py-5 shadow-sm">
+          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
+            Rapor Yönetimi
+          </h1>
+          <p className="mt-2 text-sm text-slate-600">
+            Bu sayfada tüm hastaların genel rapor özetini görüntüleyebilir,
+            ilgili hastanın rapor geçmişine hızlıca geçebilirsiniz
+          </p>
+        </div>
+
+        <Card className="rounded-2xl border border-[#d8e0df] bg-white shadow-sm">
+          <CardHeader className="border-b border-slate-100">
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-[var(--retina-secondary)]" />
+              Genel Hasta Raporları
+            </CardTitle>
+            <CardDescription>
+              Gelişmiş filtreleme ve sayfalama ile hasta bazlı rapor yönetimi
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent className="space-y-4 p-4 md:p-5">
+            <ReportsClient reports={serializedReports} />
+          </CardContent>
+        </Card>
       </div>
-
-      <Card className="border border-[#d8e0df] bg-white shadow-sm">
-        <CardHeader className="border-b border-slate-100">
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5 text-[#5f90ad]" />
-            Genel Hasta Raporları
-          </CardTitle>
-          <CardDescription>
-            Gelişmiş filtreleme ve sayfalama ile hasta bazlı rapor yönetimi.
-          </CardDescription>
-        </CardHeader>
-
-        <CardContent className="space-y-4 pt-4">
-          <ReportsClient reports={serializedReports} />
-        </CardContent>
-      </Card>
     </div>
   );
 }

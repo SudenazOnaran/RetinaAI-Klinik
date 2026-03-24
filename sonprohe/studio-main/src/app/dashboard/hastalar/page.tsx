@@ -304,30 +304,16 @@ export default async function HastalarPage({
     <div className="clinic-app-bg min-h-screen p-4 md:p-6">
       <div className="mx-auto max-w-7xl space-y-6">
         <div className="rounded-2xl border border-[#d8e0df] bg-white px-6 py-5 shadow-sm">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-col gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#5f90ad]">
-                Hasta Yönetimi
-              </p>
               <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
                 Hasta Yönetimi
               </h1>
               <p className="mt-2 text-sm text-slate-600 md:text-base">
-                Kayıtlı hasta portföyü ve analiz yükü özeti.
+                Hasta portföyünüz ve analiz yükünüzün güncel özetini buradan
+                takip edebilirsiniz
               </p>
             </div>
-
-            <Button
-              asChild
-              className="bg-[var(--retina-primary)] text-white hover:bg-[var(--retina-primary-deep)]"
-            >
-              <Link
-                href="/dashboard/hastalar/yeni"
-                className="flex items-center gap-2"
-              >
-                <Plus size={18} /> Yeni Hasta Kaydı
-              </Link>
-            </Button>
           </div>
         </div>
 

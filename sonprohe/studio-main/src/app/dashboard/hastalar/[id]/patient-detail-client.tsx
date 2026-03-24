@@ -46,6 +46,25 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
   >("report-create");
   const [editOpen, setEditOpen] = useState(false);
 
+  const tabButtonClass = (tab: "report-create" | "reports" | "progress") =>
+    [
+      "rounded-lg border px-4 py-2 text-sm font-medium transition-all duration-200",
+      "focus-visible:ring-2 focus-visible:ring-[var(--retina-primary)] focus-visible:ring-offset-2",
+      activeTab === tab
+        ? "border-[#5f56e8] bg-[#6c63ff] text-white shadow-sm hover:bg-[#5a52e0]"
+        : "border-[#d6d2ff] bg-white text-[#4b45b5] hover:border-[#bcb5ff] hover:bg-[#f1efff] hover:text-[#3f399e]",
+    ].join(" ");
+
+  const getReportAccentClass = (index: number) => {
+    const variants = [
+      "border-l-[#659f92] bg-[#f7fbfa]",
+      "border-l-[#8b6a49] bg-[#fdf9f4]",
+      "border-l-[#5f90ad] bg-[#f7fafd]",
+    ] as const;
+
+    return variants[index % variants.length];
+  };
+
   useEffect(() => {
     const tab = searchParams.get("tab");
     if (tab === "reports") {
@@ -130,6 +149,23 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
     );
     if (sectionValue) return sectionValue;
     return report?.ilaclar || "-";
+  };
+
+  const isAiIncludedInReport = (report: any) => {
+    const structured = parseStructuredReport(report?.doctorNote);
+    if (typeof structured?.aiIncluded === "boolean") {
+      return structured.aiIncluded;
+    }
+
+    const summaryText = String(structured?.aiSummary || "")
+      .trim()
+      .toLocaleLowerCase("tr-TR");
+
+    if (summaryText.includes("ai analizi eklenmedi")) {
+      return false;
+    }
+
+    return Boolean(report?.originalImage || report?.heatmapUrl);
   };
 
   const normalizeDiagnosisKey = (value: unknown) => {
@@ -356,7 +392,7 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
           </div>
 
           <Button
-            className="bg-[var(--retina-primary)] text-white hover:bg-[var(--retina-primary-deep)]"
+            className="h-11 rounded-xl bg-[var(--retina-primary)] px-5 text-white shadow-sm transition-all duration-200 hover:bg-[var(--retina-primary-deep)] hover:shadow-md"
             onClick={() => setEditOpen(true)}
           >
             Bilgileri Güncelle{" "}
@@ -369,57 +405,55 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
         </CardContent>
       </Card>
 
-      <div className="flex gap-4">
+      <div className="flex flex-wrap gap-4">
         <Button
-          className={
-            activeTab === "report-create"
-              ? "bg-[var(--retina-primary)] text-white hover:bg-[var(--retina-primary-deep)]"
-              : "border-[#cfd8d7] bg-white text-[#476775] hover:bg-[#eef3f2]"
-          }
-          variant={activeTab === "report-create" ? "default" : "outline"}
+          className={tabButtonClass("report-create")}
+          variant="outline"
           onClick={() => setActiveTab("report-create")}
         >
           Rapor Oluştur
         </Button>
         <Button
-          className="border-[#cfd8d7] bg-white text-[#476775] hover:bg-[#eef3f2]"
-          variant={activeTab === "reports" ? "default" : "outline"}
+          className={tabButtonClass("reports")}
+          variant="outline"
           onClick={() => setActiveTab("reports")}
         >
           Geçmiş Raporlar
         </Button>
         <Button
-          className="border-[#cfd8d7] bg-white text-[#476775] hover:bg-[#eef3f2]"
-          variant={activeTab === "progress" ? "default" : "outline"}
+          className={tabButtonClass("progress")}
+          variant="outline"
           onClick={() => setActiveTab("progress")}
         >
-          Değişim Analizi
+          DR Değişim Analizi
         </Button>
       </div>
 
       {activeTab === "report-create" ? (
-        <div className="space-y-4">
-          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-            Bu sayfada klinik rapor ve AI görsel analiz tek akışta çalışır. AI
-            analizi Rapor Oluştur kartının içindedir ve sonuçlar aynı kaydetme
-            işlemiyle rapora eklenir.
-          </div>
+        <Card className="border border-[#d8e0df] bg-white shadow-sm">
+          <CardContent className="space-y-4 p-4 md:p-5">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+              Bu sayfada klinik rapor ve AI görsel analiz tek akışta çalışır. AI
+              analizi Rapor Oluştur kartının içindedir ve sonuçlar aynı kaydetme
+              işlemiyle rapora eklenir.
+            </div>
 
-          <ManualReportCard
-            patientId={patient.id}
-            patientInfo={{
-              fullName: patient.fullName,
-              tcNo: patient.tcNo,
-              age: patient.age,
-              gender: patient.gender,
-              risk: patient.risk,
-            }}
-            doctorName={patient?.doctor?.name}
-          />
-        </div>
+            <ManualReportCard
+              patientId={patient.id}
+              patientInfo={{
+                fullName: patient.fullName,
+                tcNo: patient.tcNo,
+                age: patient.age,
+                gender: patient.gender,
+                risk: patient.risk,
+              }}
+              doctorName={patient?.doctor?.name}
+            />
+          </CardContent>
+        </Card>
       ) : activeTab === "reports" ? (
         <Card className="border border-[#d8e0df] bg-white shadow-sm">
-          <CardHeader className="border-b border-slate-100">
+          <CardHeader className="border-b border-slate-100 bg-[#f8faf9]">
             <CardTitle>Geçmiş Raporlar</CardTitle>
             <CardDescription>{reports.length} kayıt bulundu</CardDescription>
           </CardHeader>
@@ -431,17 +465,31 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
                   new Date(b.createdAt).getTime() -
                   new Date(a.createdAt).getTime(),
               )
-              .map((r: any) => {
+              .map((r: any, idx: number) => {
                 const odirLabels = parseJsonArray(r.aiOdriLabels);
                 const odirConfs = parseJsonArray(r.aiOdriConfidences);
+                const hasAiAnalysis = isAiIncludedInReport(r);
+                const aiRiskLabel = hasAiAnalysis
+                  ? formatDiagnosisLabel(resolveEffectiveDiagnosis(r) || "-")
+                  : "-";
+                const aiConfidenceLabel =
+                  hasAiAnalysis && Number.isFinite(Number(r.confidence))
+                    ? `%${Math.round(Number(r.confidence) * 100)}`
+                    : "-";
 
                 return (
                   <div
                     key={r.id}
-                    className="rounded-xl border border-slate-200 bg-slate-50/40 p-4"
+                    className={`rounded-xl border border-slate-200 border-l-4 p-4 shadow-sm ${getReportAccentClass(idx)}`}
                   >
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
                       <div className="flex items-center gap-2">
+                        <Badge
+                          variant="outline"
+                          className="border-slate-300 bg-white text-slate-700"
+                        >
+                          Rapor #{reports.length - idx}
+                        </Badge>
                         <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                           Tarih
                         </span>
@@ -454,6 +502,7 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
                       <Button
                         size="sm"
                         variant="outline"
+                        className="border-[#b8ccd6] text-[#355769] transition-colors hover:border-[#91afbd] hover:bg-[#edf6fb] hover:text-[#24485d]"
                         onClick={() => handlePreviewReportPdf(r)}
                       >
                         PDF Görüntüle
@@ -509,9 +558,11 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
                             r,
                             "clinicalAssessment",
                             "Teşhis / Klinik Değerlendirme",
-                            formatDiagnosisLabel(
-                              resolveEffectiveDiagnosis(r) || "-",
-                            ),
+                            hasAiAnalysis
+                              ? formatDiagnosisLabel(
+                                  resolveEffectiveDiagnosis(r) || "-",
+                                )
+                              : "-",
                           )}
                         </p>
                       </div>
@@ -530,13 +581,12 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
                           AI/DR Risk Tahmini - Güven
                         </p>
                         <div className="mt-1 flex flex-wrap items-center gap-2">
-                          <Badge>
-                            {formatDiagnosisLabel(
-                              resolveEffectiveDiagnosis(r) || "-",
-                            )}
-                          </Badge>
-                          <Badge variant="outline">
-                            %{Math.round(Number(r.confidence ?? 0) * 100)}
+                          <Badge>{aiRiskLabel}</Badge>
+                          <Badge
+                            variant="outline"
+                            className="border-[#c5d8d3] bg-[#edf6f3] text-[#446b62]"
+                          >
+                            {aiConfidenceLabel}
                           </Badge>
                         </div>
                       </div>
@@ -604,14 +654,14 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
             <CardHeader className="border-b border-slate-100">
               <CardTitle>Klinik Sonuç Değişim Grafiği</CardTitle>
               <CardDescription>
-                Nihai sonuc hesaplamasi Gecmis Raporlar ile aynidir: doktor geri
-                bildirimi varsa o, yoksa AI sonucu kullanilir.
+                Diyabetik retinopati teşhisleri kayıtlı hastaların hastalık
+                takip grafiği.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 pt-6">
               {progressionData.length < 2 ? (
                 <p className="text-sm text-slate-600">
-                  Degisim analizi icin en az 2 analiz kaydi gerekli.
+                  Değişim analizi için en az 2 analiz kaydı gerekli.
                 </p>
               ) : (
                 <>

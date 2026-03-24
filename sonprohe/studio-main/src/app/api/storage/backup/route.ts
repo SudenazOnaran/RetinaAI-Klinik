@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     const session = await getCurrentDoctorSession();
     if (!session) {
       return NextResponse.json(
-        { error: "Oturum bulunamadi" },
+        { error: "Oturum bulunamadı" },
         { status: 401, headers: requestIdHeaders(requestId) },
       );
     }
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
       role: session.role,
       action: "EDIT",
       entityType: "SYSTEM",
-      description: "Object storage yedekleme islemi calistirildi",
+      description: "Object storage yedekleme işlemi çalıştırıldı",
       metadata: {
         backupDir: backup.backupDir,
       },
@@ -69,7 +69,7 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json(
-      { error: "Yedekleme basarisiz" },
+      { error: "Yedekleme başarısız" },
       { status: 500, headers: requestIdHeaders(requestId) },
     );
   }

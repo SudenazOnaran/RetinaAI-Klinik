@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { isRoleAllowed } from "@/lib/roles";
 
 type CalendarPayload = {
+  id?: string;
   dateKey?: string;
   time?: string;
   title?: string;
@@ -34,7 +35,7 @@ type CalendarEventRow = {
 export async function GET(req: Request) {
   const session = await getCurrentDoctorSession();
   if (!session) {
-    return NextResponse.json({ error: "Oturum bulunamadi" }, { status: 401 });
+    return NextResponse.json({ error: "Oturum bulunamadı" }, { status: 401 });
   }
 
   if (!isRoleAllowed(session.role, ["DOCTOR", "ASSISTANT", "MANAGER"])) {
@@ -67,7 +68,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const session = await getCurrentDoctorSession();
   if (!session) {
-    return NextResponse.json({ error: "Oturum bulunamadi" }, { status: 401 });
+    return NextResponse.json({ error: "Oturum bulunamadı" }, { status: 401 });
   }
 
   if (!isRoleAllowed(session.role, ["DOCTOR", "ASSISTANT", "MANAGER"])) {
@@ -82,8 +83,29 @@ export async function POST(req: Request) {
 
   if (!isValidDateKey(dateKey) || !isValidTime(time) || !title || !note) {
     return NextResponse.json(
-      { error: "Gecersiz takvim verisi" },
+      { error: "Geçersiz takvim verisi" },
       { status: 400 },
+    );
+  }
+
+  const conflicting = await prisma.$queryRaw<
+    Array<{ id: string; title: string }>
+  >`
+    SELECT "id", "title"
+    FROM "CalendarEvent"
+    WHERE "doctorId" = ${session.id}
+      AND "dateKey" = ${dateKey}
+      AND "time" = ${time}
+    LIMIT 1
+  `;
+
+  if (conflicting.length > 0) {
+    return NextResponse.json(
+      {
+        error: "Aynı saatte başka bir görev zaten var",
+        conflict: conflicting[0],
+      },
+      { status: 409 },
     );
   }
 
@@ -118,10 +140,82 @@ export async function POST(req: Request) {
   return NextResponse.json({ success: true, event });
 }
 
+export async function PUT(req: Request) {
+  const session = await getCurrentDoctorSession();
+  if (!session) {
+    return NextResponse.json({ error: "Oturum bulunamadı" }, { status: 401 });
+  }
+
+  if (!isRoleAllowed(session.role, ["DOCTOR", "ASSISTANT", "MANAGER"])) {
+    return NextResponse.json({ error: "Yetkiniz yok" }, { status: 403 });
+  }
+
+  const body = (await req.json()) as CalendarPayload;
+  const id = body.id?.trim();
+  const dateKey = body.dateKey?.trim();
+  const time = body.time?.trim();
+  const title = body.title?.trim();
+  const note = body.note?.trim();
+
+  if (
+    !id ||
+    !isValidDateKey(dateKey) ||
+    !isValidTime(time) ||
+    !title ||
+    !note
+  ) {
+    return NextResponse.json(
+      { error: "Geçersiz takvim verisi" },
+      { status: 400 },
+    );
+  }
+
+  const conflicting = await prisma.$queryRaw<
+    Array<{ id: string; title: string }>
+  >`
+    SELECT "id", "title"
+    FROM "CalendarEvent"
+    WHERE "doctorId" = ${session.id}
+      AND "dateKey" = ${dateKey}
+      AND "time" = ${time}
+      AND "id" <> ${id}
+    LIMIT 1
+  `;
+
+  if (conflicting.length > 0) {
+    return NextResponse.json(
+      {
+        error: "Aynı saatte başka bir görev zaten var",
+        conflict: conflicting[0],
+      },
+      { status: 409 },
+    );
+  }
+
+  const rows = await prisma.$queryRaw<CalendarEventRow[]>`
+    UPDATE "CalendarEvent"
+    SET
+      "dateKey" = ${dateKey},
+      "time" = ${time},
+      "title" = ${title},
+      "note" = ${note},
+      "updatedAt" = CURRENT_TIMESTAMP
+    WHERE "id" = ${id}
+      AND "doctorId" = ${session.id}
+    RETURNING "id", "dateKey", "time", "title", "note", "createdAt", "updatedAt"
+  `;
+
+  if (rows.length === 0) {
+    return NextResponse.json({ error: "Kayıt bulunamadı" }, { status: 404 });
+  }
+
+  return NextResponse.json({ success: true, event: rows[0] });
+}
+
 export async function DELETE(req: Request) {
   const session = await getCurrentDoctorSession();
   if (!session) {
-    return NextResponse.json({ error: "Oturum bulunamadi" }, { status: 401 });
+    return NextResponse.json({ error: "Oturum bulunamadı" }, { status: 401 });
   }
 
   if (!isRoleAllowed(session.role, ["DOCTOR", "ASSISTANT", "MANAGER"])) {
@@ -132,7 +226,7 @@ export async function DELETE(req: Request) {
   const id = body.id?.trim();
 
   if (!id) {
-    return NextResponse.json({ error: "Kayit id gerekli" }, { status: 400 });
+    return NextResponse.json({ error: "Kayıt id gerekli" }, { status: 400 });
   }
 
   const rows = await prisma.$queryRaw<Array<{ id: string }>>`
@@ -145,7 +239,7 @@ export async function DELETE(req: Request) {
   const deletedCount = rows.length;
 
   if (deletedCount === 0) {
-    return NextResponse.json({ error: "Kayit bulunamadi" }, { status: 404 });
+    return NextResponse.json({ error: "Kayıt bulunamadı" }, { status: 404 });
   }
 
   return NextResponse.json({ success: true, id });

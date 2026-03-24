@@ -73,8 +73,8 @@ export default function DashboardLayout({
               <RetinaAiLogo className="h-10 w-10 text-[var(--retina-primary)]" />
               <div className="flex flex-col">
                 <h1 className="text-xl font-black leading-none tracking-tight text-slate-900">
-                  RETINA{" "}
-                  <span className="text-[var(--retina-secondary)]">CLINIC</span>
+                  RETİNA{" "}
+                  <span className="text-[var(--retina-secondary)]">KLİNİK</span>
                 </h1>
                 <span className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
                   Fundus Klinik Takip Sistemi

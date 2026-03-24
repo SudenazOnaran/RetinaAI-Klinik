@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { AlertTriangle, CalendarClock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -193,9 +194,10 @@ export function DashboardAlertCenter({ patients }: DashboardAlertCenterProps) {
           </p>
         ) : (
           plannedFollowups.slice(0, 8).map((item) => (
-            <div
+            <Link
               key={item.id}
-              className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5"
+              href={`/dashboard/hastalar/${item.id}?tab=reports`}
+              className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--retina-primary)]"
             >
               <div>
                 <p className="text-sm font-semibold text-slate-900">
@@ -217,7 +219,7 @@ export function DashboardAlertCenter({ patients }: DashboardAlertCenterProps) {
                     : `${item.remainingDays} gün kaldı`}
                 </Badge>
               </div>
-            </div>
+            </Link>
           ))
         )}
       </CardContent>

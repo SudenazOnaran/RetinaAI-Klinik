@@ -68,7 +68,7 @@ export default function LoginPage() {
           <div className="hidden border-r border-[var(--retina-border)] bg-gradient-to-br from-[#0a2540] to-[#1e90ff] p-10 text-white md:flex md:flex-col md:justify-between">
             <div>
               <p className="clinic-wood-strip inline-flex items-center gap-2 rounded-md px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em]">
-                <Eye className="h-3.5 w-3.5" /> Retina Clinic
+                <Eye className="h-3.5 w-3.5" /> Retina Klinik
               </p>
               <h1 className="mt-4 text-3xl font-bold leading-tight">
                 Klinik Destek ve Retina Analiz Paneli

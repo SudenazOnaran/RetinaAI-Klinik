@@ -162,7 +162,7 @@ export default function SettingsPage() {
       });
 
       if (!res.ok) {
-        throw new Error("Ayarlar veritabanina kaydedilemedi");
+        throw new Error("Ayarlar veritabanına kaydedilemedi");
       }
 
       const data = (await res.json()) as {
@@ -175,15 +175,15 @@ export default function SettingsPage() {
 
       toast({
         title: "Ayarlar kaydedildi",
-        description: "Klinik tercihleri merkezi veritabanina kaydedildi.",
+        description: "Klinik tercihleri merkezi veritabanına kaydedildi.",
       });
     } catch {
       setSettings(validated);
       saveRetinaSettingsToStorage(validated);
       toast({
         variant: "destructive",
-        title: "Uyari",
-        description: "Merkezi kayit basarisiz. Ayarlar yerel olarak saklandi.",
+        title: "Uyarı",
+        description: "Merkezi kayıt başarısız. Ayarlar yerel olarak saklandı.",
       });
     } finally {
       setIsSaving(false);
@@ -201,24 +201,24 @@ export default function SettingsPage() {
       });
 
       if (!res.ok) {
-        throw new Error("Varsayilan ayarlar kaydedilemedi");
+        throw new Error("Varsayılan ayarlar kaydedilemedi");
       }
 
       setSettings(defaults);
       saveRetinaSettingsToStorage(defaults);
 
       toast({
-        title: "Varsayilanlara donuldu",
-        description: "Ayarlar merkezi olarak sifirlandi.",
+        title: "Varsayılana dönüldü",
+        description: "Ayarlar merkezi olarak sıfırlandı.",
       });
     } catch {
       setSettings(defaults);
       saveRetinaSettingsToStorage(defaults);
       toast({
         variant: "destructive",
-        title: "Uyari",
+        title: "Uyarı",
         description:
-          "Merkezi sifirlama basarisiz. Varsayilanlar yerel olarak uygulandi.",
+          "Merkezi sıfırlama başarısız. Varsayılanlar yerel olarak uygulandı.",
       });
     } finally {
       setIsSaving(false);
@@ -276,9 +276,10 @@ export default function SettingsPage() {
   };
 
   const isDark = settings.appearance.darkMode;
-  const pageContainerClass = isDark
-    ? "clinic-app-bg mx-auto max-w-4xl space-y-8 rounded-2xl border border-slate-700/80 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.14),_transparent_42%),radial-gradient(circle_at_bottom_right,_rgba(59,130,246,0.12),_transparent_36%),linear-gradient(160deg,_#0b1220_0%,_#111827_45%,_#1e293b_100%)] p-4 shadow-2xl shadow-slate-950/40 md:p-6"
-    : "clinic-app-bg mx-auto max-w-4xl space-y-8 p-4 md:p-6";
+  const pageContainerClass = "clinic-app-bg min-h-screen p-4 md:p-6";
+  const contentContainerClass = isDark
+    ? "mx-auto max-w-7xl space-y-8 rounded-2xl border border-slate-700/80 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.14),_transparent_42%),radial-gradient(circle_at_bottom_right,_rgba(59,130,246,0.12),_transparent_36%),linear-gradient(160deg,_#0b1220_0%,_#111827_45%,_#1e293b_100%)] p-4 shadow-2xl shadow-slate-950/40 md:p-6"
+    : "mx-auto max-w-7xl space-y-8";
   const cardClass = isDark
     ? "border border-slate-700 bg-slate-900/70 shadow-lg shadow-slate-950/30"
     : "border border-[#d8e0df] bg-white shadow-sm";
@@ -292,301 +293,318 @@ export default function SettingsPage() {
 
   return (
     <div className={pageContainerClass}>
-      <div>
-        <h1 className={`text-2xl font-bold tracking-tight ${titleClass}`}>
-          Sistem Ayarları
-        </h1>
-        <p className={`text-sm ${subtitleClass}`}>
-          Uygulamanın raporlama ve görünüm ayarlarını yönetin.
-        </p>
-      </div>
+      <div className={contentContainerClass}>
+        <div>
+          <h1 className={`text-2xl font-bold tracking-tight ${titleClass}`}>
+            Sistem Ayarları
+          </h1>
+          <p className={`text-sm ${subtitleClass}`}>
+            Uygulamanın raporlama ve görünüm ayarlarını yönetin.
+          </p>
+        </div>
 
-      <div className="grid gap-6">
-        <Card className={cardClass}>
-          <CardHeader className="flex flex-row items-center gap-4">
-            <div
-              className={`rounded-lg p-2 ${
-                isDark
-                  ? "bg-emerald-900/40 text-emerald-200"
-                  : "bg-[#edf2e4] text-[#64895a]"
-              }`}
-            >
-              <Building2 size={20} />
-            </div>
-            <div>
-              <CardTitle className={titleClass}>Klinik Bilgileri</CardTitle>
-              <CardDescription className={cardDescriptionClass}>
-                Kurum adı, rapor başlığı ve adres gibi temel tanımlar.
-              </CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-6">
+          <Card className={cardClass}>
+            <CardHeader className="flex flex-row items-center gap-4">
+              <div
+                className={`rounded-lg p-2 ${
+                  isDark
+                    ? "bg-emerald-900/40 text-emerald-200"
+                    : "bg-[#edf2e4] text-[#64895a]"
+                }`}
+              >
+                <Building2 size={20} />
+              </div>
+              <div>
+                <CardTitle className={titleClass}>Klinik Bilgileri</CardTitle>
+                <CardDescription className={cardDescriptionClass}>
+                  Kurum adı, rapor başlığı ve adres gibi temel tanımlar.
+                </CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label className={labelClass}>Klinik Adı</Label>
+                  <Input
+                    className={inputClass}
+                    value={settings.clinic.clinicName}
+                    onChange={(e) => updateClinic("clinicName", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className={labelClass}>PDF Rapor Başlığı</Label>
+                  <Input
+                    className={inputClass}
+                    value={settings.clinic.reportHeader}
+                    onChange={(e) =>
+                      updateClinic("reportHeader", e.target.value)
+                    }
+                  />
+                </div>
+              </div>
               <div className="space-y-2">
-                <Label className={labelClass}>Klinik Adı</Label>
+                <Label className={labelClass}>Klinik Adresi</Label>
+                <Textarea
+                  className={inputClass}
+                  value={settings.clinic.address}
+                  onChange={(e) => updateClinic("address", e.target.value)}
+                  placeholder="Adres, il/ilçe"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className={cardClass}>
+            <CardHeader className="flex flex-row items-center gap-4">
+              <div
+                className={`rounded-lg p-2 ${
+                  isDark
+                    ? "bg-sky-900/40 text-sky-200"
+                    : "bg-[#dceaf2] text-[#5f90ad]"
+                }`}
+              >
+                <FileText size={20} />
+              </div>
+              <div>
+                <CardTitle className={titleClass}>
+                  Raporlama Tercihleri
+                </CardTitle>
+                <CardDescription className={cardDescriptionClass}>
+                  Oluşturulan PDF raporlarının içeriğini belirleyin.
+                </CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <ToggleRow
+                label="Doktor Notlarını Dahil Et"
+                description="Yazdığınız manuel yorumları rapora ekler."
+                checked={settings.report.includeDoctorNotes}
+                darkMode={isDark}
+                onCheckedChange={(v) => updateReport("includeDoctorNotes", v)}
+              />
+              <ToggleRow
+                label="Isı Haritasını Dahil Et"
+                description="Görsel rapor kısmında heatmap paneli ekler."
+                checked={settings.report.includeHeatmap}
+                darkMode={isDark}
+                onCheckedChange={(v) => updateReport("includeHeatmap", v)}
+              />
+              <ToggleRow
+                label="İlaç Planını Dahil Et"
+                description="Tedavi ve ilaç önerilerini PDF raporda gösterir."
+                checked={settings.report.includeMedications}
+                darkMode={isDark}
+                onCheckedChange={(v) => updateReport("includeMedications", v)}
+              />
+              <ToggleRow
+                label="Önizlemeyi Otomatik Aç"
+                description="PDF oluşturulduğunda önce önizleme sekmesini açar."
+                checked={settings.report.autoOpenPreview}
+                darkMode={isDark}
+                onCheckedChange={(v) => updateReport("autoOpenPreview", v)}
+              />
+              <ToggleRow
+                label="Kompakt PDF Düzeni"
+                description="Yazı boyutunu azaltarak raporu daha az sayfada tutar."
+                checked={settings.report.compactPdf}
+                darkMode={isDark}
+                onCheckedChange={(v) => updateReport("compactPdf", v)}
+              />
+            </CardContent>
+          </Card>
+
+          <Card className={cardClass}>
+            <CardHeader className="flex flex-row items-center gap-4">
+              <div
+                className={`rounded-lg p-2 ${
+                  isDark
+                    ? "bg-indigo-900/40 text-indigo-200"
+                    : "bg-[#e9ecf9] text-[#5d6fa8]"
+                }`}
+              >
+                <ShieldCheck size={20} />
+              </div>
+              <div>
+                <CardTitle className={titleClass}>
+                  Triage ve Klinik Eşikler
+                </CardTitle>
+                <CardDescription className={cardDescriptionClass}>
+                  Risk seviyesine göre kontrol süresi ve AI güven eşiği.
+                </CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label className={labelClass}>
+                  Yüksek Risk Kontrol Süresi (gün)
+                </Label>
                 <Input
                   className={inputClass}
-                  value={settings.clinic.clinicName}
-                  onChange={(e) => updateClinic("clinicName", e.target.value)}
+                  type="number"
+                  min={1}
+                  max={30}
+                  value={settings.triage.highRiskFollowupDays}
+                  onChange={(e) =>
+                    updateTriage("highRiskFollowupDays", Number(e.target.value))
+                  }
                 />
               </div>
               <div className="space-y-2">
-                <Label className={labelClass}>PDF Rapor Başlığı</Label>
+                <Label className={labelClass}>
+                  Orta Risk Kontrol Süresi (gün)
+                </Label>
                 <Input
                   className={inputClass}
-                  value={settings.clinic.reportHeader}
-                  onChange={(e) => updateClinic("reportHeader", e.target.value)}
+                  type="number"
+                  min={1}
+                  max={180}
+                  value={settings.triage.mediumRiskFollowupDays}
+                  onChange={(e) =>
+                    updateTriage(
+                      "mediumRiskFollowupDays",
+                      Number(e.target.value),
+                    )
+                  }
                 />
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label className={labelClass}>Klinik Adresi</Label>
-              <Textarea
-                className={inputClass}
-                value={settings.clinic.address}
-                onChange={(e) => updateClinic("address", e.target.value)}
-                placeholder="Adres, il/ilçe"
-              />
-            </div>
-          </CardContent>
-        </Card>
+              <div className="space-y-2">
+                <Label className={labelClass}>
+                  Düşük Risk Kontrol Süresi (gün)
+                </Label>
+                <Input
+                  className={inputClass}
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={settings.triage.lowRiskFollowupDays}
+                  onChange={(e) =>
+                    updateTriage("lowRiskFollowupDays", Number(e.target.value))
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className={labelClass}>
+                  AI Güven Eşiği (0.50 - 0.99)
+                </Label>
+                <Input
+                  className={inputClass}
+                  type="number"
+                  min={0.5}
+                  max={0.99}
+                  step={0.01}
+                  value={settings.triage.aiConfidenceThreshold}
+                  onChange={(e) =>
+                    updateTriage(
+                      "aiConfidenceThreshold",
+                      Number(e.target.value),
+                    )
+                  }
+                />
+              </div>
+            </CardContent>
+          </Card>
 
-        <Card className={cardClass}>
-          <CardHeader className="flex flex-row items-center gap-4">
-            <div
-              className={`rounded-lg p-2 ${
-                isDark
-                  ? "bg-sky-900/40 text-sky-200"
-                  : "bg-[#dceaf2] text-[#5f90ad]"
-              }`}
-            >
-              <FileText size={20} />
-            </div>
-            <div>
-              <CardTitle className={titleClass}>Raporlama Tercihleri</CardTitle>
-              <CardDescription className={cardDescriptionClass}>
-                Oluşturulan PDF raporlarının içeriğini belirleyin.
-              </CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <ToggleRow
-              label="Doktor Notlarını Dahil Et"
-              description="Yazdığınız manuel yorumları rapora ekler."
-              checked={settings.report.includeDoctorNotes}
-              darkMode={isDark}
-              onCheckedChange={(v) => updateReport("includeDoctorNotes", v)}
-            />
-            <ToggleRow
-              label="Isı Haritasını Dahil Et"
-              description="Görsel rapor kısmında heatmap paneli ekler."
-              checked={settings.report.includeHeatmap}
-              darkMode={isDark}
-              onCheckedChange={(v) => updateReport("includeHeatmap", v)}
-            />
-            <ToggleRow
-              label="İlaç Planını Dahil Et"
-              description="Tedavi ve ilaç önerilerini PDF raporda gösterir."
-              checked={settings.report.includeMedications}
-              darkMode={isDark}
-              onCheckedChange={(v) => updateReport("includeMedications", v)}
-            />
-            <ToggleRow
-              label="Önizlemeyi Otomatik Aç"
-              description="PDF oluşturulduğunda önce önizleme sekmesini açar."
-              checked={settings.report.autoOpenPreview}
-              darkMode={isDark}
-              onCheckedChange={(v) => updateReport("autoOpenPreview", v)}
-            />
-            <ToggleRow
-              label="Kompakt PDF Düzeni"
-              description="Yazı boyutunu azaltarak raporu daha az sayfada tutar."
-              checked={settings.report.compactPdf}
-              darkMode={isDark}
-              onCheckedChange={(v) => updateReport("compactPdf", v)}
-            />
-          </CardContent>
-        </Card>
-
-        <Card className={cardClass}>
-          <CardHeader className="flex flex-row items-center gap-4">
-            <div
-              className={`rounded-lg p-2 ${
-                isDark
-                  ? "bg-indigo-900/40 text-indigo-200"
-                  : "bg-[#e9ecf9] text-[#5d6fa8]"
-              }`}
-            >
-              <ShieldCheck size={20} />
-            </div>
-            <div>
-              <CardTitle className={titleClass}>
-                Triage ve Klinik Eşikler
-              </CardTitle>
-              <CardDescription className={cardDescriptionClass}>
-                Risk seviyesine göre kontrol süresi ve AI güven eşiği.
-              </CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label className={labelClass}>
-                Yüksek Risk Kontrol Süresi (gün)
-              </Label>
-              <Input
-                className={inputClass}
-                type="number"
-                min={1}
-                max={30}
-                value={settings.triage.highRiskFollowupDays}
-                onChange={(e) =>
-                  updateTriage("highRiskFollowupDays", Number(e.target.value))
+          <Card className={cardClass}>
+            <CardHeader className="flex flex-row items-center gap-4">
+              <div
+                className={`rounded-lg p-2 ${
+                  isDark
+                    ? "bg-amber-900/40 text-amber-200"
+                    : "bg-[#fff3e4] text-[#b17a3f]"
+                }`}
+              >
+                <BellRing size={20} />
+              </div>
+              <div>
+                <CardTitle className={titleClass}>
+                  Bildirim Tercihleri
+                </CardTitle>
+                <CardDescription className={cardDescriptionClass}>
+                  Kritik vaka ve takip hatırlatma bildirimlerini yönetin.
+                </CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <ToggleRow
+                tone="amber"
+                label="Kritik Vaka Uyarısı"
+                description="Yüksek riskli analizlerde anlık uyarı verir."
+                checked={settings.notifications.criticalCaseAlert}
+                darkMode={isDark}
+                onCheckedChange={(v) =>
+                  updateNotifications("criticalCaseAlert", v)
                 }
               />
-            </div>
-            <div className="space-y-2">
-              <Label className={labelClass}>
-                Orta Risk Kontrol Süresi (gün)
-              </Label>
-              <Input
-                className={inputClass}
-                type="number"
-                min={1}
-                max={180}
-                value={settings.triage.mediumRiskFollowupDays}
-                onChange={(e) =>
-                  updateTriage("mediumRiskFollowupDays", Number(e.target.value))
+              <ToggleRow
+                tone="amber"
+                label="Kontrol Takip Hatırlatması"
+                description="Planlanan takip günü yaklaşan hastaları listeler."
+                checked={settings.notifications.followupReminder}
+                darkMode={isDark}
+                onCheckedChange={(v) =>
+                  updateNotifications("followupReminder", v)
                 }
               />
-            </div>
-            <div className="space-y-2">
-              <Label className={labelClass}>
-                Düşük Risk Kontrol Süresi (gün)
-              </Label>
-              <Input
-                className={inputClass}
-                type="number"
-                min={1}
-                max={365}
-                value={settings.triage.lowRiskFollowupDays}
-                onChange={(e) =>
-                  updateTriage("lowRiskFollowupDays", Number(e.target.value))
-                }
+            </CardContent>
+          </Card>
+
+          <Card className={cardClass}>
+            <CardHeader className="flex flex-row items-center gap-4">
+              <div
+                className={`rounded-lg p-2 ${
+                  isDark
+                    ? "bg-slate-700/70 text-slate-100"
+                    : "bg-[#efe7da] text-[#8b6a49]"
+                }`}
+              >
+                <Moon size={20} />
+              </div>
+              <div>
+                <CardTitle className={titleClass}>Görünüm Tercihleri</CardTitle>
+                <CardDescription className={cardDescriptionClass}>
+                  Arayüz temasını kişiselleştirin.
+                </CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <ToggleRow
+                tone="indigo"
+                label="Gece Modu"
+                description="Sistemi koyu renk şemasına geçirir."
+                checked={settings.appearance.darkMode}
+                darkMode={isDark}
+                onCheckedChange={(v) => updateAppearance("darkMode", v)}
               />
-            </div>
-            <div className="space-y-2">
-              <Label className={labelClass}>AI Güven Eşiği (0.50 - 0.99)</Label>
-              <Input
-                className={inputClass}
-                type="number"
-                min={0.5}
-                max={0.99}
-                step={0.01}
-                value={settings.triage.aiConfidenceThreshold}
-                onChange={(e) =>
-                  updateTriage("aiConfidenceThreshold", Number(e.target.value))
-                }
-              />
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </div>
 
-        <Card className={cardClass}>
-          <CardHeader className="flex flex-row items-center gap-4">
-            <div
-              className={`rounded-lg p-2 ${
-                isDark
-                  ? "bg-amber-900/40 text-amber-200"
-                  : "bg-[#fff3e4] text-[#b17a3f]"
-              }`}
-            >
-              <BellRing size={20} />
-            </div>
-            <div>
-              <CardTitle className={titleClass}>Bildirim Tercihleri</CardTitle>
-              <CardDescription className={cardDescriptionClass}>
-                Kritik vaka ve takip hatırlatma bildirimlerini yönetin.
-              </CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <ToggleRow
-              tone="amber"
-              label="Kritik Vaka Uyarısı"
-              description="Yüksek riskli analizlerde anlık uyarı verir."
-              checked={settings.notifications.criticalCaseAlert}
-              darkMode={isDark}
-              onCheckedChange={(v) =>
-                updateNotifications("criticalCaseAlert", v)
-              }
-            />
-            <ToggleRow
-              tone="amber"
-              label="Kontrol Takip Hatırlatması"
-              description="Planlanan takip günü yaklaşan hastaları listeler."
-              checked={settings.notifications.followupReminder}
-              darkMode={isDark}
-              onCheckedChange={(v) =>
-                updateNotifications("followupReminder", v)
-              }
-            />
-          </CardContent>
-        </Card>
-
-        <Card className={cardClass}>
-          <CardHeader className="flex flex-row items-center gap-4">
-            <div
-              className={`rounded-lg p-2 ${
-                isDark
-                  ? "bg-slate-700/70 text-slate-100"
-                  : "bg-[#efe7da] text-[#8b6a49]"
-              }`}
-            >
-              <Moon size={20} />
-            </div>
-            <div>
-              <CardTitle className={titleClass}>Görünüm Tercihleri</CardTitle>
-              <CardDescription className={cardDescriptionClass}>
-                Arayüz temasını kişiselleştirin.
-              </CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <ToggleRow
-              tone="indigo"
-              label="Gece Modu"
-              description="Sistemi koyu renk şemasına geçirir."
-              checked={settings.appearance.darkMode}
-              darkMode={isDark}
-              onCheckedChange={(v) => updateAppearance("darkMode", v)}
-            />
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="flex flex-wrap justify-end gap-3 pt-4">
-        <Button
-          variant="outline"
-          className={`gap-2 ${
-            isDark
-              ? "border-slate-600 bg-slate-800 text-slate-200 hover:bg-slate-700"
-              : "border-[#d8e0df]"
-          }`}
-          onClick={handleResetDefaults}
-        >
-          <RotateCcw size={16} /> Varsayılana Dön
-        </Button>
-        <Button
-          className={`gap-2 px-8 text-white ${
-            isDark
-              ? "bg-emerald-600 hover:bg-emerald-500"
-              : "bg-[#659f92] hover:bg-[#84b9ad]"
-          }`}
-          onClick={handleSaveSettings}
-          disabled={isSaving}
-        >
-          <Save size={18} /> {isSaving ? "Kaydediliyor..." : "Ayarları Kaydet"}
-        </Button>
+        <div className="flex flex-wrap justify-end gap-3 pt-4">
+          <Button
+            variant="outline"
+            className={`gap-2 ${
+              isDark
+                ? "border-slate-600 bg-slate-800 text-slate-200 hover:bg-slate-700"
+                : "border-[#d8e0df]"
+            }`}
+            onClick={handleResetDefaults}
+          >
+            <RotateCcw size={16} /> Varsayılana Dön
+          </Button>
+          <Button
+            className={`gap-2 px-8 text-white ${
+              isDark
+                ? "bg-emerald-600 hover:bg-emerald-500"
+                : "bg-[#659f92] hover:bg-[#84b9ad]"
+            }`}
+            onClick={handleSaveSettings}
+            disabled={isSaving}
+          >
+            <Save size={18} />{" "}
+            {isSaving ? "Kaydediliyor..." : "Ayarları Kaydet"}
+          </Button>
+        </div>
       </div>
     </div>
   );

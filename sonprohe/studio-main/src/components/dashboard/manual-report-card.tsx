@@ -36,7 +36,6 @@ type ManualReportCardProps = {
   doctorName?: string;
 };
 
-const MANUAL_REPORT_CONFIDENCE = 0.85;
 const REPORT_FORMAT_VERSION = "manual_report_v2";
 const CANONICAL_RISK_LABELS = new Set([
   "No_DR",
@@ -114,9 +113,7 @@ export function ManualReportCard({
       const finalAiLabel = aiDraft?.correctionLabel || aiDraft?.aiResult;
       const finalRiskForSave = finalAiLabel || riskForSave;
       const finalConfidence =
-        typeof aiDraft?.confidence === "number"
-          ? aiDraft.confidence
-          : MANUAL_REPORT_CONFIDENCE;
+        typeof aiDraft?.confidence === "number" ? aiDraft.confidence : 0;
 
       const aiSummary = aiDraft
         ? [
@@ -130,6 +127,7 @@ export function ManualReportCard({
         version: REPORT_FORMAT_VERSION,
         reportTitle: reportTitle.trim() || "Göz Muayene Raporu",
         reportDate: reportDate || "-",
+        aiIncluded: Boolean(aiDraft),
         patientInfo: {
           fullName: patientInfo.fullName,
           tcNo: patientInfo.tcNo,
@@ -358,7 +356,11 @@ export function ManualReportCard({
         </label>
 
         <div className="flex justify-end">
-          <Button onClick={handleSave} disabled={busy}>
+          <Button
+            onClick={handleSave}
+            disabled={busy}
+            className="min-w-[200px] rounded-lg bg-[var(--retina-primary)] px-5 text-white shadow-sm transition-all duration-200 hover:bg-[var(--retina-primary-deep)] hover:shadow-md"
+          >
             {busy
               ? "Kaydediliyor..."
               : aiDraft

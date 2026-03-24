@@ -164,7 +164,7 @@ export default function KvkkClient({ role }: { role: DoctorRole }) {
 
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
-        throw new Error(data.error || "Yedekleme basarisiz");
+        throw new Error(data.error || "Yedekleme başarısız");
       }
 
       const data = (await res.json()) as { backupDir: string };
@@ -177,7 +177,7 @@ export default function KvkkClient({ role }: { role: DoctorRole }) {
         variant: "destructive",
         title: "Hata",
         description:
-          error instanceof Error ? error.message : "Yedekleme basarisiz.",
+          error instanceof Error ? error.message : "Yedekleme başarısız.",
       });
     }
   };

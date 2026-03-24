@@ -12,7 +12,7 @@ import { logAuditEvent } from "@/lib/audit-log";
 export async function GET() {
   const session = await getCurrentDoctorSession();
   if (!session) {
-    return NextResponse.json({ error: "Oturum bulunamadi" }, { status: 401 });
+    return NextResponse.json({ error: "Oturum bulunamadı" }, { status: 401 });
   }
 
   if (!isRoleAllowed(session.role, ["DOCTOR", "MANAGER", "AUDITOR"])) {
@@ -57,7 +57,7 @@ export async function GET() {
 export async function PUT(req: Request) {
   const session = await getCurrentDoctorSession();
   if (!session) {
-    return NextResponse.json({ error: "Oturum bulunamadi" }, { status: 401 });
+    return NextResponse.json({ error: "Oturum bulunamadı" }, { status: 401 });
   }
 
   if (!isRoleAllowed(session.role, ["DOCTOR", "MANAGER"])) {
@@ -81,7 +81,7 @@ export async function PUT(req: Request) {
   });
 
   if (!patient) {
-    return NextResponse.json({ error: "Hasta bulunamadi" }, { status: 404 });
+    return NextResponse.json({ error: "Hasta bulunamadı" }, { status: 404 });
   }
 
   const saved = await upsertKvkkConsent({
@@ -96,7 +96,7 @@ export async function PUT(req: Request) {
     doctorId: session.id,
     patientId: patient.id,
     action: "CONSENT_UPDATE",
-    detail: `Acik riza durumu guncellendi (${body.consentGiven ? "onayli" : "reddedildi"})`,
+    detail: `Açık rıza durumu güncellendi (${body.consentGiven ? "onaylı" : "reddedildi"})`,
     metadata: {
       patientName: patient.fullName,
       consentVersion: body.consentVersion || "v1",
@@ -109,7 +109,7 @@ export async function PUT(req: Request) {
     action: "EDIT",
     entityType: "SYSTEM",
     entityId: patient.id,
-    description: "KVKK acik riza durumu guncellendi",
+    description: "KVKK açık rıza durumu güncellendi",
     metadata: {
       patientName: patient.fullName,
       consentGiven: body.consentGiven,

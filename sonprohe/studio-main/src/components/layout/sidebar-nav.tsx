@@ -19,7 +19,6 @@ import {
   ShieldCheck,
   PlugZap,
   Siren,
-  FlaskConical,
   ChevronDown,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
@@ -62,22 +61,10 @@ const menuItems: Array<{
     roles: ["DOCTOR", "ASSISTANT", "MANAGER"],
   },
   {
-    href: "/dashboard/entegrasyonlar",
-    label: "Klinik Entegrasyon",
-    icon: PlugZap,
-    roles: ["DOCTOR", "MANAGER"],
-  },
-  {
     href: "/dashboard/izleme",
     label: "İzleme ve Alarm",
     icon: Siren,
     roles: ["MANAGER", "AUDITOR"],
-  },
-  {
-    href: "/dashboard/pilot-metrikleri",
-    label: "Pilot Metrikleri",
-    icon: FlaskConical,
-    roles: ["DOCTOR", "MANAGER", "AUDITOR"],
   },
 ];
 
@@ -105,6 +92,12 @@ const settingsSubItems: Array<{
     icon: ShieldCheck,
     roles: ["DOCTOR", "MANAGER", "AUDITOR"],
   },
+  {
+    href: "/dashboard/entegrasyonlar",
+    label: "Klinik Entegrasyon",
+    icon: PlugZap,
+    roles: ["DOCTOR", "MANAGER"],
+  },
 ];
 
 export function SidebarNav() {
@@ -130,7 +123,7 @@ export function SidebarNav() {
           setRole(data.doctor.role);
         }
       } catch {
-        // Varsayilan rol ile devam.
+        // Varsayılan rol ile devam.
       }
     };
 
@@ -233,7 +226,7 @@ export function SidebarNav() {
                   </CollapsibleTrigger>
 
                   <CollapsibleContent>
-                    <SidebarMenuSub>
+                    <SidebarMenuSub className="mt-2 space-y-1 rounded-xl border border-[#d8e0df] bg-[#f8fbff] p-2">
                       {visibleSettingsSubItems.map((subItem) => {
                         const isSubActive = pathname.startsWith(subItem.href);
                         return (
@@ -241,10 +234,20 @@ export function SidebarNav() {
                             <SidebarMenuSubButton
                               asChild
                               isActive={isSubActive}
+                              className={`h-10 rounded-lg px-3 transition-colors ${
+                                isSubActive
+                                  ? "bg-[var(--retina-primary)] text-white hover:bg-[var(--retina-primary)]"
+                                  : "text-[#5f7482] hover:bg-white hover:text-[var(--retina-primary-deep)]"
+                              }`}
                             >
-                              <Link href={subItem.href}>
+                              <Link
+                                href={subItem.href}
+                                className="flex items-center gap-2.5"
+                              >
                                 <subItem.icon className="h-4 w-4" />
-                                <span>{subItem.label}</span>
+                                <span className="text-[13px] font-semibold">
+                                  {subItem.label}
+                                </span>
                               </Link>
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>

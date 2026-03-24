@@ -123,31 +123,32 @@ export default async function DashboardPage() {
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--retina-primary)]">
-                Retina Klinik Destek Sistemi
+                Retina Klinik Karar Destek Sistemi
               </p>
               <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
-                Klinik Özet - Dr. {doctor.name}
+                Hoş geldiniz, Dr. {doctor.name}
               </h1>
               <p className="mt-2 text-sm text-slate-600 md:text-base">
-                Hoş geldiniz Dr. {doctor.name}. Size ait hasta portföyü, analiz
-                yoğunluğu ve kritik risk dağılımı.
+                Klinik özet paneli üzerinden hasta sayısı, analiz yoğunluğu ve
+                risk dağılımını tek bakışta görüntüleyebilir ve takip
+                edebilirsiniz
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-3">
+            <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row md:flex-nowrap md:shrink-0">
               <Button
                 asChild
                 variant="outline"
-                className="border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                className="w-full border-slate-300 bg-white text-slate-700 hover:bg-slate-50 sm:w-auto"
               >
                 <Link href="/dashboard/hastalar">
-                  <Users className="mr-2 h-4 w-4" /> Hastalar
+                  <Users className="mr-2 h-4 w-4" /> Hasta Kayıtları
                 </Link>
               </Button>
 
               <Button
                 asChild
-                className="bg-[var(--retina-accent)] text-white hover:bg-[#00a592]"
+                className="w-full bg-[var(--retina-primary)] text-white hover:bg-[var(--retina-primary-deep)] sm:w-auto"
               >
                 <Link href="/dashboard/hastalar/yeni">
                   <UserPlus className="mr-2 h-4 w-4" /> Yeni Kayıt
@@ -203,7 +204,7 @@ export default async function DashboardPage() {
                     className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#7eaec9] text-sm font-bold text-white">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#edf5ff] text-sm font-bold text-[var(--retina-primary)]">
                         {patient.fullName[0]}
                       </div>
                       <div>
@@ -290,10 +291,10 @@ type StatsCardProps = {
 
 function StatsCard({ title, value, icon, color, desc }: StatsCardProps) {
   const iconColors = {
-    cyan: "bg-[#dceaf2] text-[#5f90ad]",
+    cyan: "bg-[#edf5ff] text-[var(--retina-primary)]",
     amber: "bg-amber-100/80 text-amber-700",
-    teal: "bg-[#d8ebe6] text-[#659f92]",
-    slate: "bg-[#e9eeed] text-[#5b6f6b]",
+    teal: "bg-[#e7fbf8] text-[var(--retina-accent)]",
+    slate: "bg-slate-100 text-slate-600",
   } as const;
 
   return (
@@ -309,7 +310,7 @@ function StatsCard({ title, value, icon, color, desc }: StatsCardProps) {
           </p>
           <div className="flex items-baseline gap-2">
             <h2 className="text-3xl font-extrabold">{value}</h2>
-            <span className="text-[10px] font-bold text-slate-500 uppercase">
+            <span className="text-xs font-bold text-slate-500 uppercase">
               {desc}
             </span>
           </div>

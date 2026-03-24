@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight,
   NotebookPen,
+  Pencil,
   Plus,
   Trash2,
 } from "lucide-react";
@@ -92,7 +93,7 @@ async function fetchCalendarNotes(monthDate: Date): Promise<CalendarNote[]> {
   });
 
   if (!res.ok) {
-    throw new Error("Takvim verisi alinamadi");
+    throw new Error("Takvim verisi alınamadı");
   }
 
   const data = (await res.json()) as { events?: CalendarNote[] };
@@ -107,6 +108,7 @@ export function CalendarBoard({ doctorId }: CalendarBoardProps) {
   const [notes, setNotes] = useState<CalendarNote[]>([]);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [isLoadingNotes, setIsLoadingNotes] = useState(true);
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [time, setTime] = useState("");
   const [noteText, setNoteText] = useState("");
@@ -129,7 +131,7 @@ export function CalendarBoard({ doctorId }: CalendarBoardProps) {
         toast({
           variant: "destructive",
           title: "Hata",
-          description: "Takvim verileri yuklenemedi.",
+          description: "Takvim verileri yüklenemedi.",
         });
       } finally {
         setIsLoadingNotes(false);
@@ -168,6 +170,14 @@ export function CalendarBoard({ doctorId }: CalendarBoardProps) {
     [notesByDateKey, selectedDateKey],
   );
 
+  const isEditing = Boolean(editingNoteId);
+  const hasTimeConflict = useMemo(() => {
+    if (!time) return false;
+    return selectedDateNotes.some(
+      (item) => item.time === time && item.id !== editingNoteId,
+    );
+  }, [selectedDateNotes, time, editingNoteId]);
+
   const monthGrid = useMemo(() => {
     if (!monthDate) return [];
     return getCalendarGrid(monthDate);
@@ -179,9 +189,64 @@ export function CalendarBoard({ doctorId }: CalendarBoardProps) {
     setTitle("");
     setTime("");
     setNoteText("");
+    setEditingNoteId(null);
   };
 
-  const handleAddNote = async () => {
+  const startEditNote = (item: CalendarNote) => {
+    setEditingNoteId(item.id);
+    setTime(item.time);
+    setTitle(item.title);
+    setNoteText(item.note);
+  };
+
+  const handleUpdateNote = async (
+    id: string,
+    cleanTitle: string,
+    cleanNote: string,
+  ) => {
+    const res = await fetch("/api/doctor/calendar", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id,
+        dateKey: selectedDateKey,
+        time,
+        title: cleanTitle,
+        note: cleanNote,
+      }),
+    });
+
+    if (res.status === 409) {
+      toast({
+        variant: "destructive",
+        title: "Saat çakışması",
+        description: "Bu saatte zaten başka bir görev bulunuyor.",
+      });
+      return;
+    }
+
+    if (!res.ok) {
+      throw new Error("Takvim kaydı güncellenemedi");
+    }
+
+    const data = (await res.json()) as { event?: CalendarNote };
+    if (data.event) {
+      setNotes((prev) =>
+        prev.map((item) =>
+          item.id === id ? (data.event as CalendarNote) : item,
+        ),
+      );
+    }
+
+    resetForm();
+
+    toast({
+      title: "Görev güncellendi",
+      description: "Takvim görevi başarıyla güncellendi.",
+    });
+  };
+
+  const handleSaveNote = async () => {
     const cleanTitle = title.trim();
     const cleanNote = noteText.trim();
 
@@ -194,7 +259,21 @@ export function CalendarBoard({ doctorId }: CalendarBoardProps) {
       return;
     }
 
+    if (hasTimeConflict) {
+      toast({
+        variant: "destructive",
+        title: "Saat çakışması",
+        description: "Bu saatte zaten başka bir görev bulunuyor.",
+      });
+      return;
+    }
+
     try {
+      if (editingNoteId) {
+        await handleUpdateNote(editingNoteId, cleanTitle, cleanNote);
+        return;
+      }
+
       const res = await fetch("/api/doctor/calendar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -206,8 +285,17 @@ export function CalendarBoard({ doctorId }: CalendarBoardProps) {
         }),
       });
 
+      if (res.status === 409) {
+        toast({
+          variant: "destructive",
+          title: "Saat çakışması",
+          description: "Bu saatte zaten başka bir görev bulunuyor.",
+        });
+        return;
+      }
+
       if (!res.ok) {
-        throw new Error("Takvim kaydi olusturulamadi");
+        throw new Error("Takvim kaydı oluşturulamadı");
       }
 
       const data = (await res.json()) as { event?: CalendarNote };
@@ -217,14 +305,16 @@ export function CalendarBoard({ doctorId }: CalendarBoardProps) {
       resetForm();
 
       toast({
-        title: "Not eklendi",
-        description: "Takvim notu merkezi veritabanina kaydedildi.",
+        title: "Görev eklendi",
+        description: "Takvim görevi merkezi veritabanına kaydedildi.",
       });
     } catch {
       toast({
         variant: "destructive",
         title: "Hata",
-        description: "Takvim kaydi olusturulamadi.",
+        description: isEditing
+          ? "Takvim kaydı güncellenemedi."
+          : "Takvim kaydı oluşturulamadı.",
       });
     }
   };
@@ -238,20 +328,24 @@ export function CalendarBoard({ doctorId }: CalendarBoardProps) {
       });
 
       if (!res.ok) {
-        throw new Error("Takvim kaydi silinemedi");
+        throw new Error("Takvim kaydı silinemedi");
+      }
+
+      if (editingNoteId === id) {
+        resetForm();
       }
 
       setNotes((prev) => prev.filter((item) => item.id !== id));
 
       toast({
         title: "Not silindi",
-        description: "Takvim kaydi merkezi veritabanindan kaldirildi.",
+        description: "Takvim kaydı merkezi veritabanından kaldırıldı.",
       });
     } catch {
       toast({
         variant: "destructive",
         title: "Hata",
-        description: "Takvim kaydi silinemedi.",
+        description: "Takvim kaydı silinemedi.",
       });
     }
   };
@@ -279,7 +373,7 @@ export function CalendarBoard({ doctorId }: CalendarBoardProps) {
     return (
       <Card className="border border-slate-200 bg-white shadow-sm">
         <CardContent className="p-8 text-sm text-slate-600">
-          Takvim yükleniyor...
+          Takvim verileri yükleniyor...
         </CardContent>
       </Card>
     );
@@ -289,7 +383,7 @@ export function CalendarBoard({ doctorId }: CalendarBoardProps) {
     return (
       <Card className="border border-slate-200 bg-white shadow-sm">
         <CardContent className="p-8 text-sm text-slate-600">
-          Takvim verileri yukleniyor...
+          Takvim verileri yükleniyor...
         </CardContent>
       </Card>
     );
@@ -389,7 +483,7 @@ export function CalendarBoard({ doctorId }: CalendarBoardProps) {
               {formatDisplayDate(selectedDate)}
             </DialogTitle>
             <DialogDescription>
-              Gün kutusuna ait görevleri yönetin ve yeni görev ekleyin.
+              Gün kutusuna ait görevleri yönetin, ekleyin ve düzenleyin.
             </DialogDescription>
           </DialogHeader>
 
@@ -416,12 +510,35 @@ export function CalendarBoard({ doctorId }: CalendarBoardProps) {
               className="min-h-[110px] border-slate-300"
             />
 
-            <Button
-              onClick={handleAddNote}
-              className="w-full bg-[var(--retina-primary)] text-white hover:bg-[var(--retina-primary-deep)]"
-            >
-              <Plus className="mr-2 h-4 w-4" /> Görev Ekle
-            </Button>
+            {hasTimeConflict && (
+              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                Seçtiğiniz saat için zaten bir görev bulunuyor. Lütfen farklı
+                bir saat seçin.
+              </p>
+            )}
+
+            <div className="flex gap-2">
+              <Button
+                onClick={handleSaveNote}
+                className="w-full bg-[var(--retina-primary)] text-white hover:bg-[var(--retina-primary-deep)]"
+              >
+                {isEditing ? (
+                  <>
+                    <Pencil className="mr-2 h-4 w-4" /> Görevi Güncelle
+                  </>
+                ) : (
+                  <>
+                    <Plus className="mr-2 h-4 w-4" /> Görev Ekle
+                  </>
+                )}
+              </Button>
+
+              {isEditing && (
+                <Button variant="outline" onClick={resetForm}>
+                  Vazgeç
+                </Button>
+              )}
+            </div>
 
             <div className="space-y-2 pt-2">
               {selectedDateNotes.length === 0 ? (
@@ -446,14 +563,24 @@ export function CalendarBoard({ doctorId }: CalendarBoardProps) {
                           {item.note}
                         </p>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
-                        onClick={() => handleDeleteNote(item.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-slate-600 hover:bg-slate-200 hover:text-slate-800"
+                          onClick={() => startEditNote(item)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-rose-600 hover:bg-rose-50 hover:text-rose-700"
+                          onClick={() => handleDeleteNote(item.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 ))

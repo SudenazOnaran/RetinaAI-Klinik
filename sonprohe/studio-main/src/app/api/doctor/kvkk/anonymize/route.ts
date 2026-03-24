@@ -8,7 +8,7 @@ import { logAuditEvent } from "@/lib/audit-log";
 export async function POST(req: Request) {
   const session = await getCurrentDoctorSession();
   if (!session) {
-    return NextResponse.json({ error: "Oturum bulunamadi" }, { status: 401 });
+    return NextResponse.json({ error: "Oturum bulunamadı" }, { status: 401 });
   }
 
   if (!isRoleAllowed(session.role, ["DOCTOR", "MANAGER"])) {
@@ -27,7 +27,7 @@ export async function POST(req: Request) {
   });
 
   if (!patient) {
-    return NextResponse.json({ error: "Hasta bulunamadi" }, { status: 404 });
+    return NextResponse.json({ error: "Hasta bulunamadı" }, { status: 404 });
   }
 
   const anonymizedName = `Anonim Hasta ${patient.id.slice(-6).toUpperCase()}`;
@@ -59,7 +59,7 @@ export async function POST(req: Request) {
     doctorId: session.id,
     patientId: patient.id,
     action: "ANONYMIZE",
-    detail: "Hasta verisi KVKK kapsaminda anonimlestirildi",
+    detail: "Hasta verisi KVKK kapsamında anonimleştirildi",
     metadata: {
       oldName: patient.fullName,
       newName: anonymizedName,
@@ -72,7 +72,7 @@ export async function POST(req: Request) {
     action: "EDIT",
     entityType: "PATIENT",
     entityId: patient.id,
-    description: "KVKK anonymizasyon islemi uygulandi",
+    description: "KVKK anonimleştirme işlemi uygulandı",
   });
 
   return NextResponse.json({
