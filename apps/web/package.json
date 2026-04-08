@@ -87,6 +87,9 @@
     "typescript": "^5",
     "vitest": "^4.1.0"
   },
+  "prisma": {
+    "seed": "npx tsx prisma/seed.ts"
+  },
   "overrides": {
     "@tootallnate/once": "^3.0.1",
     "effect": "^3.20.0",

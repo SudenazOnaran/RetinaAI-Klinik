@@ -10,7 +10,12 @@ async function main() {
   // Admin kullanıcısı
   await prisma.doctor.upsert({
     where: { email: "admin@retina.local" },
-    update: {},
+    update: {
+      password: adminPasswordHash,
+      role: "ADMIN",
+      approvalStatus: "APPROVED",
+      isActive: true,
+    },
     create: {
       name: "Admin",
       surname: "Retina",
