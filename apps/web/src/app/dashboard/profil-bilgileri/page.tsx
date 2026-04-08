@@ -83,7 +83,7 @@ export default function DoctorProfilePage() {
         description: "Profil verileri yüklenemedi.",
       });
     } finally {
-      setIsLoading(false);
+      // loading state handled by render
     }
   };
 
