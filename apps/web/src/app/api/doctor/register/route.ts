@@ -87,9 +87,8 @@ export async function POST(req: Request) {
 
     const session = auth.session;
 
-    const { name, email, role, temporaryPassword } = await req.json();
-    if (!name || !email) {
-      console.warn("Eksik bilgi ile kayit denemesi");
+    const { name, surname, email, role, specialty, hospital, temporaryPassword } = await req.json();
+    if (!name || !surname || !email || !specialty || !hospital) {
       return NextResponse.json({ error: "Eksik bilgi" }, { status: 400 });
     }
 
@@ -123,8 +122,11 @@ export async function POST(req: Request) {
     const doctor = await prisma.doctor.create({
       data: {
         name,
+        surname,
         email,
         password: hashed,
+        specialty,
+        hospital,
         role: normalizedRole,
       },
     });
