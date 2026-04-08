@@ -1,6 +1,15 @@
 {
-  "dependencies": {
-    "framer-motion": "^12.23.26",
-    "swr": "^2.3.8"
+  "name": "retina-ai-monorepo",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Retina AI web + AI service monorepo",
+  "scripts": {
+    "web:install": "npm --prefix apps/web install",
+    "web:dev": "npm --prefix apps/web run dev",
+    "web:build": "npm --prefix apps/web run build",
+    "web:start": "npm --prefix apps/web run start",
+    "web:lint": "npm --prefix apps/web run lint",
+    "web:test": "npm --prefix apps/web run test",
+    "ai:run": "python services/ai/app.py"
   }
 }

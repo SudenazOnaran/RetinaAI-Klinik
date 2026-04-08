@@ -1,0 +1,9 @@
+flask
+flask-cors
+python-dotenv
+numpy
+opencv-python
+pillow
+torch
+torchvision
+redis
