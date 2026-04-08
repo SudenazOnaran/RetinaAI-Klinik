@@ -314,11 +314,6 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: "Oturum bulunamadı" }, { status: 401 });
   }
 
-  return NextResponse.json(
-    { error: "Profil güncelleme kapalıdır" },
-    { status: 403 },
-  );
-
   if (!isRoleAllowed(session.role, ["DOCTOR", "MANAGER"])) {
     return NextResponse.json({ error: "Yetkiniz yok" }, { status: 403 });
   }
