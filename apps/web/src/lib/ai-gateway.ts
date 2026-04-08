@@ -67,14 +67,23 @@ function getTimeoutMs() {
 }
 
 function getRetryCount() {
-  const value = Number(process.env.AI_REQUEST_RETRY_COUNT || "0");
-  if (!Number.isFinite(value) || value < 0) return 0;
+  const value = Number(process.env.AI_REQUEST_RETRY_COUNT ?? "2");
+  if (!Number.isFinite(value) || value < 0) return 2;
   return Math.min(5, value);
 }
 
-function shouldUseTlsEnforcement() {
+function isLoopbackHost(hostname: string) {
+  return (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "::1"
+  );
+}
+
+function shouldUseTlsEnforcement(targetUrl: URL) {
   if (process.env.NODE_ENV !== "production") return false;
   if (process.env.AI_ALLOW_HTTP_IN_PROD === "1") return false;
+  if (isLoopbackHost(targetUrl.hostname)) return false;
   return true;
 }
 
@@ -84,7 +93,7 @@ async function delay(ms: number) {
 
 export async function callAiServiceWithRetry(formData: FormData) {
   const url = new URL(getAiServiceUrl());
-  if (shouldUseTlsEnforcement() && url.protocol !== "https:") {
+  if (shouldUseTlsEnforcement(url) && url.protocol !== "https:") {
     throw new Error("AI servisi production ortaminda HTTPS kullanmalidir.");
   }
 
