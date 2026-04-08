@@ -6,6 +6,7 @@ import { Download, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { drLabelTr } from "@/lib/dr-label-tr";
 
 type HistoryRow = {
   id: string;
@@ -355,7 +356,7 @@ export default function HistoryClient({ rows }: { rows: HistoryRow[] }) {
                         {badge.text}
                       </Badge>
                       <div className="mt-1 text-xs text-slate-500">
-                        {diagnosis}
+                        {drLabelTr(diagnosis)}
                       </div>
                     </td>
                     <td className="p-3">

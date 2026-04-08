@@ -38,6 +38,7 @@ import {
 } from "@/lib/retina-report-pdf";
 import { loadRetinaSettingsFromStorage } from "@/lib/retina-settings";
 import { ManualReportCard } from "@/components/dashboard/manual-report-card";
+import { drLabelTr } from "@/lib/dr-label-tr";
 
 export default function PatientDetailClient({ patient }: { patient: any }) {
   const searchParams = useSearchParams();
@@ -199,7 +200,7 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
   };
 
   const formatDiagnosisLabel = (label: string) => {
-    return label.replaceAll("_", " ");
+    return drLabelTr(label);
   };
 
   const isApprovalFeedback = (value: unknown) => {

@@ -323,7 +323,7 @@ export default function RegisterPage() {
             </div>
           </form>
 
-          <div className="hidden border-l border-[var(--retina-border)] bg-gradient-to-br from-[#6c63ff] to-[#1e90ff] p-10 text-white md:flex md:flex-col md:justify-between">
+          <div className="hidden border-l border-[var(--retina-border)] bg-gradient-to-br from-[#0088BB] to-[#00A8CC] p-10 text-white md:flex md:flex-col md:justify-between">
             <div>
               <p className="clinic-wood-strip inline-flex items-center gap-2 rounded-md px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em]">
                 <Eye className="h-3.5 w-3.5" /> Retina Klinik

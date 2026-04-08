@@ -7,8 +7,15 @@ export default function HomePage() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace("/login");
+    const key = "__retina_root_redirect";
+    if (sessionStorage.getItem(key)) {
+      sessionStorage.removeItem(key);
+      router.replace("/login");
+      return;
+    }
+    sessionStorage.setItem(key, "1");
+    window.location.href = "/";
   }, [router]);
 
-  return null; // Veya bir yükleme ekranı gösterebilirsiniz
+  return null;
 }

@@ -25,6 +25,7 @@ import {
   RefreshCw,
   ChevronDown,
 } from "lucide-react";
+import { drLabelTr } from "@/lib/dr-label-tr";
 
 type PatientReportInfo = {
   fullName?: string;
@@ -236,7 +237,7 @@ export function ImageAnalysisCard({
                   AI Sonucu Özeti
                 </p>
                 <p className="mt-3 text-3xl font-bold leading-tight">
-                  {String(result.pytorch?.label || "No_DR").replace("_", " ")}
+                  {drLabelTr(result.pytorch?.label || "No_DR")}
                 </p>
                 <p className="mt-4 rounded-lg bg-white/15 px-3 py-2 text-sm font-medium">
                   Güven: %
@@ -490,7 +491,7 @@ export function ImageAnalysisCard({
                   <option value="">Düzeltme etiketini seçin...</option>
                   {["Mild", "Moderate", "Severe"].map((c) => (
                     <option key={c} value={c}>
-                      {c.replace("_", " ")}
+                      {drLabelTr(c)}
                     </option>
                   ))}
                 </select>

@@ -1,5 +1,6 @@
 import jsPDF from "jspdf";
 import { loadRetinaSettingsFromStorage } from "@/lib/retina-settings";
+import { drLabelTr } from "@/lib/dr-label-tr";
 
 type PatientReportInfo = {
   fullName?: string;
@@ -90,8 +91,7 @@ function toSafeFileName(value: string) {
 }
 
 function formatLabel(value?: string) {
-  if (!value) return "Belirtilmedi";
-  return value.replace(/_/g, " ");
+  return drLabelTr(value);
 }
 
 function normalizeForRisk(value: string) {

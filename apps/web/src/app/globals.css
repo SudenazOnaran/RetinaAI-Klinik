@@ -10,18 +10,18 @@
     --clinic-bg: #f8fafc;
     --clinic-panel: #ffffff;
     --clinic-soft-gray: #dbe6f5;
-    --clinic-blue: #1e90ff;
-    --clinic-blue-deep: #0a2540;
+    --clinic-blue: #00A8CC;
+    --clinic-blue-deep: #006B8F;
     --clinic-green: #2ecc71;
-    --clinic-green-deep: #00bfa6;
+    --clinic-green-deep: #00D4FF;
     --clinic-beige: #f2f7ff;
-    --clinic-wood: #6c63ff;
-    --clinic-wood-deep: #8a7cff;
-    --retina-primary: #1e90ff;
-    --retina-primary-deep: #0a2540;
-    --retina-secondary: #6c63ff;
-    --retina-secondary-soft: #8a7cff;
-    --retina-accent: #00bfa6;
+    --clinic-wood: #0088BB;
+    --clinic-wood-deep: #00B4D8;
+    --retina-primary: #00A8CC;
+    --retina-primary-deep: #006B8F;
+    --retina-secondary: #0088BB;
+    --retina-secondary-soft: #00B4D8;
+    --retina-accent: #00D4FF;
     --retina-background: #f8fafc;
     --retina-text: #1a1a1a;
     --retina-border: #dbe6f5;
@@ -51,7 +51,7 @@
   width: 4px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(30, 144, 255, 0.45);
+  background: rgba(0, 168, 204, 0.45);
   border-radius: 10px;
 }
 
@@ -75,7 +75,7 @@ html.dark [data-sidebar="menu-button"] {
 html.dark [data-sidebar="menu-button"][data-active="true"],
 html.dark [data-sidebar="menu-button"]:hover {
   color: #e2e8f0 !important;
-  background: rgba(30, 144, 255, 0.2);
+  background: rgba(0, 168, 204, 0.2);
 }
 
 [data-sidebar="menu-button"] svg {
@@ -105,8 +105,8 @@ html.dark [data-sidebar="menu-button"]:hover {
   }
 
   .clinic-wood-strip {
-    background: rgba(108, 99, 255, 0.1);
-    border: 1px solid rgba(108, 99, 255, 0.24);
+    background: rgba(0, 136, 187, 0.1);
+    border: 1px solid rgba(0, 136, 187, 0.24);
   }
 
   .clinic-action {
@@ -194,12 +194,12 @@ html.dark .hover\:bg-\[\#84b9ad\]:hover {
   background-color: #1e293b !important;
 }
 
-html.dark .bg-gradient-to-br.from-\[\#0a2540\].to-\[\#1e90ff\],
-html.dark .bg-gradient-to-br.from-\[\#6c63ff\].to-\[\#1e90ff\] {
+html.dark .bg-gradient-to-br.from-\[\#006B8F\].to-\[\#00A8CC\],
+html.dark .bg-gradient-to-br.from-\[\#0088BB\].to-\[\#00A8CC\] {
   background-image: linear-gradient(
     160deg,
     #0f172a 0%,
-    #1e3a8a 100%
+    #064e6e 100%
   ) !important;
 }
 

@@ -19,6 +19,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { bulkDeletePatientsAction } from "@/app/actions/bulk-delete-patients";
 import { bulkUpdatePatientRiskAction } from "@/app/actions/bulk-update-patient-risk";
+import { drLabelTr } from "@/lib/dr-label-tr";
 
 type Patient = {
   id: string;
@@ -625,12 +626,12 @@ export default function HastalarClient({
               onChange={(e) => setBulkRiskValue(e.target.value)}
               aria-label="Toplu risk değeri"
             >
-              <option value="No_DR">Toplu risk: No_DR</option>
-              <option value="Mild">Toplu risk: Mild</option>
-              <option value="Moderate">Toplu risk: Moderate</option>
-              <option value="Severe">Toplu risk: Severe</option>
+              <option value="No_DR">Toplu risk: {drLabelTr("No_DR")}</option>
+              <option value="Mild">Toplu risk: {drLabelTr("Mild")}</option>
+              <option value="Moderate">Toplu risk: {drLabelTr("Moderate")}</option>
+              <option value="Severe">Toplu risk: {drLabelTr("Severe")}</option>
               <option value="Proliferative_DR">
-                Toplu risk: Proliferative_DR
+                Toplu risk: {drLabelTr("Proliferative_DR")}
               </option>
             </select>
 

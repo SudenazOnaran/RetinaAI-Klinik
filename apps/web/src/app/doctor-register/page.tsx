@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Eye, UserPlus, CheckCircle } from "lucide-react";
+import { Eye, EyeOff, UserPlus, CheckCircle } from "lucide-react";
 
 export default function DoctorRegisterPage() {
   const [name, setName] = useState("");
@@ -15,6 +15,8 @@ export default function DoctorRegisterPage() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,7 +90,7 @@ export default function DoctorRegisterPage() {
     <div className="clinic-app-bg min-h-screen px-4 py-8">
       <div className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-5xl items-center justify-center">
         <div className="clinic-panel grid w-full overflow-hidden rounded-2xl md:grid-cols-2">
-          <div className="hidden border-r border-[var(--retina-border)] bg-gradient-to-br from-[#0a2540] to-[#1e90ff] p-10 text-white md:flex md:flex-col md:justify-between">
+          <div className="hidden border-r border-[var(--retina-border)] bg-gradient-to-br from-[#006B8F] to-[#00A8CC] p-10 text-white md:flex md:flex-col md:justify-between">
             <div>
               <p className="clinic-wood-strip inline-flex items-center gap-2 rounded-md px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em]">
                 <Eye className="h-3.5 w-3.5" /> Retina Klinik
@@ -192,14 +194,24 @@ export default function DoctorRegisterPage() {
                 <label className="mb-1 block text-sm font-medium text-slate-700">
                   Şifre
                 </label>
-                <input
-                  type="password"
-                  className="w-full rounded-lg border border-[var(--retina-border)] px-3 py-2.5 outline-none focus:border-[var(--retina-primary)]"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  minLength={8}
-                  required
-                />
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    className="w-full rounded-lg border border-[var(--retina-border)] px-3 py-2.5 pr-10 outline-none focus:border-[var(--retina-primary)]"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    minLength={8}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
                 <p className="mt-1 text-xs text-slate-500">En az 8 karakter</p>
               </div>
 
@@ -207,14 +219,24 @@ export default function DoctorRegisterPage() {
                 <label className="mb-1 block text-sm font-medium text-slate-700">
                   Şifre Tekrar
                 </label>
-                <input
-                  type="password"
-                  className="w-full rounded-lg border border-[var(--retina-border)] px-3 py-2.5 outline-none focus:border-[var(--retina-primary)]"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  minLength={8}
-                  required
-                />
+                <div className="relative">
+                  <input
+                    type={showConfirmPassword ? "text" : "password"}
+                    className="w-full rounded-lg border border-[var(--retina-border)] px-3 py-2.5 pr-10 outline-none focus:border-[var(--retina-primary)]"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    minLength={8}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    tabIndex={-1}
+                  >
+                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
 
               {error && (
