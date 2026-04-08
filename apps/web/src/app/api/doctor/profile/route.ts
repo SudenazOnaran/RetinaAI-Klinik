@@ -482,11 +482,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Oturum bulunamadı" }, { status: 401 });
   }
 
-  return NextResponse.json(
-    { error: "Profil doğrulama akışı kapalıdır" },
-    { status: 403 },
-  );
-
   if (!isRoleAllowed(session.role, ["DOCTOR", "MANAGER"])) {
     return NextResponse.json({ error: "Yetkiniz yok" }, { status: 403 });
   }

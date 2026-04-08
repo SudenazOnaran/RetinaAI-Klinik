@@ -10,7 +10,6 @@ import {
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import {
   RetinaSettings,
@@ -29,11 +28,9 @@ export default function DoctorProfilePage() {
   const [doctorRole, setDoctorRole] = useState("");
   const [doctorActive, setDoctorActive] = useState<boolean | null>(null);
   const [doctorCreatedAt, setDoctorCreatedAt] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
   const loadProfile = async () => {
-    setIsLoading(true);
     try {
       const res = await fetch("/api/doctor/profile", {
         method: "GET",
@@ -99,6 +96,7 @@ export default function DoctorProfilePage() {
     };
 
     void hydrate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const previewName = useMemo(

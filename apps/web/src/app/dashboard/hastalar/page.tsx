@@ -2,11 +2,9 @@ import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { getCurrentDoctorSession } from "@/lib/auth-session";
 import { redirect } from "next/navigation";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
 import HastalarClient from "./HastalarClient";
 import { Card, CardContent } from "@/components/ui/card";
-import { User, Activity, AlertTriangle, Plus } from "lucide-react";
+import { User, Activity, AlertTriangle } from "lucide-react";
 import { isHighRiskLabel } from "@/lib/risk-alerts";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
