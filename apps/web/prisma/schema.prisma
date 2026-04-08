@@ -33,9 +33,10 @@ model Doctor {
   approvalStatus ApprovalStatus    @default(APPROVED)
   isActive       Boolean           @default(true)
   createdAt      DateTime          @default(now())
-  patients       Patient[]
-  settings       DoctorSettings?
-  calendarEvents CalendarEvent[]
+  patients         Patient[]
+  settings         DoctorSettings?
+  calendarEvents   CalendarEvent[]
+  credentialPolicy DoctorCredentialPolicy?
 }
 
 model Patient {
@@ -123,6 +124,15 @@ model IntegrationEvent {
 
   @@index([doctorId, createdAt(sort: Desc)])
   @@index([patientId])
+}
+
+model DoctorCredentialPolicy {
+  doctorId                   String    @id
+  mustResetPassword          Boolean   @default(false)
+  temporaryPasswordExpiresAt DateTime?
+  updatedAt                  DateTime  @updatedAt
+
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
 }
 
 model LoginAttempt {
