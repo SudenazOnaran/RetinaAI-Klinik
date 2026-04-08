@@ -1,0 +1,53 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script_stop: true
+          script: |
+            set -e
+
+            echo "=== Pull latest code ==="
+            cd /opt/apps/retina_ai
+            git fetch origin main
+            git reset --hard origin/main
+
+            echo "=== Install dependencies ==="
+            cd apps/web
+            npm ci --prefer-offline
+
+            echo "=== Build Next.js ==="
+            npm run build
+
+            echo "=== Restart web service ==="
+            sudo systemctl restart retina-web
+
+            echo "=== Update AI service ==="
+            cd /opt/apps/retina_ai/services/ai
+            source .venv/bin/activate
+            pip install -q -r requirements.txt
+            deactivate
+            sudo systemctl restart retina-ai
+
+            echo "=== Verify services ==="
+            sleep 3
+            sudo systemctl is-active retina-web
+            sudo systemctl is-active retina-ai
+            echo "Deploy completed successfully"
