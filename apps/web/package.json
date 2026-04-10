@@ -21,7 +21,8 @@
     "test:e2e:ui": "playwright test --ui",
     "ci": "npm run lint && npm run typecheck && npm run test",
     "release:check": "npm run clean:next-artifacts && npm run env:check:release && npm run ci && npm run test:e2e && npm run build",
-    "fix:analysis-feedback": "node scripts/fix-analysis-feedback.js"
+    "fix:analysis-feedback": "node scripts/fix-analysis-feedback.js",
+    "login:clear-attempts": "prisma db execute --file scripts/clear-login-attempts.sql --schema prisma/schema.prisma"
   },
   "dependencies": {
     "@genkit-ai/google-genai": "^1.30.1",

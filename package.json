@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "description": "Retina AI web + AI service monorepo",
   "scripts": {
+    "dev": "npm run web:dev",
     "web:install": "npm --prefix apps/web install",
     "web:dev": "npm --prefix apps/web run dev",
     "web:build": "npm --prefix apps/web run build",

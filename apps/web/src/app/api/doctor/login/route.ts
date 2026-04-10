@@ -201,8 +201,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Eksik bilgi" }, { status: 400 });
     }
 
+    const emailTrimmed = String(email).trim();
     const now = new Date();
-    const attemptKey = getAttemptKey(req, String(email));
+    const attemptKey = getAttemptKey(req, emailTrimmed);
     const currentState = await getAttemptStateSafe(attemptKey);
 
     if (currentState?.lockedUntil && currentState.lockedUntil > now) {
@@ -225,7 +226,11 @@ export async function POST(req: Request) {
       );
     }
 
-    const doctor = await prisma.doctor.findUnique({ where: { email } });
+    const doctor = await prisma.doctor.findFirst({
+      where: {
+        email: { equals: emailTrimmed, mode: "insensitive" },
+      },
+    });
     if (!doctor) {
       const failed = await registerFailedAttemptSafe(attemptKey, now);
       if (failed.locked) {

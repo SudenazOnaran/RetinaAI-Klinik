@@ -229,3 +229,15 @@ model PilotMetricSnapshot {
   @@unique([doctorId, snapshotMonth])
   @@index([doctorId, generatedAt(sort: Desc)])
 }
+
+/// Tanıtım sitesi “Bize ulaşın / demo talep” formu (admin panelinde listelenir)
+model LandingContactRequest {
+  id        String   @id @default(cuid())
+  fullName  String
+  email     String?
+  phone     String?
+  message   String?  @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([createdAt(sort: Desc)])
+}
