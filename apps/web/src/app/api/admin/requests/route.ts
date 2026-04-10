@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentDoctorSession } from "@/lib/auth-session";
+import { sendDoctorApprovalEmail } from "@/lib/doctor-approval-email";
 
 async function requireAdminSession() {
   const session = await getCurrentDoctorSession();
@@ -139,6 +140,15 @@ export async function PATCH(req: Request) {
       WHERE "id" = ${doctorId}
       LIMIT 1
     `;
+
+    if (action === "APPROVE" && updated[0]?.email) {
+      void sendDoctorApprovalEmail({
+        to: updated[0].email,
+        recipientFirstName: updated[0].name,
+      }).catch((err) => {
+        console.error("[admin/requests] Onay e-postası gönderilemedi:", err);
+      });
+    }
 
     return NextResponse.json({
       success: true,
