@@ -88,11 +88,17 @@ Retina AI`;
 <p>İyi çalışmalar,<br/>Retina AI</p>`;
 
   const transporter = createTransporter();
-  await transporter.sendMail({
+  const mailOptions = {
     from: getFromAddress(),
     to: params.to,
     subject,
     text,
     html,
-  });
+  };
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log("MAIL GÖNDERİLDİ");
+  } catch (err) {
+    console.log("MAIL HATASI:", err);
+  }
 }
