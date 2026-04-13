@@ -40,6 +40,7 @@ function createTransporter() {
     host,
     port,
     secure,
+    requireTLS: !secure && port === 587,
     auth: { user, pass },
   });
 }
@@ -64,6 +65,7 @@ export async function sendDoctorApprovalEmail(params: {
     console.warn(
       "[doctor-approval-email] SMTP atlandı: SMTP_HOST / SMTP_USER / SMTP_PASS eksik.",
     );
+    console.warn("[retina-mail] SKIP missing SMTP_HOST / SMTP_USER / SMTP_PASS");
     return;
   }
 
@@ -95,10 +97,13 @@ Retina AI`;
     text,
     html,
   };
+  // ASCII-only: journalctl / grep guvenilir; Turkce karakter sorun cikarmasin
+  console.error("[retina-mail] attempting send");
   try {
     await transporter.sendMail(mailOptions);
-    console.log("MAIL GÖNDERİLDİ");
+    console.error("[retina-mail] SENT ok");
   } catch (err) {
-    console.log("MAIL HATASI:", err);
+    console.error("[retina-mail] SEND failed", err);
+    throw err;
   }
 }

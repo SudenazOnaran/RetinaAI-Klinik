@@ -161,12 +161,12 @@ export default function AdminPage() {
               Admin Yönetim Paneli
             </p>
             <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
-              {tab === "doctors" ? "Doktor Başvuru Yönetimi" : "Tanıtım Sitesi Talepleri"}
+              {tab === "doctors" ? "Doktor Başvuru Yönetimi" : "Bize Ulaşın Talepleri"}
             </h1>
             <p className="mt-2 text-sm text-slate-600">
               {tab === "doctors"
-                ? "Kayıt olan doktorların başvurularını inceleyin, onaylayın veya reddedin."
-                : "Bize ulaşın formu ile gelen demo ve iletişim taleplerini görüntüleyin."}
+                ? "Kayıt olan doktorların başvurularını inceleyin, onaylayın veya reddedin. Tanıtım sitesindeki iletişim formu için üstteki «Bize Ulaşın talepleri» sekmesine geçin."
+                : "Tanıtım sitesindeki «Bize Ulaşın» formundan gelen talepler burada listelenir."}
             </p>
           </div>
           {tab === "doctors" && filter === "PENDING" && (
@@ -185,7 +185,10 @@ export default function AdminPage() {
       <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-4">
         <button
           type="button"
-          onClick={() => setTab("doctors")}
+          onClick={() => {
+            setMessage(null);
+            setTab("doctors");
+          }}
           className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
             tab === "doctors"
               ? "bg-[var(--retina-primary)] text-white"
@@ -197,7 +200,10 @@ export default function AdminPage() {
         </button>
         <button
           type="button"
-          onClick={() => setTab("landing")}
+          onClick={() => {
+            setMessage(null);
+            setTab("landing");
+          }}
           className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
             tab === "landing"
               ? "bg-[var(--retina-primary)] text-white"
@@ -205,9 +211,21 @@ export default function AdminPage() {
           }`}
         >
           <MessageSquareText className="h-4 w-4" />
-          Tanıtım talepleri
+          Bize Ulaşın talepleri
         </button>
       </div>
+
+      {message && (
+        <div
+          className={`rounded-lg border px-4 py-3 text-sm ${
+            message.type === "success"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+              : "border-rose-200 bg-rose-50 text-rose-700"
+          }`}
+        >
+          {message.text}
+        </div>
+      )}
 
       {tab === "landing" && (
         <div className="space-y-4">
@@ -305,18 +323,6 @@ export default function AdminPage() {
           Yenile
         </button>
       </div>
-
-      {message && (
-        <div
-          className={`rounded-lg border px-4 py-3 text-sm ${
-            message.type === "success"
-              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-              : "border-rose-200 bg-rose-50 text-rose-700"
-          }`}
-        >
-          {message.text}
-        </div>
-      )}
 
       <div className="rounded-2xl border border-[var(--retina-border)] bg-white shadow-sm">
         {loading ? (
