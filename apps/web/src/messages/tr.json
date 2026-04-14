@@ -1,0 +1,49 @@
+{
+  "meta": {
+    "title": "Retina AI",
+    "description": "Profesyonel bir klinik web sitesi"
+  },
+  "common": {
+    "language": "Dil",
+    "turkish": "Türkçe",
+    "english": "English"
+  },
+  "login": {
+    "brand": "Retina Klinik",
+    "heroTitle": "Klinik Destek ve Retina Analiz Paneli",
+    "heroDescription": "Doktor oturumu ile güvenli erişim, sade ve modern klinik çalışma alanı.",
+    "heroNote": "Göz hastalıkları takip süreçleri için optimize edilmiş kullanıcı deneyimi.",
+    "title": "Sistem Girişi",
+    "subtitle": "Sisteme erişmek için giriş yapın.",
+    "email": "E-posta",
+    "password": "Şifre",
+    "submit": "Giriş Yap",
+    "submitting": "Giriş yapılıyor...",
+    "registerPrompt": "Doktor olarak kayıt olmak ister misiniz?",
+    "registerLink": "Kayıt Ol",
+    "backToLanding": "Tanıtım Sayfasına Dön",
+    "errors": {
+      "tooManyAttemptsWithRetry": "Çok fazla hatalı deneme algılandı. Lütfen {{minutes}} dakika sonra tekrar deneyin.",
+      "tooManyAttempts": "Çok fazla hatalı deneme algılandı. Lütfen daha sonra tekrar deneyin.",
+      "loginFailed": "Giriş başarısız",
+      "serverError": "Sunucu hatası"
+    }
+  },
+  "dashboard": {
+    "productNamePrimary": "RETINA",
+    "productNameSecondary": "KLİNİK",
+    "productTagline": "Fundus Klinik Takip Sistemi",
+    "backToPatientList": "Hasta Listesi",
+    "logout": "Çıkış Yap",
+    "menu": {
+      "panel": "Panel",
+      "patients": "Hasta Kayıtları",
+      "reports": "Hasta Raporları",
+      "calendar": "Takvim",
+      "monitoring": "İzleme ve Alarm",
+      "settings": "Ayarlar",
+      "systemSettings": "Sistem Ayarları",
+      "profile": "Profil Bilgileri"
+    }
+  }
+}

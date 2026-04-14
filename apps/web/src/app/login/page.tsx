@@ -3,9 +3,12 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, LogIn, ArrowLeft } from "lucide-react";
+import { useTranslation } from "@/components/providers/i18n-provider";
+import { LanguageSwitcher } from "@/components/layout/language-switcher";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -44,19 +47,17 @@ export default function LoginPage() {
           if (Number.isFinite(retry) && retry > 0) {
             const minutes = Math.ceil(retry / 60);
             setError(
-              `Cok fazla hatali deneme algilandi. Lutfen ${minutes} dakika sonra tekrar deneyin.`,
+              t("login.errors.tooManyAttemptsWithRetry", { minutes }),
             );
           } else {
-            setError(
-              "Cok fazla hatali deneme algilandi. Lutfen daha sonra tekrar deneyin.",
-            );
+            setError(t("login.errors.tooManyAttempts"));
           }
         } else {
-          setError(data.error || "Giriş başarısız");
+          setError(data.error || t("login.errors.loginFailed"));
         }
       }
     } catch {
-      setError("Sunucu hatası");
+      setError(t("login.errors.serverError"));
     } finally {
       setIsLoading(false);
     }
@@ -69,33 +70,34 @@ export default function LoginPage() {
           <div className="hidden border-r border-[var(--retina-border)] bg-gradient-to-br from-[#006B8F] to-[#00A8CC] p-10 text-white md:flex md:flex-col md:justify-between">
             <div>
               <p className="clinic-wood-strip inline-flex items-center gap-2 rounded-md px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em]">
-                <Eye className="h-3.5 w-3.5" /> Retina Klinik
+                <Eye className="h-3.5 w-3.5" /> {t("login.brand")}
               </p>
               <h1 className="mt-4 text-3xl font-bold leading-tight">
-                Klinik Destek ve Retina Analiz Paneli
+                {t("login.heroTitle")}
               </h1>
               <p className="mt-3 text-sm text-blue-100">
-                Doktor oturumu ile güvenli erişim, sade ve modern klinik çalışma
-                alanı.
+                {t("login.heroDescription")}
               </p>
             </div>
 
             <div className="rounded-xl border border-white/25 bg-white/10 p-4 text-sm text-blue-50 backdrop-blur-sm">
-              Göz hastalıkları takip süreçleri için optimize edilmiş kullanıcı
-              deneyimi.
+              {t("login.heroNote")}
             </div>
           </div>
 
           <form onSubmit={handleLogin} className="p-8 md:p-10">
-            <h2 className="text-2xl font-bold text-slate-900">Sistem Girişi</h2>
+            <div className="mb-4 flex justify-end">
+              <LanguageSwitcher />
+            </div>
+            <h2 className="text-2xl font-bold text-slate-900">{t("login.title")}</h2>
             <p className="mt-1 text-sm text-slate-600">
-              Sisteme erişmek için giriş yapın.
+              {t("login.subtitle")}
             </p>
 
             <div className="mt-6 space-y-4">
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">
-                  E-posta
+                  {t("login.email")}
                 </label>
                 <input
                   type="email"
@@ -108,7 +110,7 @@ export default function LoginPage() {
 
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">
-                  Şifre
+                  {t("login.password")}
                 </label>
                 <div className="relative">
                   <input
@@ -141,13 +143,13 @@ export default function LoginPage() {
                 className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--retina-primary)] px-4 py-2.5 font-semibold text-white hover:bg-[var(--retina-primary-deep)] disabled:opacity-70"
               >
                 <LogIn className="h-4 w-4" />
-                {isLoading ? "Giriş yapılıyor..." : "Giriş Yap"}
+                {isLoading ? t("login.submitting") : t("login.submit")}
               </button>
 
               <p className="text-center text-xs text-slate-500 mt-2">
-                Doktor olarak kayıt olmak ister misiniz?{" "}
+                {t("login.registerPrompt")}{" "}
                 <Link href="/doctor-register" className="underline font-semibold text-[var(--retina-primary)]">
-                  Kayıt Ol
+                  {t("login.registerLink")}
                 </Link>
               </p>
 
@@ -157,7 +159,7 @@ export default function LoginPage() {
                 className="mt-3 inline-flex w-full items-center justify-center gap-1.5 text-xs text-slate-400 hover:text-[var(--retina-primary)] transition-colors"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
-                Tanıtım Sayfasına Dön
+                {t("login.backToLanding")}
               </button>
             </div>
           </form>

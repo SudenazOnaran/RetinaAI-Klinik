@@ -11,6 +11,7 @@ import {
 import { RetinaAiLogo } from "@/components/icons/logo";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { LogoutButton } from "@/components/layout/logout-button";
+import { LanguageSwitcher } from "@/components/layout/language-switcher";
 import {
   Sidebar,
   SidebarContent,
@@ -19,12 +20,14 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
+import { useTranslation } from "@/components/providers/i18n-provider";
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const { t } = useTranslation();
   const [isMounted, setIsMounted] = useState(false);
   const pathname = usePathname();
   const isPatientDetail = pathname.startsWith("/dashboard/hastalar/");
@@ -78,11 +81,13 @@ export default function DashboardLayout({
               <RetinaAiLogo className="h-10 w-10 text-[var(--retina-primary)]" />
               <div className="flex flex-col">
                 <h1 className="text-xl font-black leading-none tracking-tight text-slate-900">
-                  RETİNA{" "}
-                  <span className="text-[var(--retina-secondary)]">KLİNİK</span>
+                  {t("dashboard.productNamePrimary")}{" "}
+                  <span className="text-[var(--retina-secondary)]">
+                    {t("dashboard.productNameSecondary")}
+                  </span>
                 </h1>
                 <span className="mt-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                  Fundus Klinik Takip Sistemi
+                  {t("dashboard.productTagline")}
                 </span>
               </div>
             </div>
@@ -105,11 +110,12 @@ export default function DashboardLayout({
                 className="group flex items-center gap-2 rounded-full border border-[var(--retina-border)] bg-[#f2f7ff] px-4 py-1.5 text-sm font-medium text-[var(--retina-primary)] shadow-sm"
               >
                 <ArrowLeft className="h-4 w-4" />
-                Hasta Listesi
+                {t("dashboard.backToPatientList")}
               </Link>
             )}
 
-            <div className="ml-auto">
+            <div className="ml-auto flex items-center gap-2">
+              <LanguageSwitcher />
               <LogoutButton />
             </div>
           </header>

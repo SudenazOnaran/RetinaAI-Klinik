@@ -27,40 +27,41 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { useTranslation } from "@/components/providers/i18n-provider";
 
 const menuItems: Array<{
   href: string;
-  label: string;
+  labelKey: string;
   icon: any;
   roles: DoctorRole[];
 }> = [
   {
     href: "/dashboard",
-    label: "Panel",
+    labelKey: "dashboard.menu.panel",
     icon: LayoutDashboard,
     roles: ["DOCTOR", "ASSISTANT", "MANAGER", "AUDITOR"],
   },
   {
     href: "/dashboard/hastalar",
-    label: "Hasta Kayıtları",
+    labelKey: "dashboard.menu.patients",
     icon: Users,
     roles: ["DOCTOR", "ASSISTANT", "MANAGER"],
   },
   {
     href: "/dashboard/raporlar",
-    label: "Hasta Raporları",
+    labelKey: "dashboard.menu.reports",
     icon: FileText,
     roles: ["DOCTOR", "ASSISTANT", "MANAGER", "AUDITOR"],
   },
   {
     href: "/dashboard/takvim",
-    label: "Takvim",
+    labelKey: "dashboard.menu.calendar",
     icon: CalendarDays,
     roles: ["DOCTOR", "ASSISTANT", "MANAGER"],
   },
   {
     href: "/dashboard/izleme",
-    label: "İzleme ve Alarm",
+    labelKey: "dashboard.menu.monitoring",
     icon: Siren,
     roles: ["MANAGER", "AUDITOR"],
   },
@@ -68,25 +69,26 @@ const menuItems: Array<{
 
 const settingsSubItems: Array<{
   href: string;
-  label: string;
+  labelKey: string;
   icon: any;
   roles: DoctorRole[];
 }> = [
   {
     href: "/dashboard/ayarlar",
-    label: "Sistem Ayarları",
+    labelKey: "dashboard.menu.systemSettings",
     icon: Settings,
     roles: ["DOCTOR", "MANAGER"],
   },
   {
     href: "/dashboard/profil-bilgileri",
-    label: "Profil Bilgileri",
+    labelKey: "dashboard.menu.profile",
     icon: UserRound,
     roles: ["DOCTOR", "ASSISTANT", "MANAGER", "AUDITOR"],
   },
 ];
 
 export function SidebarNav() {
+  const { t } = useTranslation();
   const pathname = usePathname();
   const [role, setRole] = useState<DoctorRole>("DOCTOR");
 
@@ -166,7 +168,7 @@ export function SidebarNav() {
                       }`}
                     />
                     <span className="font-semibold tracking-wide text-[14px]">
-                      {item.label}
+                      {t(item.labelKey)}
                     </span>
                   </div>
                   {isActive && (
@@ -203,7 +205,7 @@ export function SidebarNav() {
                             }`}
                           />
                           <span className="font-semibold tracking-wide text-[14px]">
-                            Ayarlar
+                            {t("dashboard.menu.settings")}
                           </span>
                         </div>
                         <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180" />
@@ -232,7 +234,7 @@ export function SidebarNav() {
                               >
                                 <subItem.icon className="h-4 w-4" />
                                 <span className="text-[13px] font-semibold">
-                                  {subItem.label}
+                                  {t(subItem.labelKey)}
                                 </span>
                               </Link>
                             </SidebarMenuSubButton>

@@ -5,6 +5,12 @@ import {
   canAccessAdminPath,
   normalizeDoctorRole,
 } from "@/lib/roles";
+import {
+  DEFAULT_LOCALE,
+  LOCALE_COOKIE_NAME,
+  isLocale,
+  normalizeLocale,
+} from "@/lib/i18n/config";
 
 function decodeSessionRole(token?: string | null) {
   if (!token) return null;
@@ -39,6 +45,10 @@ export function middleware(req: NextRequest) {
   const requestId = req.headers.get("x-request-id") || crypto.randomUUID();
   const requestHeaders = new Headers(req.headers);
   requestHeaders.set("x-request-id", requestId);
+  const localeCookie = req.cookies.get(LOCALE_COOKIE_NAME)?.value;
+  const localeToPersist = isLocale(localeCookie)
+    ? localeCookie
+    : normalizeLocale(req.headers.get("accept-language"));
 
   if (pathname.startsWith("/admin") && !hasSession) {
     const loginUrl = new URL("/login", req.url);
@@ -81,16 +91,25 @@ export function middleware(req: NextRequest) {
     },
   });
   response.headers.set("x-request-id", requestId);
+  if (!isLocale(localeCookie)) {
+    response.cookies.set(LOCALE_COOKIE_NAME, localeToPersist ?? DEFAULT_LOCALE, {
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365,
+      sameSite: "lax",
+    });
+  }
   return response;
 }
 
 export const config = {
   matcher: [
+    "/",
     "/dashboard/:path*",
     "/admin/:path*",
     "/login",
     "/register",
     "/doctor-register",
+    "/reset-password",
     "/en/login",
     "/tr/login",
   ],

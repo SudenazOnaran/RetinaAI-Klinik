@@ -1,0 +1,49 @@
+{
+  "meta": {
+    "title": "Retina AI",
+    "description": "A professional clinic website"
+  },
+  "common": {
+    "language": "Language",
+    "turkish": "Turkish",
+    "english": "English"
+  },
+  "login": {
+    "brand": "Retina Clinic",
+    "heroTitle": "Clinical Support and Retina Analysis Panel",
+    "heroDescription": "Secure access with doctor session, simple and modern clinical workspace.",
+    "heroNote": "Optimized user experience for eye disease follow-up workflows.",
+    "title": "System Login",
+    "subtitle": "Sign in to access the system.",
+    "email": "Email",
+    "password": "Password",
+    "submit": "Sign In",
+    "submitting": "Signing in...",
+    "registerPrompt": "Would you like to register as a doctor?",
+    "registerLink": "Register",
+    "backToLanding": "Back to Landing Page",
+    "errors": {
+      "tooManyAttemptsWithRetry": "Too many failed attempts detected. Please try again in {{minutes}} minutes.",
+      "tooManyAttempts": "Too many failed attempts detected. Please try again later.",
+      "loginFailed": "Login failed",
+      "serverError": "Server error"
+    }
+  },
+  "dashboard": {
+    "productNamePrimary": "RETINA",
+    "productNameSecondary": "CLINIC",
+    "productTagline": "Fundus Clinical Follow-up System",
+    "backToPatientList": "Patient List",
+    "logout": "Log Out",
+    "menu": {
+      "panel": "Panel",
+      "patients": "Patient Records",
+      "reports": "Patient Reports",
+      "calendar": "Calendar",
+      "monitoring": "Monitoring and Alerts",
+      "settings": "Settings",
+      "systemSettings": "System Settings",
+      "profile": "Profile Information"
+    }
+  }
+}
