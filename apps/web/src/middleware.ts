@@ -1,6 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { DOCTOR_SESSION_COOKIE } from "@/lib/auth-constants";
-import { canAccessDashboardPath, canAccessAdminPath, normalizeDoctorRole } from "@/lib/roles";
+import {
+  canAccessDashboardPath,
+  canAccessAdminPath,
+  normalizeDoctorRole,
+} from "@/lib/roles";
 
 function decodeSessionRole(token?: string | null) {
   if (!token) return null;
@@ -24,6 +28,11 @@ function decodeSessionRole(token?: string | null) {
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  if (pathname === "/en/login" || pathname === "/tr/login") {
+    const target = new URL("/login", req.url);
+    target.search = req.nextUrl.search;
+    return NextResponse.redirect(target);
+  }
   const token = req.cookies.get(DOCTOR_SESSION_COOKIE)?.value;
   const role = decodeSessionRole(token);
   const hasSession = Boolean(token);
@@ -76,5 +85,13 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/admin/:path*", "/login", "/register", "/doctor-register"],
+  matcher: [
+    "/dashboard/:path*",
+    "/admin/:path*",
+    "/login",
+    "/register",
+    "/doctor-register",
+    "/en/login",
+    "/tr/login",
+  ],
 };

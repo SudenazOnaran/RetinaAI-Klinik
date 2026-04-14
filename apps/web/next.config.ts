@@ -3,6 +3,12 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   /* config options here */
   distDir: process.env.NEXT_DIST_DIR || ".next",
+  async redirects() {
+    return [
+      { source: "/en/login", destination: "/login", permanent: true },
+      { source: "/tr/login", destination: "/login", permanent: true },
+    ];
+  },
   turbopack: {
     root: __dirname,
   },
