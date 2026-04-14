@@ -45,5 +45,78 @@
       "systemSettings": "Sistem Ayarları",
       "profile": "Profil Bilgileri"
     }
+  },
+  "register": {
+    "title": "Kullanıcı Yönetimi",
+    "subtitle": "Yalnızca yönetici yeni kullanıcı oluşturabilir. Kullanıcıya geçici şifre verilir ve gerekirse hesap pasife alınabilir.",
+    "managerWarning": "Bu sayfayı kullanmak için manager hesabı ile giriş yapın.",
+    "refresh": "Yenile",
+    "temporaryPasswordHint": "API cevabında dönülmez. Güvenli kanal ile paylaşın.",
+    "active": "Aktif",
+    "passive": "Pasif",
+    "deactivate": "Pasif Et",
+    "backDashboard": "Dashboarda Dön",
+    "fields": {
+      "name": "Ad Soyad",
+      "email": "E-posta",
+      "temporaryPassword": "Geçici Şifre (Yönetici tarafından paylaşılır)",
+      "role": "Rol"
+    },
+    "roles": {
+      "assistant": "Asistan",
+      "doctor": "Doktor",
+      "manager": "Yönetici",
+      "auditor": "Denetleyici"
+    },
+    "states": {
+      "checkingAuth": "Yetki kontrol ediliyor...",
+      "creating": "Kullanıcı oluşturuluyor...",
+      "createUser": "Geçici Şifre ile Kullanıcı Aç",
+      "managerOnly": "Yalnızca Yönetici İşlem Yapabilir"
+    },
+    "errors": {
+      "managerOnly": "Yeni kullanıcı oluşturma yalnızca yönetici oturumunda açıktır.",
+      "requiredFields": "Ad Soyad ve e-posta alanları zorunludur.",
+      "createFailed": "Kayıt sırasında bir hata oluştu.",
+      "deactivateFailed": "Kullanıcı pasif duruma alınamadı.",
+      "server": "Sunucuya bağlanırken hata oluştu."
+    },
+    "success": {
+      "created": "Kullanıcı oluşturuldu. Geçici şifreyi güvenli bir kanal ile iletin.",
+      "deactivated": "Kullanıcı pasif duruma alındı."
+    },
+    "userList": {
+      "title": "Kullanıcı Listesi",
+      "empty": "Henüz listelenecek kullanıcı yok."
+    },
+    "side": {
+      "brand": "Retina Klinik",
+      "title": "Klinik Kullanıcı Yönetimi",
+      "description": "Sade, güvenilir ve hasta odaklı klinik sistem arayüzü.",
+      "note": "Her doktor için güvenli giriş ve ayrıştırılmış hasta erişimi."
+    }
+  },
+  "notFound": {
+    "title": "Sayfa bulunamadı",
+    "description": "Aradığınız sayfa taşınmış veya silinmiş olabilir.",
+    "backHome": "Giriş sayfasına dön"
+  },
+  "errorPage": {
+    "title": "Bir hata oluştu",
+    "description": "Beklenmeyen bir sorun oluştu. Lütfen tekrar deneyin.",
+    "retry": "Tekrar dene",
+    "goHome": "Giriş sayfasına dön"
+  },
+  "modal": {
+    "addPatient": {
+      "title": "Yeni Hasta Ekle",
+      "description": "Yeni hasta bilgilerini girerek kaydı tamamlayın.",
+      "fields": {
+        "fullName": "Ad Soyad",
+        "tcNo": "TC Kimlik No",
+        "age": "Yaş"
+      },
+      "save": "Kaydet"
+    }
   }
 }

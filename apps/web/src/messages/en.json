@@ -45,5 +45,78 @@
       "systemSettings": "System Settings",
       "profile": "Profile Information"
     }
+  },
+  "register": {
+    "title": "User Management",
+    "subtitle": "Only managers can create new users. A temporary password is assigned and accounts can be deactivated if needed.",
+    "managerWarning": "Sign in with a manager account to use this page.",
+    "refresh": "Refresh",
+    "temporaryPasswordHint": "It is not returned in API responses. Share it via a secure channel.",
+    "active": "Active",
+    "passive": "Inactive",
+    "deactivate": "Deactivate",
+    "backDashboard": "Back to Dashboard",
+    "fields": {
+      "name": "Full Name",
+      "email": "Email",
+      "temporaryPassword": "Temporary Password (shared by manager)",
+      "role": "Role"
+    },
+    "roles": {
+      "assistant": "Assistant",
+      "doctor": "Doctor",
+      "manager": "Manager",
+      "auditor": "Auditor"
+    },
+    "states": {
+      "checkingAuth": "Checking authorization...",
+      "creating": "Creating user...",
+      "createUser": "Create User with Temporary Password",
+      "managerOnly": "Manager Access Required"
+    },
+    "errors": {
+      "managerOnly": "Creating users is only available in a manager session.",
+      "requiredFields": "Full name and email are required.",
+      "createFailed": "An error occurred during registration.",
+      "deactivateFailed": "Failed to deactivate user.",
+      "server": "A server connection error occurred."
+    },
+    "success": {
+      "created": "User created. Share the temporary password through a secure channel.",
+      "deactivated": "User has been deactivated."
+    },
+    "userList": {
+      "title": "User List",
+      "empty": "No users to display yet."
+    },
+    "side": {
+      "brand": "Retina Clinic",
+      "title": "Clinic User Management",
+      "description": "A simple, reliable, and patient-focused clinical interface.",
+      "note": "Secure sign-in and segmented patient access for every doctor."
+    }
+  },
+  "notFound": {
+    "title": "Page not found",
+    "description": "The page you are looking for may have been moved or deleted.",
+    "backHome": "Back to login"
+  },
+  "errorPage": {
+    "title": "Something went wrong",
+    "description": "An unexpected issue occurred. Please try again.",
+    "retry": "Try again",
+    "goHome": "Back to login"
+  },
+  "modal": {
+    "addPatient": {
+      "title": "Add New Patient",
+      "description": "Complete the record by entering new patient details.",
+      "fields": {
+        "fullName": "Full Name",
+        "tcNo": "National ID",
+        "age": "Age"
+      },
+      "save": "Save"
+    }
   }
 }

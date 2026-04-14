@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createPatientAction } from "@/app/actions/create-patient";
+import { useTranslation } from "@/components/providers/i18n-provider";
 
 interface AddPatientDialogProps {
   open: boolean;
@@ -24,14 +25,15 @@ export function AddPatientDialog({
   onOpenChange,
 }: AddPatientDialogProps) {
   const router = useRouter();
+  const { t } = useTranslation();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Yeni Hasta Ekle</DialogTitle>
+          <DialogTitle>{t("modal.addPatient.title")}</DialogTitle>
           <DialogDescription>
-            Yeni hasta bilgilerini girerek kaydı tamamlayın.
+            {t("modal.addPatient.description")}
           </DialogDescription>
         </DialogHeader>
 
@@ -50,7 +52,7 @@ export function AddPatientDialog({
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="fullName" className="text-right">
-                Ad Soyad
+                {t("modal.addPatient.fields.fullName")}
               </Label>
               <Input
                 id="fullName"
@@ -62,14 +64,14 @@ export function AddPatientDialog({
 
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="tcNo" className="text-right">
-                TC Kimlik No
+                {t("modal.addPatient.fields.tcNo")}
               </Label>
               <Input id="tcNo" name="tcNo" className="col-span-3" required />
             </div>
 
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="age" className="text-right">
-                Yaş
+                {t("modal.addPatient.fields.age")}
               </Label>
               <Input
                 id="age"
@@ -82,7 +84,7 @@ export function AddPatientDialog({
           </div>
 
           <DialogFooter>
-            <Button type="submit">Kaydet</Button>
+            <Button type="submit">{t("modal.addPatient.save")}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
