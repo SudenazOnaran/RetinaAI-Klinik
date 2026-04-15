@@ -19,7 +19,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { bulkDeletePatientsAction } from "@/app/actions/bulk-delete-patients";
 import { bulkUpdatePatientRiskAction } from "@/app/actions/bulk-update-patient-risk";
-import { drLabelTr } from "@/lib/dr-label-tr";
 import { useTranslation } from "@/components/providers/i18n-provider";
 
 type Patient = {
@@ -241,7 +240,7 @@ export default function HastalarClient({
   pageSize,
   initialFilters,
 }: HastalarClientProps) {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
@@ -637,12 +636,35 @@ export default function HastalarClient({
               onChange={(e) => setBulkRiskValue(e.target.value)}
               aria-label={t("patientsList.a11yBulkRiskValue")}
             >
-              <option value="No_DR">{t("patientsList.bulkRiskPrefix")}{drLabelTr("No_DR")}</option>
-              <option value="Mild">{t("patientsList.bulkRiskPrefix")}{drLabelTr("Mild")}</option>
-              <option value="Moderate">{t("patientsList.bulkRiskPrefix")}{drLabelTr("Moderate")}</option>
-              <option value="Severe">{t("patientsList.bulkRiskPrefix")}{drLabelTr("Severe")}</option>
+              <option value="No_DR">
+                {t("patientsList.bulkRiskPrefix")}
+                {locale === "en"
+                  ? t("patientsList.bulkRiskNoDrEn")
+                  : t("patientsList.bulkRiskNoDr")}
+              </option>
+              <option value="Mild">
+                {t("patientsList.bulkRiskPrefix")}
+                {locale === "en"
+                  ? t("patientsList.bulkRiskMildEn")
+                  : t("patientsList.bulkRiskMild")}
+              </option>
+              <option value="Moderate">
+                {t("patientsList.bulkRiskPrefix")}
+                {locale === "en"
+                  ? t("patientsList.bulkRiskModerateEn")
+                  : t("patientsList.bulkRiskModerate")}
+              </option>
+              <option value="Severe">
+                {t("patientsList.bulkRiskPrefix")}
+                {locale === "en"
+                  ? t("patientsList.bulkRiskSevereEn")
+                  : t("patientsList.bulkRiskSevere")}
+              </option>
               <option value="Proliferative_DR">
-                {t("patientsList.bulkRiskPrefix")}{drLabelTr("Proliferative_DR")}
+                {t("patientsList.bulkRiskPrefix")}
+                {locale === "en"
+                  ? t("patientsList.bulkRiskProliferativeEn")
+                  : t("patientsList.bulkRiskProliferative")}
               </option>
             </select>
 
