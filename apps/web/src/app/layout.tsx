@@ -42,15 +42,16 @@ export default async function RootLayout({
   `;
 
   return (
-    <html lang={locale} suppressHydrationWarning>
+    <html lang={locale} translate="no" suppressHydrationWarning>
       <head>
+        <meta name="google" content="notranslate" />
         <script
           dangerouslySetInnerHTML={{ __html: bootstrapAppearanceScript }}
         />
       </head>
       <body
         className={cn(
-          "clinic-app-bg relative min-h-screen font-sans antialiased",
+          "clinic-app-bg notranslate relative min-h-screen font-sans antialiased",
           inter.variable,
         )}
       >
