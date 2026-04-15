@@ -1,6 +1,7 @@
 "use client";
 
 import type { Locale } from "@/lib/i18n/config";
+import { useRouter } from "next/navigation";
 import { useTranslation } from "@/components/providers/i18n-provider";
 
 const OPTIONS: Array<{ value: Locale; labelKey: string }> = [
@@ -9,6 +10,7 @@ const OPTIONS: Array<{ value: Locale; labelKey: string }> = [
 ];
 
 export function LanguageSwitcher() {
+  const router = useRouter();
   const { locale, setLocale, t } = useTranslation();
 
   return (
@@ -16,7 +18,11 @@ export function LanguageSwitcher() {
       <span>{t("common.language")}</span>
       <select
         value={locale}
-        onChange={(event) => setLocale(event.target.value as Locale)}
+        onChange={(event) => {
+          setLocale(event.target.value as Locale);
+          // Refresh server components so SSR text follows new locale immediately.
+          router.refresh();
+        }}
         className="bg-transparent text-xs font-semibold text-[var(--retina-primary)] outline-none"
         aria-label={t("common.language")}
       >
