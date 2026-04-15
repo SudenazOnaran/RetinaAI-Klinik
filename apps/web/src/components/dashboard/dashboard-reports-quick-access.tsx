@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useTranslation } from "@/components/providers/i18n-provider";
 
 type DashboardReportRow = {
   id: string;
@@ -49,6 +50,7 @@ function mapRiskBucket(diagnosis: string): RiskFilter {
 }
 
 export function DashboardReportsQuickAccess({ reports }: Props) {
+  const { t, locale } = useTranslation();
   const [query, setQuery] = useState("");
   const [riskFilter, setRiskFilter] = useState<RiskFilter>("ALL");
   const [fromDate, setFromDate] = useState("");
@@ -76,7 +78,7 @@ export function DashboardReportsQuickAccess({ reports }: Props) {
     <div className="space-y-3">
       <div className="grid gap-2 md:grid-cols-4">
         <Input
-          placeholder="Hasta veya tanı ara"
+          placeholder={t("reportsQuick.searchPlaceholder")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -86,10 +88,10 @@ export function DashboardReportsQuickAccess({ reports }: Props) {
           value={riskFilter}
           onChange={(e) => setRiskFilter(e.target.value as RiskFilter)}
         >
-          <option value="ALL">Tüm riskler</option>
-          <option value="HIGH">Yüksek risk</option>
-          <option value="MEDIUM">Orta risk</option>
-          <option value="LOW">Düşük risk</option>
+          <option value="ALL">{t("reportsQuick.riskAll")}</option>
+          <option value="HIGH">{t("reportsQuick.riskHigh")}</option>
+          <option value="MEDIUM">{t("reportsQuick.riskMedium")}</option>
+          <option value="LOW">{t("reportsQuick.riskLow")}</option>
         </select>
 
         <Input
@@ -99,14 +101,14 @@ export function DashboardReportsQuickAccess({ reports }: Props) {
         />
 
         <Button asChild variant="outline">
-          <Link href="/dashboard/raporlar">Tüm Raporlar</Link>
+          <Link href="/dashboard/raporlar">{t("reportsQuick.allReports")}</Link>
         </Button>
       </div>
 
       <div className="space-y-2">
         {filtered.length === 0 ? (
           <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-500">
-            Filtreye uygun rapor bulunamadı.
+            {t("reportsQuick.empty")}
           </p>
         ) : (
           filtered.slice(0, 8).map((row) => (
@@ -121,8 +123,10 @@ export function DashboardReportsQuickAccess({ reports }: Props) {
                     {row.patientName}
                   </p>
                   <p className="text-xs text-slate-500">
-                    {new Date(row.createdAt).toLocaleDateString("tr-TR")} |
-                    Güven: %{Math.round((row.confidence || 0) * 100)}
+                    {new Date(row.createdAt).toLocaleDateString(
+                      locale === "en" ? "en-US" : "tr-TR",
+                    )}{" "}
+                    | {t("reportsQuick.confidence")} %{Math.round((row.confidence || 0) * 100)}
                   </p>
                 </div>
                 <Badge variant="outline">{row.diagnosis}</Badge>

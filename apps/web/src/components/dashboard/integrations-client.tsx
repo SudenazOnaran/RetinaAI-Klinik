@@ -11,6 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useTranslation } from "@/components/providers/i18n-provider";
 
 type IntegrationPatient = {
   id: string;
@@ -37,6 +38,7 @@ export default function IntegrationsClient({
 }: {
   patients: IntegrationPatient[];
 }) {
+  const { t, locale } = useTranslation();
   const [target, setTarget] = useState<"FHIR" | "HBYS">("FHIR");
   const [selectedPatientId, setSelectedPatientId] = useState<string>(
     patients[0]?.id ?? "",
@@ -68,13 +70,13 @@ export default function IntegrationsClient({
       };
 
       if (!res.ok || !data.success) {
-        setMessage(data.error || "Loglar yuklenemedi");
+        setMessage(data.error || t("integrationsClient.logsLoadFail"));
         return;
       }
 
       setEvents(data.events || []);
     } catch {
-      setMessage("Loglar yuklenirken beklenmeyen bir hata olustu");
+      setMessage(t("integrationsClient.logsUnexpected"));
     } finally {
       setLoadingEvents(false);
     }
@@ -86,7 +88,7 @@ export default function IntegrationsClient({
 
   const handleExport = async () => {
     if (!selectedPatientId) {
-      setMessage("Lutfen bir hasta secin");
+      setMessage(t("integrationsClient.selectPatientError"));
       return;
     }
 
@@ -112,14 +114,14 @@ export default function IntegrationsClient({
       };
 
       if (!res.ok || !data.success) {
-        setMessage(data.error || data.message || "Aktarim basarisiz");
+        setMessage(data.error || data.message || t("integrationsClient.exportFail"));
       } else {
-        setMessage(data.message || "Aktarim basarili");
+        setMessage(data.message || t("integrationsClient.exportOk"));
       }
 
       await refreshEvents();
     } catch {
-      setMessage("Aktarim sirasinda beklenmeyen bir hata olustu");
+      setMessage(t("integrationsClient.exportUnexpected"));
     } finally {
       setSubmitting(false);
     }
@@ -130,7 +132,7 @@ export default function IntegrationsClient({
       <div className="grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-4">
         <label className="flex flex-col gap-2">
           <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-            Hasta
+            {t("integrationsClient.patient")}
           </span>
           <select
             className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm"
@@ -139,7 +141,7 @@ export default function IntegrationsClient({
             disabled={patients.length === 0}
           >
             {patients.length === 0 ? (
-              <option value="">Hasta bulunamadi</option>
+              <option value="">{t("integrationsClient.noPatient")}</option>
             ) : (
               patients.map((patient) => (
                 <option key={patient.id} value={patient.id}>
@@ -152,7 +154,7 @@ export default function IntegrationsClient({
 
         <label className="flex flex-col gap-2">
           <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-            Hedef Sistem
+            {t("integrationsClient.targetSystem")}
           </span>
           <select
             className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm"
@@ -168,10 +170,12 @@ export default function IntegrationsClient({
 
         <div className="flex flex-col gap-2">
           <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-            Sonuc
+            {t("integrationsClient.result")}
           </span>
           <div className="flex h-10 items-center rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700">
-            {selectedPatient ? `${selectedPatient.analysisCount} analiz` : "-"}
+            {selectedPatient
+              ? t("integrationsClient.analysisCount", { count: selectedPatient.analysisCount })
+              : "-"}
           </div>
         </div>
 
@@ -181,14 +185,14 @@ export default function IntegrationsClient({
             onClick={handleExport}
             disabled={submitting || !selectedPatientId}
           >
-            {submitting ? "Gonderiliyor..." : "Aktarimi Baslat"}
+            {submitting ? t("integrationsClient.sending") : t("integrationsClient.startExport")}
           </Button>
           <Button
             variant="outline"
             onClick={refreshEvents}
             disabled={loadingEvents}
           >
-            {loadingEvents ? "Yukleniyor..." : "Loglari Yenile"}
+            {loadingEvents ? t("integrationsClient.loading") : t("integrationsClient.refreshLogs")}
           </Button>
         </div>
       </div>
@@ -203,26 +207,26 @@ export default function IntegrationsClient({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Tarih</TableHead>
-              <TableHead>Hasta</TableHead>
-              <TableHead>Hedef</TableHead>
-              <TableHead>Durum</TableHead>
+              <TableHead>{t("integrationsClient.colDate")}</TableHead>
+              <TableHead>{t("integrationsClient.colPatient")}</TableHead>
+              <TableHead>{t("integrationsClient.colTarget")}</TableHead>
+              <TableHead>{t("integrationsClient.colStatus")}</TableHead>
               <TableHead>HTTP</TableHead>
-              <TableHead>Hata</TableHead>
+              <TableHead>{t("integrationsClient.colError")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {events.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="text-center text-slate-500">
-                  Henuz entegrasyon logu yok.
+                  {t("integrationsClient.emptyLogs")}
                 </TableCell>
               </TableRow>
             ) : (
               events.map((event) => (
                 <TableRow key={event.id}>
                   <TableCell>
-                    {new Date(event.createdAt).toLocaleString("tr-TR")}
+                    {new Date(event.createdAt).toLocaleString(locale === "en" ? "en-US" : "tr-TR")}
                   </TableCell>
                   <TableCell>
                     {event.patientFullName || event.patientId}
@@ -234,7 +238,7 @@ export default function IntegrationsClient({
                         event.status === "SUCCESS" ? "default" : "destructive"
                       }
                     >
-                      {event.status === "SUCCESS" ? "Basarili" : "Hata"}
+                      {event.status === "SUCCESS" ? t("integrationsClient.success") : t("integrationsClient.error")}
                     </Badge>
                   </TableCell>
                   <TableCell>{event.httpStatus ?? "-"}</TableCell>
@@ -249,10 +253,7 @@ export default function IntegrationsClient({
       </div>
 
       <div className="rounded-xl border border-[#dae7f8] bg-[#f7fbff] px-4 py-3 text-xs text-slate-600">
-        Not: Endpoint tanimlari ortam degiskenlerinden okunur. FHIR icin
-        FHIR_EXPORT_URL/FHIR_BASE_URL, HBYS icin HBYS_EXPORT_URL/HBYS_BASE_URL
-        ayarlayin. Kimlik dogrulama icin FHIR_AUTH_TOKEN ve HBYS_API_KEY
-        kullanilabilir.
+        {t("integrationsClient.envNote")}
       </div>
     </div>
   );

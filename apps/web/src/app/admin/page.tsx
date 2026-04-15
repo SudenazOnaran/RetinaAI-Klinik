@@ -13,6 +13,7 @@ import {
   Phone,
   MessageSquareText,
 } from "lucide-react";
+import { useTranslation } from "@/components/providers/i18n-provider";
 
 type AdminTab = "doctors" | "landing";
 
@@ -41,6 +42,7 @@ type LandingContactRow = {
 };
 
 export default function AdminPage() {
+  const { t, locale } = useTranslation();
   const [tab, setTab] = useState<AdminTab>("doctors");
   const [doctors, setDoctors] = useState<DoctorRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,11 +61,11 @@ export default function AdminPage() {
         setDoctors(data.doctors);
       }
     } catch {
-      setMessage({ type: "error", text: "Veriler yüklenirken hata oluştu." });
+      setMessage({ type: "error", text: t("adminPage.errors.loadDoctors") });
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     loadDoctors(filter);
@@ -77,14 +79,17 @@ export default function AdminPage() {
       if (res.ok && Array.isArray(data.requests)) {
         setLandingRows(data.requests);
       } else {
-        setMessage({ type: "error", text: data.error || "Tanıtım talepleri yüklenemedi." });
+        setMessage({
+          type: "error",
+          text: data.error || t("adminPage.errors.loadLanding"),
+        });
       }
     } catch {
-      setMessage({ type: "error", text: "Tanıtım talepleri yüklenirken hata oluştu." });
+      setMessage({ type: "error", text: t("adminPage.errors.loadLandingUnexpected") });
     } finally {
       setLandingLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (tab === "landing") {
@@ -109,10 +114,13 @@ export default function AdminPage() {
         });
         await loadDoctors(filter);
       } else {
-        setMessage({ type: "error", text: data.error || "İşlem başarısız." });
+        setMessage({
+          type: "error",
+          text: data.error || t("adminPage.errors.actionFailed"),
+        });
       }
     } catch {
-      setMessage({ type: "error", text: "Sunucuya bağlanırken hata oluştu." });
+      setMessage({ type: "error", text: t("adminPage.errors.server") });
     } finally {
       setActionLoading(null);
     }
@@ -125,19 +133,19 @@ export default function AdminPage() {
       case "PENDING":
         return (
           <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">
-            <Clock className="h-3 w-3" /> Beklemede
+            <Clock className="h-3 w-3" /> {t("adminPage.status.pending")}
           </span>
         );
       case "APPROVED":
         return (
           <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800">
-            <CheckCircle className="h-3 w-3" /> Onaylandı
+            <CheckCircle className="h-3 w-3" /> {t("adminPage.status.approved")}
           </span>
         );
       case "REJECTED":
         return (
           <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-800">
-            <XCircle className="h-3 w-3" /> Reddedildi
+            <XCircle className="h-3 w-3" /> {t("adminPage.status.rejected")}
           </span>
         );
       default:
@@ -146,10 +154,22 @@ export default function AdminPage() {
   };
 
   const filterButtons: Array<{ label: string; value: FilterStatus; icon: React.ReactNode }> = [
-    { label: "Bekleyenler", value: "PENDING", icon: <Clock className="h-4 w-4" /> },
-    { label: "Onaylananlar", value: "APPROVED", icon: <UserCheck className="h-4 w-4" /> },
-    { label: "Reddedilenler", value: "REJECTED", icon: <UserX className="h-4 w-4" /> },
-    { label: "Tümü", value: "ALL", icon: <Users className="h-4 w-4" /> },
+    {
+      label: t("adminPage.filters.pending"),
+      value: "PENDING",
+      icon: <Clock className="h-4 w-4" />,
+    },
+    {
+      label: t("adminPage.filters.approved"),
+      value: "APPROVED",
+      icon: <UserCheck className="h-4 w-4" />,
+    },
+    {
+      label: t("adminPage.filters.rejected"),
+      value: "REJECTED",
+      icon: <UserX className="h-4 w-4" />,
+    },
+    { label: t("adminPage.filters.all"), value: "ALL", icon: <Users className="h-4 w-4" /> },
   ];
 
   return (
@@ -158,15 +178,17 @@ export default function AdminPage() {
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--retina-primary)]">
-              Admin Yönetim Paneli
+              {t("adminPage.eyebrow")}
             </p>
             <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
-              {tab === "doctors" ? "Doktor Başvuru Yönetimi" : "Bize Ulaşın Talepleri"}
+              {tab === "doctors"
+                ? t("adminPage.titleDoctors")
+                : t("adminPage.titleLanding")}
             </h1>
             <p className="mt-2 text-sm text-slate-600">
               {tab === "doctors"
-                ? "Kayıt olan doktorların başvurularını inceleyin, onaylayın veya reddedin. Tanıtım sitesindeki iletişim formu için üstteki «Bize Ulaşın talepleri» sekmesine geçin."
-                : "Tanıtım sitesindeki «Bize Ulaşın» formundan gelen talepler burada listelenir."}
+                ? t("adminPage.descDoctors")
+                : t("adminPage.descLanding")}
             </p>
           </div>
           {tab === "doctors" && filter === "PENDING" && (
@@ -174,8 +196,8 @@ export default function AdminPage() {
               <Clock className="h-5 w-5 text-amber-600" />
               <span className="text-sm font-semibold text-amber-800">
                 {pendingCount > 0
-                  ? `${pendingCount} bekleyen başvuru`
-                  : "Bekleyen başvuru yok"}
+                  ? t("adminPage.pendingCount", { count: pendingCount })
+                  : t("adminPage.pendingEmpty")}
               </span>
             </div>
           )}
@@ -196,7 +218,7 @@ export default function AdminPage() {
           }`}
         >
           <Users className="h-4 w-4" />
-          Doktor başvuruları
+          {t("adminPage.tabDoctors")}
         </button>
         <button
           type="button"
@@ -211,7 +233,7 @@ export default function AdminPage() {
           }`}
         >
           <MessageSquareText className="h-4 w-4" />
-          Bize Ulaşın talepleri
+          {t("adminPage.tabLanding")}
         </button>
       </div>
 
@@ -236,19 +258,19 @@ export default function AdminPage() {
               className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
             >
               <RefreshCw className={`h-4 w-4 ${landingLoading ? "animate-spin" : ""}`} />
-              Yenile
+              {t("adminPage.refresh")}
             </button>
           </div>
           <div className="rounded-2xl border border-[var(--retina-border)] bg-white shadow-sm">
             {landingLoading ? (
               <div className="flex items-center justify-center py-16 text-sm text-slate-500">
                 <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                Yükleniyor...
+                {t("adminPage.loading")}
               </div>
             ) : landingRows.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-slate-500">
                 <MessageSquareText className="mb-3 h-10 w-10 text-slate-300" />
-                <p className="text-sm font-semibold">Henüz talep bulunmuyor.</p>
+                <p className="text-sm font-semibold">{t("adminPage.noRequestsYet")}</p>
               </div>
             ) : (
               <div className="divide-y divide-slate-100">
@@ -257,13 +279,16 @@ export default function AdminPage() {
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="text-sm font-semibold text-slate-900">{row.fullName}</p>
                       <span className="text-xs text-slate-400">
-                        {new Date(row.createdAt).toLocaleString("tr-TR", {
-                          day: "2-digit",
-                          month: "short",
-                          year: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
+                        {new Date(row.createdAt).toLocaleString(
+                          locale === "en" ? "en-US" : "tr-TR",
+                          {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          },
+                        )}
                       </span>
                     </div>
                     <div className="flex flex-wrap gap-4 text-sm text-slate-600">
@@ -320,7 +345,7 @@ export default function AdminPage() {
           className="ml-auto inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          Yenile
+          {t("adminPage.refresh")}
         </button>
       </div>
 
@@ -328,15 +353,15 @@ export default function AdminPage() {
         {loading ? (
           <div className="flex items-center justify-center py-16 text-sm text-slate-500">
             <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-            Yükleniyor...
+            {t("adminPage.loading")}
           </div>
         ) : doctors.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-slate-500">
             <Users className="mb-3 h-10 w-10 text-slate-300" />
             <p className="text-sm font-semibold">
               {filter === "PENDING"
-                ? "Bekleyen başvuru bulunmuyor."
-                : "Bu filtreye uygun kayıt bulunamadı."}
+                ? t("adminPage.emptyPending")
+                : t("adminPage.emptyFiltered")}
             </p>
           </div>
         ) : (
@@ -354,27 +379,30 @@ export default function AdminPage() {
                     </div>
                     <div>
                       <p className="text-sm font-semibold text-slate-900">
-                        Dr. {doctor.name} {doctor.surname}
+                        {t("adminPage.doctorPrefix")} {doctor.name} {doctor.surname}
                       </p>
                       <p className="text-xs text-slate-500">{doctor.email}</p>
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-3 pl-[52px]">
                     <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                      {doctor.specialty || "Belirtilmemiş"}
+                      {doctor.specialty || t("adminPage.notSpecified")}
                     </span>
                     <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                      {doctor.hospital || "Belirtilmemiş"}
+                      {doctor.hospital || t("adminPage.notSpecified")}
                     </span>
                     {statusBadge(doctor.approvalStatus)}
                     <span className="text-xs text-slate-400">
-                      {new Date(doctor.createdAt).toLocaleDateString("tr-TR", {
-                        day: "2-digit",
-                        month: "long",
-                        year: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                      {new Date(doctor.createdAt).toLocaleDateString(
+                        locale === "en" ? "en-US" : "tr-TR",
+                        {
+                          day: "2-digit",
+                          month: "long",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        },
+                      )}
                     </span>
                   </div>
                 </div>
@@ -387,7 +415,7 @@ export default function AdminPage() {
                       className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
                     >
                       <CheckCircle className="h-4 w-4" />
-                      Onayla
+                      {t("adminPage.approve")}
                     </button>
                     <button
                       onClick={() => handleAction(doctor.id, "REJECT")}
@@ -395,7 +423,7 @@ export default function AdminPage() {
                       className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
                     >
                       <XCircle className="h-4 w-4" />
-                      Reddet
+                      {t("adminPage.reject")}
                     </button>
                   </div>
                 )}
@@ -407,7 +435,7 @@ export default function AdminPage() {
                     className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
                   >
                     <CheckCircle className="h-4 w-4" />
-                    Tekrar Onayla
+                    {t("adminPage.reapprove")}
                   </button>
                 )}
               </div>

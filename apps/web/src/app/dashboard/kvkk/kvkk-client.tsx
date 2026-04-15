@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { DoctorRole } from "@/lib/roles";
+import { useTranslation } from "@/components/providers/i18n-provider";
 
 type ConsentRow = {
   patient: {
@@ -31,6 +32,7 @@ type LogRow = {
 };
 
 export default function KvkkClient({ role }: { role: DoctorRole }) {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const [rows, setRows] = useState<ConsentRow[]>([]);
   const [logs, setLogs] = useState<LogRow[]>([]);
@@ -94,21 +96,21 @@ export default function KvkkClient({ role }: { role: DoctorRole }) {
 
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
-        throw new Error(data.error || "Açık rıza güncellenemedi");
+        throw new Error(data.error || t("kvkkClient.errConsentUpdate"));
       }
 
       toast({
-        title: "Açık rıza güncellendi",
-        description: "Hasta için KVKK açık rıza kaydı güncellendi.",
+        title: t("kvkkClient.toastConsentOkTitle"),
+        description: t("kvkkClient.toastConsentOkDesc"),
       });
 
       await loadData();
     } catch (error) {
       toast({
         variant: "destructive",
-        title: "Hata",
+        title: t("errorPage.title"),
         description:
-          error instanceof Error ? error.message : "Açık rıza güncellenemedi.",
+          error instanceof Error ? error.message : t("kvkkClient.errConsentUpdate"),
       });
     } finally {
       setBusyPatientId(null);
@@ -119,7 +121,7 @@ export default function KvkkClient({ role }: { role: DoctorRole }) {
     if (!canManage) return;
 
     const ok = window.confirm(
-      "Bu hastanın kişisel verileri anonimleştirilecek. İşlem geri alınamaz. Devam edilsin mi?",
+      t("kvkkClient.confirmAnonymize"),
     );
     if (!ok) return;
 
@@ -133,21 +135,21 @@ export default function KvkkClient({ role }: { role: DoctorRole }) {
 
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
-        throw new Error(data.error || "Anonimleştirme başarısız");
+        throw new Error(data.error || t("kvkkClient.errAnonymize"));
       }
 
       toast({
-        title: "Anonimleştirme tamamlandı",
-        description: "Hasta verisi KVKK kapsamında anonimleştirildi.",
+        title: t("kvkkClient.toastAnonymizeOkTitle"),
+        description: t("kvkkClient.toastAnonymizeOkDesc"),
       });
 
       await loadData();
     } catch (error) {
       toast({
         variant: "destructive",
-        title: "Hata",
+        title: t("errorPage.title"),
         description:
-          error instanceof Error ? error.message : "Anonimleştirme başarısız.",
+          error instanceof Error ? error.message : t("kvkkClient.errAnonymize"),
       });
     } finally {
       setBusyPatientId(null);
@@ -164,20 +166,20 @@ export default function KvkkClient({ role }: { role: DoctorRole }) {
 
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
-        throw new Error(data.error || "Yedekleme başarısız");
+        throw new Error(data.error || t("kvkkClient.errBackup"));
       }
 
       const data = (await res.json()) as { backupDir: string };
       toast({
-        title: "Yedekleme tamamlandı",
-        description: `Object storage yedeği oluşturuldu: ${data.backupDir}`,
+        title: t("kvkkClient.toastBackupOkTitle"),
+        description: t("kvkkClient.toastBackupOkDesc", { path: data.backupDir }),
       });
     } catch (error) {
       toast({
         variant: "destructive",
-        title: "Hata",
+        title: t("errorPage.title"),
         description:
-          error instanceof Error ? error.message : "Yedekleme başarısız.",
+          error instanceof Error ? error.message : t("kvkkClient.errBackup"),
       });
     }
   };
@@ -186,29 +188,29 @@ export default function KvkkClient({ role }: { role: DoctorRole }) {
     <div className="space-y-4">
       <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-4">
         <Input
-          placeholder="Hasta adı veya TC ile ara"
+          placeholder={t("kvkkClient.placeholderSearch")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
         <Input
-          placeholder="Rıza versiyonu (örn: v1.2)"
+          placeholder={t("kvkkClient.placeholderVersion")}
           value={consentVersion}
           onChange={(e) => setConsentVersion(e.target.value || "v1")}
         />
         <Input
-          placeholder="Rıza notu (opsiyonel)"
+          placeholder={t("kvkkClient.placeholderNote")}
           value={consentNote}
           onChange={(e) => setConsentNote(e.target.value)}
         />
         <div className="text-sm text-slate-600 flex items-center justify-end">
-          Toplam hasta: {filteredRows.length}
+          {t("kvkkClient.totalPatients", { count: filteredRows.length })}
         </div>
       </div>
 
       {canRunBackup && (
         <div className="flex justify-end">
           <Button variant="outline" onClick={runStorageBackup}>
-            Görsel Depolama Yedeği Al
+            {t("kvkkClient.backupButton")}
           </Button>
         </div>
       )}
@@ -217,12 +219,12 @@ export default function KvkkClient({ role }: { role: DoctorRole }) {
         <table className="w-full text-sm">
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
-              <th className="p-3 text-left">Hasta</th>
-              <th className="p-3 text-left">TC</th>
-              <th className="p-3 text-left">Açık Rıza</th>
-              <th className="p-3 text-left">Versiyon</th>
-              <th className="p-3 text-left">Güncelleme</th>
-              <th className="p-3 text-right">İşlem</th>
+              <th className="p-3 text-left">{t("kvkkClient.colPatient")}</th>
+              <th className="p-3 text-left">{t("kvkkClient.colTc")}</th>
+              <th className="p-3 text-left">{t("kvkkClient.colConsent")}</th>
+              <th className="p-3 text-left">{t("kvkkClient.colVersion")}</th>
+              <th className="p-3 text-left">{t("kvkkClient.colUpdated")}</th>
+              <th className="p-3 text-right">{t("kvkkClient.colAction")}</th>
             </tr>
           </thead>
           <tbody>
@@ -243,8 +245,8 @@ export default function KvkkClient({ role }: { role: DoctorRole }) {
                       />
                       <span>
                         {row.consent?.consentGiven
-                          ? "Onaylı"
-                          : "Kayıt yok / Reddedildi"}
+                          ? t("kvkkClient.consentApproved")
+                          : t("kvkkClient.consentNone")}
                       </span>
                     </div>
                   </td>
@@ -264,7 +266,7 @@ export default function KvkkClient({ role }: { role: DoctorRole }) {
                             disabled={busy}
                             onClick={() => updateConsent(row.patient.id, true)}
                           >
-                            Rızayı Onayla
+                            {t("kvkkClient.approveConsent")}
                           </Button>
                           <Button
                             size="sm"
@@ -272,7 +274,7 @@ export default function KvkkClient({ role }: { role: DoctorRole }) {
                             disabled={busy}
                             onClick={() => updateConsent(row.patient.id, false)}
                           >
-                            Rızayı Kaldır
+                            {t("kvkkClient.revokeConsent")}
                           </Button>
                           <Button
                             size="sm"
@@ -280,7 +282,7 @@ export default function KvkkClient({ role }: { role: DoctorRole }) {
                             disabled={busy}
                             onClick={() => anonymizePatient(row.patient.id)}
                           >
-                            Anonimleştir
+                            {t("kvkkClient.anonymize")}
                           </Button>
                         </>
                       )}
@@ -295,12 +297,12 @@ export default function KvkkClient({ role }: { role: DoctorRole }) {
 
       <div className="rounded-lg border border-slate-200 bg-white p-4">
         <h3 className="text-sm font-semibold text-slate-800">
-          İşleme Kayıtları
+          {t("kvkkClient.logsTitle")}
         </h3>
         <div className="mt-3 space-y-2">
           {logs.length === 0 ? (
             <p className="text-sm text-slate-500">
-              Henüz KVKK işleme kaydı bulunmuyor.
+              {t("kvkkClient.logsEmpty")}
             </p>
           ) : (
             logs.map((log) => (

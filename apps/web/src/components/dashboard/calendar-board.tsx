@@ -23,6 +23,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { useTranslation } from "@/components/providers/i18n-provider";
 
 type CalendarNote = {
   id: string;
@@ -52,15 +53,11 @@ function isSameMonth(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
 }
 
-function getMonthLabel(date: Date): string {
-  return date.toLocaleDateString("tr-TR", {
+function getMonthLabel(date: Date, locale: string): string {
+  return date.toLocaleDateString(locale === "en" ? "en-US" : "tr-TR", {
     month: "long",
     year: "numeric",
   });
-}
-
-function getWeekdayHeaders(): string[] {
-  return ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
 }
 
 function getCalendarGrid(monthDate: Date): Date[] {
@@ -76,8 +73,8 @@ function getCalendarGrid(monthDate: Date): Date[] {
   });
 }
 
-function formatDisplayDate(date: Date): string {
-  return date.toLocaleDateString("tr-TR", {
+function formatDisplayDate(date: Date, locale: string): string {
+  return date.toLocaleDateString(locale === "en" ? "en-US" : "tr-TR", {
     weekday: "long",
     day: "2-digit",
     month: "long",
@@ -93,7 +90,7 @@ async function fetchCalendarNotes(monthDate: Date): Promise<CalendarNote[]> {
   });
 
   if (!res.ok) {
-    throw new Error("Takvim verisi alınamadı");
+    throw new Error("Calendar data fetch failed");
   }
 
   const data = (await res.json()) as { events?: CalendarNote[] };
@@ -101,6 +98,7 @@ async function fetchCalendarNotes(monthDate: Date): Promise<CalendarNote[]> {
 }
 
 export function CalendarBoard({ doctorId }: CalendarBoardProps) {
+  const { t, locale } = useTranslation();
   const { toast } = useToast();
 
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
@@ -130,8 +128,8 @@ export function CalendarBoard({ doctorId }: CalendarBoardProps) {
       } catch {
         toast({
           variant: "destructive",
-          title: "Hata",
-          description: "Takvim verileri yüklenemedi.",
+          title: t("errorPage.title"),
+          description: t("calendarClient.toastLoadFail"),
         });
       } finally {
         setIsLoadingNotes(false);
@@ -183,8 +181,6 @@ export function CalendarBoard({ doctorId }: CalendarBoardProps) {
     return getCalendarGrid(monthDate);
   }, [monthDate]);
 
-  const weekdayHeaders = useMemo(() => getWeekdayHeaders(), []);
-
   const resetForm = () => {
     setTitle("");
     setTime("");
@@ -219,14 +215,14 @@ export function CalendarBoard({ doctorId }: CalendarBoardProps) {
     if (res.status === 409) {
       toast({
         variant: "destructive",
-        title: "Saat çakışması",
-        description: "Bu saatte zaten başka bir görev bulunuyor.",
+        title: t("calendarClient.timeConflictTitle"),
+        description: t("calendarClient.timeConflictDesc"),
       });
       return;
     }
 
     if (!res.ok) {
-      throw new Error("Takvim kaydı güncellenemedi");
+      throw new Error("Calendar record update failed");
     }
 
     const data = (await res.json()) as { event?: CalendarNote };
@@ -241,8 +237,8 @@ export function CalendarBoard({ doctorId }: CalendarBoardProps) {
     resetForm();
 
     toast({
-      title: "Görev güncellendi",
-      description: "Takvim görevi başarıyla güncellendi.",
+      title: t("calendarClient.toastUpdatedTitle"),
+      description: t("calendarClient.toastUpdatedDesc"),
     });
   };
 
@@ -253,8 +249,8 @@ export function CalendarBoard({ doctorId }: CalendarBoardProps) {
     if (!cleanTitle || !cleanNote || !time) {
       toast({
         variant: "destructive",
-        title: "Eksik alan",
-        description: "Saat, başlık ve not alanları zorunludur.",
+        title: t("calendarClient.missingFieldsTitle"),
+        description: t("calendarClient.missingFieldsDesc"),
       });
       return;
     }
@@ -262,8 +258,8 @@ export function CalendarBoard({ doctorId }: CalendarBoardProps) {
     if (hasTimeConflict) {
       toast({
         variant: "destructive",
-        title: "Saat çakışması",
-        description: "Bu saatte zaten başka bir görev bulunuyor.",
+        title: t("calendarClient.timeConflictTitle"),
+        description: t("calendarClient.timeConflictDesc"),
       });
       return;
     }
@@ -288,14 +284,14 @@ export function CalendarBoard({ doctorId }: CalendarBoardProps) {
       if (res.status === 409) {
         toast({
           variant: "destructive",
-          title: "Saat çakışması",
-          description: "Bu saatte zaten başka bir görev bulunuyor.",
+          title: t("calendarClient.timeConflictTitle"),
+          description: t("calendarClient.timeConflictDesc"),
         });
         return;
       }
 
       if (!res.ok) {
-        throw new Error("Takvim kaydı oluşturulamadı");
+        throw new Error("Calendar record create failed");
       }
 
       const data = (await res.json()) as { event?: CalendarNote };
@@ -305,16 +301,16 @@ export function CalendarBoard({ doctorId }: CalendarBoardProps) {
       resetForm();
 
       toast({
-        title: "Görev eklendi",
-        description: "Takvim görevi merkezi veritabanına kaydedildi.",
+        title: t("calendarClient.toastCreatedTitle"),
+        description: t("calendarClient.toastCreatedDesc"),
       });
     } catch {
       toast({
         variant: "destructive",
-        title: "Hata",
+        title: t("errorPage.title"),
         description: isEditing
-          ? "Takvim kaydı güncellenemedi."
-          : "Takvim kaydı oluşturulamadı.",
+          ? t("calendarClient.toastUpdateFail")
+          : t("calendarClient.toastCreateFail"),
       });
     }
   };
@@ -328,7 +324,7 @@ export function CalendarBoard({ doctorId }: CalendarBoardProps) {
       });
 
       if (!res.ok) {
-        throw new Error("Takvim kaydı silinemedi");
+        throw new Error("Calendar record delete failed");
       }
 
       if (editingNoteId === id) {
@@ -338,14 +334,14 @@ export function CalendarBoard({ doctorId }: CalendarBoardProps) {
       setNotes((prev) => prev.filter((item) => item.id !== id));
 
       toast({
-        title: "Not silindi",
-        description: "Takvim kaydı merkezi veritabanından kaldırıldı.",
+        title: t("calendarClient.toastDeletedTitle"),
+        description: t("calendarClient.toastDeletedDesc"),
       });
     } catch {
       toast({
         variant: "destructive",
-        title: "Hata",
-        description: "Takvim kaydı silinemedi.",
+        title: t("errorPage.title"),
+        description: t("calendarClient.toastDeleteFail"),
       });
     }
   };
@@ -373,7 +369,7 @@ export function CalendarBoard({ doctorId }: CalendarBoardProps) {
     return (
       <Card className="border border-slate-200 bg-white shadow-sm">
         <CardContent className="p-8 text-sm text-slate-600">
-          Takvim verileri yükleniyor...
+          {t("calendarClient.loading")}
         </CardContent>
       </Card>
     );
@@ -383,7 +379,7 @@ export function CalendarBoard({ doctorId }: CalendarBoardProps) {
     return (
       <Card className="border border-slate-200 bg-white shadow-sm">
         <CardContent className="p-8 text-sm text-slate-600">
-          Takvim verileri yükleniyor...
+          {t("calendarClient.loading")}
         </CardContent>
       </Card>
     );
@@ -396,7 +392,7 @@ export function CalendarBoard({ doctorId }: CalendarBoardProps) {
           <div className="flex items-center gap-2 text-slate-900">
             <CalendarClock className="h-5 w-5 text-[var(--retina-primary)]" />
             <h2 className="text-lg font-bold capitalize md:text-xl">
-              {getMonthLabel(monthDate)}
+              {getMonthLabel(monthDate, locale)}
             </h2>
           </div>
 
@@ -411,7 +407,15 @@ export function CalendarBoard({ doctorId }: CalendarBoardProps) {
         </div>
 
         <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50/70 px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500 md:px-3">
-          {weekdayHeaders.map((label) => (
+          {[
+            t("calendarClient.weekdays.mon"),
+            t("calendarClient.weekdays.tue"),
+            t("calendarClient.weekdays.wed"),
+            t("calendarClient.weekdays.thu"),
+            t("calendarClient.weekdays.fri"),
+            t("calendarClient.weekdays.sat"),
+            t("calendarClient.weekdays.sun"),
+          ].map((label) => (
             <div key={label} className="px-2 py-1 text-center">
               {label}
             </div>
@@ -465,7 +469,7 @@ export function CalendarBoard({ doctorId }: CalendarBoardProps) {
                   ))}
                   {dayNotes.length > 3 && (
                     <p className="text-[10px] font-medium text-slate-500">
-                      +{dayNotes.length - 3} görev daha
+                      {t("calendarClient.moreTasks", { count: dayNotes.length - 3 })}
                     </p>
                   )}
                 </div>
@@ -480,10 +484,10 @@ export function CalendarBoard({ doctorId }: CalendarBoardProps) {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-slate-900">
               <NotebookPen className="h-5 w-5 text-[var(--retina-accent)]" />
-              {formatDisplayDate(selectedDate)}
+              {formatDisplayDate(selectedDate, locale)}
             </DialogTitle>
             <DialogDescription>
-              Gün kutusuna ait görevleri yönetin, ekleyin ve düzenleyin.
+              {t("calendarClient.dialogDesc")}
             </DialogDescription>
           </DialogHeader>
 
@@ -496,7 +500,7 @@ export function CalendarBoard({ doctorId }: CalendarBoardProps) {
                 className="border-slate-300"
               />
               <Input
-                placeholder="Görev başlığı"
+                placeholder={t("calendarClient.taskTitle")}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 className="border-slate-300"
@@ -504,7 +508,7 @@ export function CalendarBoard({ doctorId }: CalendarBoardProps) {
             </div>
 
             <Textarea
-              placeholder="Görev detayı veya doktor notu..."
+              placeholder={t("calendarClient.taskDetail")}
               value={noteText}
               onChange={(e) => setNoteText(e.target.value)}
               className="min-h-[110px] border-slate-300"
@@ -512,8 +516,7 @@ export function CalendarBoard({ doctorId }: CalendarBoardProps) {
 
             {hasTimeConflict && (
               <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-                Seçtiğiniz saat için zaten bir görev bulunuyor. Lütfen farklı
-                bir saat seçin.
+                {t("calendarClient.timeConflictHint")}
               </p>
             )}
 
@@ -524,18 +527,18 @@ export function CalendarBoard({ doctorId }: CalendarBoardProps) {
               >
                 {isEditing ? (
                   <>
-                    <Pencil className="mr-2 h-4 w-4" /> Görevi Güncelle
+                    <Pencil className="mr-2 h-4 w-4" /> {t("calendarClient.updateTask")}
                   </>
                 ) : (
                   <>
-                    <Plus className="mr-2 h-4 w-4" /> Görev Ekle
+                    <Plus className="mr-2 h-4 w-4" /> {t("calendarClient.addTask")}
                   </>
                 )}
               </Button>
 
               {isEditing && (
                 <Button variant="outline" onClick={resetForm}>
-                  Vazgeç
+                  {t("calendarClient.cancel")}
                 </Button>
               )}
             </div>
@@ -543,7 +546,7 @@ export function CalendarBoard({ doctorId }: CalendarBoardProps) {
             <div className="space-y-2 pt-2">
               {selectedDateNotes.length === 0 ? (
                 <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                  Bu gün için görev bulunmuyor.
+                  {t("calendarClient.emptyDay")}
                 </p>
               ) : (
                 selectedDateNotes.map((item) => (

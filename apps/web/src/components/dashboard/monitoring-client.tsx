@@ -11,6 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useTranslation } from "@/components/providers/i18n-provider";
 
 type HealthResponse = {
   ok: boolean;
@@ -49,6 +50,7 @@ type DeploymentProfileResponse = {
 };
 
 export default function MonitoringClient() {
+  const { t } = useTranslation();
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [alerts, setAlerts] = useState<AlertRow[]>([]);
   const [deployment, setDeployment] = useState<
@@ -79,7 +81,7 @@ export default function MonitoringClient() {
 
       if (!alertsRes.ok) {
         const data = (await alertsRes.json()) as { error?: string };
-        setError(data.error || "Alarm listesi yuklenemedi");
+        setError(data.error || t("monitoringClient.errAlerts"));
         return;
       }
 
@@ -95,7 +97,7 @@ export default function MonitoringClient() {
         setDeployment(deploymentData.deployment);
       }
     } catch {
-      setError("Izleme verileri yuklenirken beklenmeyen hata olustu");
+      setError(t("monitoringClient.errUnexpected"));
     } finally {
       setIsLoading(false);
     }
@@ -109,13 +111,13 @@ export default function MonitoringClient() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 p-4">
         <div className="flex flex-wrap items-center gap-3 text-sm">
-          <span className="font-semibold text-slate-700">Sistem Durumu:</span>
+          <span className="font-semibold text-slate-700">{t("monitoringClient.systemStatus")}</span>
           <Badge variant={health?.ok ? "default" : "destructive"}>
-            {health?.ok ? "Saglikli" : "Problemli"}
+            {health?.ok ? t("monitoringClient.healthy") : t("monitoringClient.unhealthy")}
           </Badge>
-          <span className="text-slate-600">DB: {health?.db || "-"}</span>
+          <span className="text-slate-600">{t("monitoringClient.dbLabel")} {health?.db || "-"}</span>
           <span className="text-slate-500">
-            Kontrol:{" "}
+            {t("monitoringClient.checkLabel")}{" "}
             {health?.timestamp
               ? new Date(health.timestamp).toLocaleString("tr-TR")
               : "-"}
@@ -123,7 +125,7 @@ export default function MonitoringClient() {
         </div>
 
         <Button variant="outline" onClick={loadAll} disabled={isLoading}>
-          {isLoading ? "Yukleniyor..." : "Yenile"}
+          {isLoading ? t("monitoringClient.loading") : t("monitoringClient.refresh")}
         </Button>
       </div>
 
@@ -136,36 +138,36 @@ export default function MonitoringClient() {
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-slate-800">
-            Deployment Profili ve SLA
+            {t("monitoringClient.deploymentTitle")}
           </h3>
           <Badge variant="outline">{deployment?.profileLabel || "-"}</Badge>
         </div>
         <div className="mt-3 grid gap-2 text-sm text-slate-600 md:grid-cols-2">
           <div>
-            <span className="font-medium text-slate-700">Aglama:</span>{" "}
+            <span className="font-medium text-slate-700">{t("monitoringClient.isolation")}</span>{" "}
             {deployment?.networkIsolation || "-"}
           </div>
           <div>
-            <span className="font-medium text-slate-700">Uptime hedefi:</span>{" "}
+            <span className="font-medium text-slate-700">{t("monitoringClient.uptimeTarget")}</span>{" "}
             {deployment ? `%${deployment.sla.uptimeTargetPercent}` : "-"}
           </div>
           <div>
-            <span className="font-medium text-slate-700">P1 yanit:</span>{" "}
-            {deployment ? `${deployment.sla.p1ResponseMinutes} dk` : "-"}
+            <span className="font-medium text-slate-700">{t("monitoringClient.p1Response")}</span>{" "}
+            {deployment ? t("monitoringClient.minutes", { n: deployment.sla.p1ResponseMinutes }) : "-"}
           </div>
           <div>
-            <span className="font-medium text-slate-700">P1 cozum:</span>{" "}
-            {deployment ? `${deployment.sla.p1ResolutionHours} saat` : "-"}
+            <span className="font-medium text-slate-700">{t("monitoringClient.p1Resolve")}</span>{" "}
+            {deployment ? t("monitoringClient.hours", { n: deployment.sla.p1ResolutionHours }) : "-"}
           </div>
           <div>
-            <span className="font-medium text-slate-700">RPO / RTO:</span>{" "}
+            <span className="font-medium text-slate-700">{t("monitoringClient.rpoRto")}</span>{" "}
             {deployment
-              ? `${deployment.sla.rpoHours} saat / ${deployment.sla.rtoHours} saat`
+              ? t("monitoringClient.hoursPair", { rpo: deployment.sla.rpoHours, rto: deployment.sla.rtoHours })
               : "-"}
           </div>
           <div>
-            <span className="font-medium text-slate-700">Yedek sikligi:</span>{" "}
-            {deployment ? `${deployment.sla.backupFrequencyHours} saat` : "-"}
+            <span className="font-medium text-slate-700">{t("monitoringClient.backupFreq")}</span>{" "}
+            {deployment ? t("monitoringClient.hours", { n: deployment.sla.backupFrequencyHours }) : "-"}
           </div>
         </div>
         {deployment?.notes ? (
@@ -177,18 +179,18 @@ export default function MonitoringClient() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Tarih</TableHead>
-              <TableHead>Kaynak</TableHead>
-              <TableHead>Seviye</TableHead>
-              <TableHead>Baslik</TableHead>
-              <TableHead>Detay</TableHead>
+              <TableHead>{t("monitoringClient.colDate")}</TableHead>
+              <TableHead>{t("monitoringClient.colSource")}</TableHead>
+              <TableHead>{t("monitoringClient.colLevel")}</TableHead>
+              <TableHead>{t("monitoringClient.colTitle")}</TableHead>
+              <TableHead>{t("monitoringClient.colDetail")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {alerts.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-slate-500">
-                  Henuz alarm kaydi yok.
+                  {t("monitoringClient.emptyAlerts")}
                 </TableCell>
               </TableRow>
             ) : (

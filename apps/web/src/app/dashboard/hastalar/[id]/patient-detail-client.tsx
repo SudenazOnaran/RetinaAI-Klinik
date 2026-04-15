@@ -39,8 +39,10 @@ import {
 import { loadRetinaSettingsFromStorage } from "@/lib/retina-settings";
 import { ManualReportCard } from "@/components/dashboard/manual-report-card";
 import { drLabelTr } from "@/lib/dr-label-tr";
+import { useTranslation } from "@/components/providers/i18n-provider";
 
 export default function PatientDetailClient({ patient }: { patient: any }) {
+  const { t, locale } = useTranslation();
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<
     "report-create" | "reports" | "progress"
@@ -200,7 +202,18 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
   };
 
   const formatDiagnosisLabel = (label: string) => {
-    return drLabelTr(label);
+    if (locale !== "en") return drLabelTr(label);
+
+    const canonical = toReportDiagnosisLabel(label);
+    if (canonical === "No_DR") return t("patientDetailProgress.severityNone");
+    if (canonical === "Mild") return t("patientDetailProgress.severityMild");
+    if (canonical === "Moderate")
+      return t("patientDetailProgress.severityModerate");
+    if (canonical === "Severe") return t("patientDetailProgress.severitySevere");
+    if (canonical === "Proliferative_DR")
+      return t("patientDetailProgress.severityProliferative");
+
+    return String(label || "-");
   };
 
   const isApprovalFeedback = (value: unknown) => {
@@ -266,11 +279,11 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
   };
 
   const severityLabel = (score: number) => {
-    if (score >= 4) return "Proliferatif";
-    if (score === 3) return "Ciddi";
-    if (score === 2) return "Orta";
-    if (score === 1) return "Hafif";
-    return "Yok";
+    if (score >= 4) return t("patientDetailProgress.severityProliferative");
+    if (score === 3) return t("patientDetailProgress.severitySevere");
+    if (score === 2) return t("patientDetailProgress.severityModerate");
+    if (score === 1) return t("patientDetailProgress.severityMild");
+    return t("patientDetailProgress.severityNone");
   };
 
   const orderedReports = [...reports].sort(
@@ -294,7 +307,7 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
         id: r.id,
         date: new Date(r.createdAt),
         dateLabel: format(new Date(r.createdAt), "dd MMM yy", {
-          locale: tr,
+          locale: locale === "en" ? undefined : tr,
         }),
         aiResultLabel,
         finalDiagnosisRaw,
@@ -302,7 +315,13 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
         stage: score,
         stageLabel: severityLabel(score),
         delta,
-        trend: delta < 0 ? "İyileşme" : delta > 0 ? "Kötüleşme" : "Stabil",
+        trendType: delta < 0 ? "improvement" : delta > 0 ? "worsening" : "stable",
+        trend:
+          delta < 0
+            ? t("patientDetailProgress.trendImprovement")
+            : delta > 0
+              ? t("patientDetailProgress.trendWorsening")
+              : t("patientDetailProgress.trendStable"),
       };
     },
   );
@@ -315,10 +334,10 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
 
   const netTrendLabel =
     netChange < 0
-      ? "Genel İyileşme"
+      ? t("patientDetailProgress.netImprovement")
       : netChange > 0
-        ? "Genel Kötüleşme"
-        : "Genel Stabil";
+        ? t("patientDetailProgress.netWorsening")
+        : t("patientDetailProgress.netStable");
 
   const handlePreviewReportPdf = async (report: any) => {
     const labels = parseJsonArray(report.aiOdriLabels);
@@ -387,7 +406,9 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
               {patient.fullName}
             </h1>
             <p className="text-sm text-slate-600">
-              TC: {patient.tcNo} | Yaş: {patient.age} | Diyabet Süresi:{" "}
+              {t("patientDetail.tcPrefix")} {patient.tcNo} |{" "}
+              {t("patientDetail.ageLabel")} {patient.age} |{" "}
+              {t("patientDetail.diabetesDurationLabel")}{" "}
               {patient.diabetesYears ?? "-"} | HbA1c: {patient.hba1c ?? "-"}
             </p>
           </div>
@@ -396,7 +417,7 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
             className="h-11 rounded-xl bg-[var(--retina-primary)] px-5 text-white shadow-sm transition-all duration-200 hover:bg-[var(--retina-primary-deep)] hover:shadow-md"
             onClick={() => setEditOpen(true)}
           >
-            Bilgileri Güncelle{" "}
+            {t("patientDetail.updateInfoButton")}
           </Button>
           <UpdatePatientDialog
             open={editOpen}
@@ -412,21 +433,21 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
           variant="outline"
           onClick={() => setActiveTab("report-create")}
         >
-          Rapor Oluştur
+          {t("patientDetail.tabCreateReport")}
         </Button>
         <Button
           className={tabButtonClass("reports")}
           variant="outline"
           onClick={() => setActiveTab("reports")}
         >
-          Geçmiş Raporlar
+          {t("patientDetail.tabPastReports")}
         </Button>
         <Button
           className={tabButtonClass("progress")}
           variant="outline"
           onClick={() => setActiveTab("progress")}
         >
-          DR Değişim Analizi
+          {t("patientDetail.tabDrProgression")}
         </Button>
       </div>
 
@@ -434,9 +455,7 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
         <Card className="border border-[#d8e0df] bg-white shadow-sm">
           <CardContent className="space-y-4 p-4 md:p-5">
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-              Bu sayfada klinik rapor ve AI görsel analiz tek akışta çalışır. AI
-              analizi Rapor Oluştur kartının içindedir ve sonuçlar aynı kaydetme
-              işlemiyle rapora eklenir.
+              {t("patientDetail.reportCreateInfo")}
             </div>
 
             <ManualReportCard
@@ -455,8 +474,10 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
       ) : activeTab === "reports" ? (
         <Card className="border border-[#d8e0df] bg-white shadow-sm">
           <CardHeader className="border-b border-slate-100 bg-[#f8faf9]">
-            <CardTitle>Geçmiş Raporlar</CardTitle>
-            <CardDescription>{reports.length} kayıt bulundu</CardDescription>
+            <CardTitle>{t("patientDetail.tabPastReports")}</CardTitle>
+            <CardDescription>
+              {t("patientDetailReports.foundRecords", { count: reports.length })}
+            </CardDescription>
           </CardHeader>
 
           <CardContent className="space-y-4 pt-4">
@@ -489,14 +510,16 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
                           variant="outline"
                           className="border-slate-300 bg-white text-slate-700"
                         >
-                          Rapor #{reports.length - idx}
+                          {t("patientDetailReports.reportNo", {
+                            no: reports.length - idx,
+                          })}
                         </Badge>
                         <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                          Tarih
+                          {t("patientDetailReports.dateLabel")}
                         </span>
                         <Badge className="bg-slate-700 text-white">
                           {format(new Date(r.createdAt), "dd MMM yyyy", {
-                            locale: tr,
+                            locale: locale === "en" ? undefined : tr,
                           })}
                         </Badge>
                       </div>
@@ -506,14 +529,14 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
                         className="border-[#b8ccd6] text-[#355769] transition-colors hover:border-[#91afbd] hover:bg-[#edf6fb] hover:text-[#24485d]"
                         onClick={() => handlePreviewReportPdf(r)}
                       >
-                        PDF Görüntüle
+                        {t("patientDetailReports.viewPdf")}
                       </Button>
                     </div>
 
                     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                       <div className="rounded-lg border border-slate-200 bg-white p-3">
                         <p className="text-xs font-semibold text-slate-500">
-                          Klinik Öykü (Anamnez)
+                          {t("patientDetailReports.anamnesis")}
                         </p>
                         <p className="mt-1 text-sm text-slate-800">
                           {getReportSectionValue(
@@ -526,7 +549,7 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
 
                       <div className="rounded-lg border border-slate-200 bg-white p-3">
                         <p className="text-xs font-semibold text-slate-500">
-                          Muayene Bulguları
+                          {t("patientDetailReports.examFindings")}
                         </p>
                         <p className="mt-1 text-sm text-slate-800">
                           {getReportSectionValue(
@@ -539,7 +562,7 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
 
                       <div className="rounded-lg border border-slate-200 bg-white p-3">
                         <p className="text-xs font-semibold text-slate-500">
-                          Laboratuvar Sonuçları
+                          {t("patientDetailReports.labResults")}
                         </p>
                         <p className="mt-1 text-sm text-slate-800">
                           {getReportSectionValue(
@@ -552,7 +575,7 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
 
                       <div className="rounded-lg border border-slate-200 bg-white p-3">
                         <p className="text-xs font-semibold text-slate-500">
-                          Teşhis / Klinik Değerlendirme
+                          {t("patientDetailReports.clinicalAssessment")}
                         </p>
                         <p className="mt-1 text-sm text-slate-800">
                           {getReportSectionValue(
@@ -570,7 +593,7 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
 
                       <div className="rounded-lg border border-slate-200 bg-white p-3">
                         <p className="text-xs font-semibold text-slate-500">
-                          Tedavi ve Öneriler
+                          {t("patientDetailReports.treatment")}
                         </p>
                         <p className="mt-1 text-sm text-slate-800">
                           {getTreatmentText(r)}
@@ -579,7 +602,7 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
 
                       <div className="rounded-lg border border-slate-200 bg-white p-3">
                         <p className="text-xs font-semibold text-slate-500">
-                          AI/DR Risk Tahmini - Güven
+                          {t("patientDetailReports.aiDrRiskConfidence")}
                         </p>
                         <div className="mt-1 flex flex-wrap items-center gap-2">
                           <Badge>{aiRiskLabel}</Badge>
@@ -594,7 +617,7 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
 
                       <div className="rounded-lg border border-slate-200 bg-white p-3 md:col-span-2 xl:col-span-1">
                         <p className="text-xs font-semibold text-slate-500">
-                          AI Diğer Hastalık Risk Tahmini - Güven
+                          {t("patientDetailReports.aiOtherRiskConfidence")}
                         </p>
                         <p className="mt-1 text-sm text-slate-800">
                           {odirLabels.length > 0
@@ -610,12 +633,12 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
 
                       <div className="rounded-lg border border-slate-200 bg-white p-3">
                         <p className="text-xs font-semibold text-slate-500">
-                          Fundus Görseli
+                          {t("patientDetailReports.fundusImage")}
                         </p>
                         {r.originalImage ? (
                           <Image
                             src={r.originalImage}
-                            alt="Fundus"
+                            alt={t("patientDetailReports.fundusImage")}
                             width={96}
                             height={96}
                             unoptimized
@@ -628,12 +651,12 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
 
                       <div className="rounded-lg border border-slate-200 bg-white p-3">
                         <p className="text-xs font-semibold text-slate-500">
-                          Isı Haritası
+                          {t("patientDetailReports.heatmap")}
                         </p>
                         {r.heatmapUrl ? (
                           <Image
                             src={r.heatmapUrl}
-                            alt="Isı Haritası"
+                            alt={t("patientDetailReports.heatmap")}
                             width={96}
                             height={96}
                             unoptimized
@@ -653,22 +676,23 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
         <div className="space-y-4">
           <Card className="border border-[#d8e0df] bg-white shadow-sm">
             <CardHeader className="border-b border-slate-100">
-              <CardTitle>Klinik Sonuç Değişim Grafiği</CardTitle>
+              <CardTitle>{t("patientDetailProgress.title")}</CardTitle>
               <CardDescription>
-                Diyabetik retinopati teşhisleri kayıtlı hastaların hastalık
-                takip grafiği.
+                {t("patientDetailProgress.description")}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 pt-6">
               {progressionData.length < 2 ? (
                 <p className="text-sm text-slate-600">
-                  Değişim analizi için en az 2 analiz kaydı gerekli.
+                  {t("patientDetailProgress.minRecords")}
                 </p>
               ) : (
                 <>
                   <div className="grid gap-3 md:grid-cols-3">
                     <div className="rounded-lg border border-[#d8e0df] bg-[#f8fbff] p-3">
-                      <p className="text-xs text-slate-500">Son Durum</p>
+                      <p className="text-xs text-slate-500">
+                        {t("patientDetailProgress.latestStatus")}
+                      </p>
                       <p className="text-base font-semibold text-slate-900">
                         {
                           progressionData[progressionData.length - 1]
@@ -677,13 +701,17 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
                       </p>
                     </div>
                     <div className="rounded-lg border border-[#d8e0df] bg-[#f8fbff] p-3">
-                      <p className="text-xs text-slate-500">Genel Değişim</p>
+                      <p className="text-xs text-slate-500">
+                        {t("patientDetailProgress.overallChange")}
+                      </p>
                       <p className="text-base font-semibold text-slate-900">
                         {netTrendLabel}
                       </p>
                     </div>
                     <div className="rounded-lg border border-[#d8e0df] bg-[#f8fbff] p-3">
-                      <p className="text-xs text-slate-500">Toplam Muayene</p>
+                      <p className="text-xs text-slate-500">
+                        {t("patientDetailProgress.totalExams")}
+                      </p>
                       <p className="text-base font-semibold text-slate-900">
                         {progressionData.length}
                       </p>
@@ -706,9 +734,12 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
                           formatter={(value: number, _name, payload: any) => [
                             payload?.payload?.finalDiagnosisLabel ||
                               `${severityLabel(Number(value))}`,
-                            payload?.payload?.trend || "Durum",
+                            payload?.payload?.trend ||
+                              t("patientDetailProgress.statusLabel"),
                           ]}
-                          labelFormatter={(label) => `Tarih: ${label}`}
+                          labelFormatter={(label) =>
+                            `${t("patientDetailProgress.dateLabel")}: ${label}`
+                          }
                         />
                         <Line
                           type="monotone"
@@ -716,7 +747,7 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
                           stroke="#1e90ff"
                           strokeWidth={3}
                           activeDot={{ r: 7 }}
-                          name="Retinopati Seviyesi"
+                          name={t("patientDetailProgress.retinopathyLevel")}
                         />
                       </LineChart>
                     </ResponsiveContainer>
@@ -726,10 +757,10 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
                     <Table>
                       <TableHeader className="bg-slate-50">
                         <TableRow>
-                          <TableHead>Tarih</TableHead>
-                          <TableHead>AI Sonucu</TableHead>
-                          <TableHead>Nihai Sonuç</TableHead>
-                          <TableHead>Değişim Yorumu</TableHead>
+                          <TableHead>{t("patientDetailProgress.dateLabel")}</TableHead>
+                          <TableHead>{t("patientDetailProgress.colAiResult")}</TableHead>
+                          <TableHead>{t("patientDetailProgress.colFinalResult")}</TableHead>
+                          <TableHead>{t("patientDetailProgress.colChangeComment")}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -745,9 +776,9 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
                             <TableCell>
                               <Badge
                                 className={
-                                  item.trend === "İyileşme"
+                                  item.trendType === "improvement"
                                     ? "bg-emerald-500 text-white"
-                                    : item.trend === "Kötüleşme"
+                                    : item.trendType === "worsening"
                                       ? "bg-red-500 text-white"
                                       : "bg-slate-500 text-white"
                                 }

@@ -20,8 +20,11 @@ import {
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { DashboardAlertCenter } from "@/components/dashboard/dashboard-alert-center";
+import { getRequestMessages } from "@/lib/i18n/server";
 
 export default async function DashboardPage() {
+  const messages = await getRequestMessages();
+  const homeT = messages.dashboardHome;
   const doctor = await getCurrentDoctorSession();
   if (!doctor) {
     redirect("/login");
@@ -123,15 +126,13 @@ export default async function DashboardPage() {
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--retina-primary)]">
-                Retina Klinik Karar Destek Sistemi
+                {homeT.eyebrow}
               </p>
               <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
-                Hoş geldiniz, Dr. {doctor.name}
+                {homeT.welcome.replace("{{name}}", doctor.name)}
               </h1>
               <p className="mt-2 text-sm text-slate-600 md:text-base">
-                Klinik özet paneli üzerinden hasta sayısı, analiz yoğunluğu ve
-                risk dağılımını tek bakışta görüntüleyebilir ve takip
-                edebilirsiniz
+                {homeT.subtitle}
               </p>
             </div>
 
@@ -142,7 +143,7 @@ export default async function DashboardPage() {
                 className="w-full border-slate-300 bg-white text-slate-700 hover:bg-slate-50 sm:w-auto"
               >
                 <Link href="/dashboard/hastalar">
-                  <Users className="mr-2 h-4 w-4" /> Hasta Kayıtları
+                  <Users className="mr-2 h-4 w-4" /> {homeT.patientsButton}
                 </Link>
               </Button>
 
@@ -151,7 +152,7 @@ export default async function DashboardPage() {
                 className="w-full bg-[var(--retina-primary)] text-white hover:bg-[var(--retina-primary-deep)] sm:w-auto"
               >
                 <Link href="/dashboard/hastalar/yeni">
-                  <UserPlus className="mr-2 h-4 w-4" /> Yeni Kayıt
+                  <UserPlus className="mr-2 h-4 w-4" /> {homeT.newRecordButton}
                 </Link>
               </Button>
             </div>
@@ -160,40 +161,40 @@ export default async function DashboardPage() {
 
         <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <StatsCard
-            title="Toplam Hasta"
+            title={homeT.stats.totalPatients}
             value={totalPatients}
             icon={<Users className="h-5 w-5" />}
             color="cyan"
-            desc="Kayıtlı portföy"
+            desc={homeT.stats.portfolio}
           />
           <StatsCard
-            title="Yüksek Risk"
+            title={homeT.stats.highRisk}
             value={highRiskCount}
             icon={<AlertTriangle className="h-5 w-5" />}
             color="amber"
-            desc="Öncelikli takip"
+            desc={homeT.stats.priority}
           />
           <StatsCard
-            title="Toplam Analiz"
+            title={homeT.stats.totalAnalyses}
             value={totalAnalyses}
             icon={<Activity className="h-5 w-5" />}
             color="teal"
-            desc="Değerlendirme"
+            desc={homeT.stats.assessment}
           />
           <StatsCard
-            title="Sistem Durumu"
-            value="Aktif"
+            title={homeT.stats.systemStatus}
+            value={homeT.stats.active}
             icon={<Clock className="h-5 w-5" />}
             color="slate"
-            desc="Kesintisiz"
+            desc={homeT.stats.uptime}
           />
         </section>
 
         <section className="grid gap-6 md:grid-cols-7">
           <Card className="md:col-span-4 border border-slate-200 bg-white shadow-sm">
             <CardHeader className="border-b border-slate-100">
-              <CardTitle>Son Kaydedilen Hastalar</CardTitle>
-              <CardDescription>Son güncellenen hasta kayıtları</CardDescription>
+              <CardTitle>{homeT.recentPatients.title}</CardTitle>
+              <CardDescription>{homeT.recentPatients.description}</CardDescription>
             </CardHeader>
 
             <CardContent className="space-y-3 pt-4">
@@ -212,7 +213,7 @@ export default async function DashboardPage() {
                           {patient.fullName}
                         </p>
                         <p className="text-xs text-slate-500">
-                          T.C: {patient.tcNo}
+                          {homeT.recentPatients.tcNo} {patient.tcNo}
                         </p>
                       </div>
                     </div>
@@ -226,7 +227,7 @@ export default async function DashboardPage() {
                       <Link
                         href={`/dashboard/hastalar/${patient.id}?tab=report-create`}
                       >
-                        Rapor Oluştur <ChevronRight className="ml-1 h-3 w-3" />
+                        {homeT.recentPatients.createReport} <ChevronRight className="ml-1 h-3 w-3" />
                       </Link>
                     </Button>
                   </div>
@@ -239,10 +240,10 @@ export default async function DashboardPage() {
             <CardHeader className="border-b border-amber-100/70">
               <CardTitle className="flex items-center gap-2 text-slate-900">
                 <AlertTriangle className="h-5 w-5 text-amber-600" />
-                Kritik Risk İzleme
+                {homeT.critical.title}
               </CardTitle>
               <CardDescription className="text-slate-600">
-                Yüksek risk oranı: %{highRiskRate}
+                {homeT.critical.rate.replace("{{rate}}", String(highRiskRate))}
               </CardDescription>
             </CardHeader>
 
@@ -266,7 +267,7 @@ export default async function DashboardPage() {
                 ))
               ) : (
                 <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-500">
-                  Şu anda kritik vaka bulunmuyor.
+                  {homeT.critical.empty}
                 </p>
               )}
             </CardContent>

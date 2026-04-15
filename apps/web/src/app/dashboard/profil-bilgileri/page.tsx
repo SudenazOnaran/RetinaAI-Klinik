@@ -17,10 +17,12 @@ import {
   loadRetinaSettingsFromStorage,
 } from "@/lib/retina-settings";
 import { UserRound, ShieldCheck } from "lucide-react";
+import { useTranslation } from "@/components/providers/i18n-provider";
 
 type DoctorProfile = RetinaSettings["doctor"];
 
 export default function DoctorProfilePage() {
+  const { t, locale } = useTranslation();
   const [profile, setProfile] = useState<DoctorProfile>(
     getDefaultRetinaSettings().doctor,
   );
@@ -37,7 +39,7 @@ export default function DoctorProfilePage() {
         cache: "no-store",
       });
       if (!res.ok) {
-        throw new Error("Profil verileri alınamadı");
+        throw new Error("Profile fetch failed");
       }
 
       const data = (await res.json()) as {
@@ -79,8 +81,8 @@ export default function DoctorProfilePage() {
     } catch {
       toast({
         variant: "destructive",
-        title: "Hata",
-        description: "Profil verileri yüklenemedi.",
+        title: t("errorPage.title"),
+        description: t("profilePage.toastLoadFail"),
       });
     } finally {
       // loading state handled by render
@@ -101,8 +103,10 @@ export default function DoctorProfilePage() {
 
   const previewName = useMemo(
     () =>
-      profile.signatureName || profile.fullName || "Doktor Adı Belirtilmedi",
-    [profile.signatureName, profile.fullName],
+      profile.signatureName ||
+      profile.fullName ||
+      t("profilePage.unknownDoctor"),
+    [profile.signatureName, profile.fullName, t],
   );
 
   return (
@@ -110,10 +114,10 @@ export default function DoctorProfilePage() {
       <div className="mx-auto max-w-7xl space-y-8">
         <div className="rounded-2xl border border-[#d8e0df] bg-white px-6 py-5 shadow-sm">
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-            Profil Bilgileri
+            {t("profilePage.title")}
           </h1>
           <p className="mt-2 text-sm text-slate-600">
-            Doktor kimlik, uzmanlık ve imza bilgilerini yönetin.
+            {t("profilePage.description")}
           </p>
         </div>
 
@@ -123,44 +127,44 @@ export default function DoctorProfilePage() {
               <UserRound size={20} />
             </div>
             <div>
-              <CardTitle>Doktor Profili</CardTitle>
+              <CardTitle>{t("profilePage.cardTitle")}</CardTitle>
               <CardDescription>
-                Bu bilgiler rapor imzası ve klinik profilinde kullanılır.
+                {t("profilePage.cardDesc")}
               </CardDescription>
             </div>
           </CardHeader>
 
           <CardContent className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2 md:col-span-2">
-              <Label>Hesap E-postası</Label>
+              <Label>{t("profilePage.accountEmail")}</Label>
               <Input
                 value={doctorEmail}
                 disabled
-                placeholder="ornek@clinic.com (zorunlu)"
+                placeholder={t("profilePage.emailPlaceholder")}
               />
             </div>
 
             <div className="space-y-2">
-              <Label>Rol</Label>
+              <Label>{t("profilePage.role")}</Label>
               <Input value={doctorRole || "-"} disabled />
             </div>
 
             <div className="space-y-2">
-              <Label>Hesap Durumu</Label>
+              <Label>{t("profilePage.accountStatus")}</Label>
               <Input
                 value={
-                  doctorActive === null ? "-" : doctorActive ? "Aktif" : "Pasif"
+                  doctorActive === null ? "-" : doctorActive ? t("profilePage.active") : t("profilePage.passive")
                 }
                 disabled
               />
             </div>
 
             <div className="space-y-2 md:col-span-2">
-              <Label>Kayıt Tarihi</Label>
+              <Label>{t("profilePage.createdAt")}</Label>
               <Input
                 value={
                   doctorCreatedAt
-                    ? new Date(doctorCreatedAt).toLocaleString("tr-TR")
+                    ? new Date(doctorCreatedAt).toLocaleString(locale === "en" ? "en-US" : "tr-TR")
                     : "-"
                 }
                 disabled
@@ -168,25 +172,25 @@ export default function DoctorProfilePage() {
             </div>
 
             <div className="space-y-2">
-              <Label>Doktor Adı Soyadı</Label>
+              <Label>{t("profilePage.fullName")}</Label>
               <Input
                 value={profile.fullName}
                 disabled
-                placeholder="Dr. Ad Soyad"
+                placeholder={t("profilePage.fullNamePlaceholder")}
               />
             </div>
 
             <div className="space-y-2">
-              <Label>Uzmanlık</Label>
+              <Label>{t("profilePage.specialty")}</Label>
               <Input
                 value={profile.branch}
                 disabled
-                placeholder="Göz Hastalıkları"
+                placeholder={t("profilePage.specialtyPlaceholder")}
               />
             </div>
 
             <div className="space-y-2">
-              <Label>Diploma / Sicil No</Label>
+              <Label>{t("profilePage.license")}</Label>
               <Input
                 value={profile.licenseNo}
                 disabled
@@ -195,20 +199,20 @@ export default function DoctorProfilePage() {
             </div>
 
             <div className="space-y-2">
-              <Label>İletişim Telefonu</Label>
+              <Label>{t("profilePage.phone")}</Label>
               <Input
                 value={profile.contactPhone}
                 disabled
-                placeholder="0 (5__) ___ __ __ (zorunlu)"
+                placeholder={t("profilePage.phonePlaceholder")}
               />
             </div>
 
             <div className="space-y-2 md:col-span-2">
-              <Label>İmzada Görünecek Ad</Label>
+              <Label>{t("profilePage.signatureName")}</Label>
               <Input
                 value={profile.signatureName}
                 disabled
-                placeholder="Dr. Ad Soyad"
+                placeholder={t("profilePage.fullNamePlaceholder")}
               />
             </div>
           </CardContent>
@@ -216,9 +220,9 @@ export default function DoctorProfilePage() {
 
         <Card className="border border-[#d8e0df] bg-white shadow-sm">
           <CardHeader>
-            <CardTitle className="text-base">İmza Önizleme</CardTitle>
+            <CardTitle className="text-base">{t("profilePage.signaturePreview")}</CardTitle>
             <CardDescription>
-              PDF raporunun imza alanında görünecek ad aşağıdaki gibidir.
+              {t("profilePage.signaturePreviewDesc")}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -231,7 +235,7 @@ export default function DoctorProfilePage() {
         <Card className="border border-[#d8e0df] bg-white shadow-sm">
           <CardContent className="flex items-start gap-3 p-4 text-sm text-slate-600">
             <ShieldCheck className="mt-0.5 h-5 w-5 text-[#6c93b0]" />
-            <p>Profil alanları bu ekranda yalnızca görüntülenebilir.</p>
+            <p>{t("profilePage.readonlyNote")}</p>
           </CardContent>
         </Card>
       </div>

@@ -26,6 +26,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { drLabelTr } from "@/lib/dr-label-tr";
+import { useTranslation } from "@/components/providers/i18n-provider";
 
 type PatientReportInfo = {
   fullName?: string;
@@ -56,6 +57,7 @@ export function ImageAnalysisCard({
   compact = false,
   onDraftChange,
 }: ImageAnalysisCardProps) {
+  const { t } = useTranslation();
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [base64Image, setBase64Image] = useState<string | null>(null);
@@ -106,18 +108,17 @@ export function ImageAnalysisCard({
         setShowAdvanced(false);
       } else if (data.queued) {
         toast({
-          title: "AI isteği kuyrukta",
-          description:
-            "AI servisi geçici olarak ulaşılamıyor. İstek kuyruğa alındı.",
+          title: t("analysisCard.queueTitle"),
+          description: t("analysisCard.queueDesc"),
         });
       } else {
-        throw new Error(data.error || data.message || "Analiz başarısız");
+        throw new Error(data.error || data.message || t("analysisCard.analysisFail"));
       }
     } catch {
       toast({
         variant: "destructive",
-        title: "Hata",
-        description: "AI servisine güvenli gateway üzerinden bağlanılamadı.",
+        title: t("errorPage.title"),
+        description: t("analysisCard.gatewayFail"),
       });
     } finally {
       setIsLoading(false);
@@ -154,8 +155,8 @@ export function ImageAnalysisCard({
     onDraftChange?.(draft);
     setIsAddedToForm(true);
     toast({
-      title: "AI sonucu forma eklendi",
-      description: "Artık raporu tek kaydetme butonuyla kaydedebilirsiniz.",
+      title: t("analysisCard.addedTitle"),
+      description: t("analysisCard.addedDesc"),
     });
   };
 
@@ -175,13 +176,12 @@ export function ImageAnalysisCard({
             compact ? "text-lg md:text-xl" : "text-2xl md:text-3xl"
           }`}
         >
-          AI Görsel Analiz
+          {t("analysisCard.title")}
         </CardTitle>
         <CardDescription
           className={`text-slate-600 ${compact ? "max-w-none text-xs md:text-sm" : "max-w-3xl text-sm md:text-base"}`}
         >
-          Retina fundus görselini analiz edin. Sonuçlar otomatik olarak rapor
-          formuna aktarılır ve rapor tek bir Kaydet butonuyla kaydedilir.
+          {t("analysisCard.description")}
         </CardDescription>
       </CardHeader>
 
@@ -192,10 +192,10 @@ export function ImageAnalysisCard({
           <div className="relative overflow-hidden rounded-2xl border-2 border-dashed border-cyan-300 bg-cyan-50/40 p-10 text-center transition-colors hover:border-cyan-400 hover:bg-cyan-50 md:p-14">
             <Upload className="mx-auto mb-4 h-12 w-12 text-cyan-700" />
             <p className="text-base font-semibold text-slate-800 md:text-lg">
-              Fundus görüntüsü seçin
+              {t("analysisCard.pickImage")}
             </p>
             <p className="mt-1 text-sm text-slate-500">
-              Desteklenen formatlar: JPG, PNG, BMP, WEBP
+              {t("analysisCard.supportedFormats")}
             </p>
             <input
               type="file"
@@ -234,20 +234,20 @@ export function ImageAnalysisCard({
             <div className="grid gap-4 md:grid-cols-2">
               <div className="rounded-2xl border border-cyan-100 bg-gradient-to-br from-cyan-700 to-blue-700 p-5 text-white shadow-lg">
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-100">
-                  AI Sonucu Özeti
+                  {t("analysisCard.summary")}
                 </p>
                 <p className="mt-3 text-3xl font-bold leading-tight">
                   {drLabelTr(result.pytorch?.label || "No_DR")}
                 </p>
                 <p className="mt-4 rounded-lg bg-white/15 px-3 py-2 text-sm font-medium">
-                  Güven: %
+                  {t("analysisCard.confidencePrefix")}
                   {(Number(result.pytorch?.confidence || 0) * 100).toFixed(1)}
                 </p>
 
                 {Array.isArray(result.odir?.results) &&
                 result.odir.results.length > 0 ? (
                   <div className="mt-3 rounded-lg bg-white/10 px-3 py-2 text-xs text-cyan-100">
-                    Ek riskler:{" "}
+                    {t("analysisCard.extraRisks")}{" "}
                     {result.odir.results
                       .slice(0, 3)
                       .map(
@@ -262,14 +262,14 @@ export function ImageAnalysisCard({
               {result.heatmapPlus ? (
                 <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-950 shadow-lg">
                   <div className="border-b border-slate-800 bg-slate-900/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-cyan-200">
-                    Heatmap (Grad-CAM++)
+                    {t("analysisCard.heatmapTitle")}
                   </div>
                   <div
                     className={`relative w-full ${compact ? "h-[220px] md:h-[250px]" : "h-[260px] md:h-[300px]"}`}
                   >
                     <Image
                       src={result.heatmapPlus}
-                      alt="Analiz Heatmap"
+                      alt={t("analysisCard.heatmapAlt")}
                       fill
                       unoptimized
                       sizes="(max-width: 768px) 100vw, 900px"
@@ -290,7 +290,7 @@ export function ImageAnalysisCard({
                   type="button"
                   className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold text-slate-700"
                 >
-                  <span>Gelişmiş AI Detayları</span>
+                  <span>{t("analysisCard.advancedTitle")}</span>
                   <ChevronDown
                     className={`h-4 w-4 transition-transform ${showAdvanced ? "rotate-180" : ""}`}
                   />
@@ -302,7 +302,7 @@ export function ImageAnalysisCard({
                 result.odir.results.length > 0 ? (
                   <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 p-4 shadow-sm">
                     <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-800">
-                      ODIR Risk Tahminleri
+                      {t("analysisCard.odirTitle")}
                     </p>
                     <div className="mt-3 space-y-2">
                       {result.odir.results.map((r: any, i: number) => (
@@ -325,29 +325,29 @@ export function ImageAnalysisCard({
                 {result.uncertainty || result.ood ? (
                   <div className="rounded-xl border border-amber-100 bg-amber-50/70 p-4 shadow-sm">
                     <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-800">
-                      Güvenilirlik Metrikleri
+                      {t("analysisCard.reliabilityTitle")}
                     </p>
                     <div className="mt-2 space-y-1 text-sm text-slate-700">
                       <p>
-                        Predictive Entropy:{" "}
+                        {t("analysisCard.predictiveEntropy")}{" "}
                         {Number(
                           result.uncertainty?.predictiveEntropy || 0,
                         ).toFixed(4)}
                       </p>
                       <p>
-                        Mutual Information:{" "}
+                        {t("analysisCard.mutualInformation")}{" "}
                         {Number(
                           result.uncertainty?.mutualInformation || 0,
                         ).toFixed(4)}
                       </p>
                       <p>
-                        Sınıf Varyansı:{" "}
+                        {t("analysisCard.classVariance")}{" "}
                         {Number(result.uncertainty?.classVariance || 0).toFixed(
                           6,
                         )}
                       </p>
                       <p>
-                        OOD Skoru: %
+                        {t("analysisCard.oodScore")}
                         {(Number(result.ood?.score || 0) * 100).toFixed(1)}
                       </p>
                     </div>
@@ -357,7 +357,7 @@ export function ImageAnalysisCard({
                 {result.localization ? (
                   <div className="rounded-xl border border-indigo-100 bg-indigo-50/70 p-4 shadow-sm">
                     <p className="text-xs font-semibold uppercase tracking-[0.12em] text-indigo-800">
-                      Lokalizasyon Metrikleri
+                      {t("analysisCard.localizationTitle")}
                     </p>
                     <div className="mt-2 space-y-1 text-sm text-slate-700">
                       <p>
@@ -367,8 +367,10 @@ export function ImageAnalysisCard({
                         Dice: {Number(result.localization.dice || 0).toFixed(4)}
                       </p>
                       <p>
-                        Pointing Hit:{" "}
-                        {result.localization.pointingHit ? "Evet" : "Hayır"}
+                        {t("analysisCard.pointingHit")}{" "}
+                        {result.localization.pointingHit
+                          ? t("analysisCard.yes")
+                          : t("analysisCard.no")}
                       </p>
                     </div>
                   </div>
@@ -377,14 +379,14 @@ export function ImageAnalysisCard({
                 {result.heatmapPlus ? (
                   <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-950 shadow-sm">
                     <div className="border-b border-slate-800 bg-slate-900/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-cyan-200">
-                      Grad-CAM++
+                      {t("analysisCard.gradcam")}
                     </div>
                     <div
                       className={`relative w-full ${compact ? "h-[220px] md:h-[250px]" : "h-[280px] md:h-[320px]"}`}
                     >
                       <Image
                         src={result.heatmapPlus}
-                        alt="Grad-CAM Plus Plus Heatmap"
+                      alt={t("analysisCard.gradcamAlt")}
                         fill
                         unoptimized
                         sizes="(max-width: 768px) 100vw, 900px"
@@ -403,13 +405,13 @@ export function ImageAnalysisCard({
             <div className="flex items-center gap-2 font-medium">
               <CheckCircle2 className="h-4 w-4" />
               {isAddedToForm
-                ? "Analiz sonucu rapor formuna eklendi."
-                : "Analiz hazır. Rapor formuna eklemek için aşağıdaki butonu kullanın."}
+                ? t("analysisCard.addedShort")
+                : t("analysisCard.readyHint")}
             </div>
             <p className="mt-1 text-xs text-emerald-700">
               {isAddedToForm
-                ? "İsterseniz raporu tek kaydetme akışıyla tamamlayabilirsiniz."
-                : "Önce doğrula/düzelt adımını tamamlayın, ardından Sonucu Forma Aktar'a basın."}
+                ? t("analysisCard.addedFlowHint")
+                : t("analysisCard.validationHint")}
             </p>
           </div>
         ) : null}
@@ -433,14 +435,14 @@ export function ImageAnalysisCard({
             ) : (
               <Zap className="mr-2 h-5 w-5" />
             )}
-            Analizi Başlat
+            {t("analysisCard.startAnalysis")}
           </Button>
         ) : (
           <div className="w-full space-y-4">
             <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 md:flex-row md:items-center md:justify-between md:p-5">
               <div className="flex items-center gap-3 text-slate-800">
                 <span className="text-sm font-semibold uppercase tracking-[0.08em] md:text-base">
-                  Yapay Zeka Sonucu Doğru mu?
+                  {t("analysisCard.isCorrect")}
                 </span>
               </div>
               <div className="flex gap-2">
@@ -456,7 +458,7 @@ export function ImageAnalysisCard({
                     setIsAddedToForm(false);
                   }}
                 >
-                  EVET
+                  {t("analysisCard.yesUpper")}
                 </Button>
                 <Button
                   className={`rounded-xl px-6 text-sm font-semibold ${
@@ -469,7 +471,7 @@ export function ImageAnalysisCard({
                     setIsAddedToForm(false);
                   }}
                 >
-                  HAYIR
+                  {t("analysisCard.noUpper")}
                 </Button>
               </div>
             </div>
@@ -477,7 +479,7 @@ export function ImageAnalysisCard({
             {isCorrect === false && (
               <div className="rounded-2xl border border-rose-200 bg-rose-50/50 p-4">
                 <span className="mb-2 block text-sm font-semibold uppercase tracking-[0.08em] text-rose-700">
-                  Düzeltme Seçimi
+                  {t("analysisCard.correctionTitle")}
                 </span>
                 <select
                   className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium outline-none transition focus:border-cyan-500"
@@ -488,7 +490,7 @@ export function ImageAnalysisCard({
                     setIsAddedToForm(false);
                   }}
                 >
-                  <option value="">Düzeltme etiketini seçin...</option>
+                  <option value="">{t("analysisCard.correctionPlaceholder")}</option>
                   {["Mild", "Moderate", "Severe"].map((c) => (
                     <option key={c} value={c}>
                       {drLabelTr(c)}
@@ -507,7 +509,7 @@ export function ImageAnalysisCard({
                 }
               >
                 <CheckCircle2 className="mr-2 h-4 w-4" />
-                Sonucu Forma Aktar
+                {t("analysisCard.pushToForm")}
               </Button>
 
               <Button
@@ -515,7 +517,7 @@ export function ImageAnalysisCard({
                 onClick={resetAnalysis}
               >
                 <RefreshCw className="mr-2 h-4 w-4" />
-                Temizle
+                {t("analysisCard.clear")}
               </Button>
             </div>
           </div>

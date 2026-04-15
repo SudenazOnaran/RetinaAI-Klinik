@@ -30,10 +30,14 @@ import {
   ShieldCheck,
   RotateCcw,
 } from "lucide-react";
+import { useTranslation } from "@/components/providers/i18n-provider";
+import { LanguageSwitcher } from "@/components/layout/language-switcher";
 
 function ToggleRow({
   label,
   description,
+  onText,
+  offText,
   checked,
   onCheckedChange,
   darkMode,
@@ -41,6 +45,8 @@ function ToggleRow({
 }: {
   label: string;
   description: string;
+  onText: string;
+  offText: string;
   checked: boolean;
   onCheckedChange: (value: boolean) => void;
   darkMode: boolean;
@@ -96,7 +102,7 @@ function ToggleRow({
           <span
             className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${badgeClass}`}
           >
-            {checked ? "Açık" : "Kapalı"}
+            {checked ? onText : offText}
           </span>
         </div>
         <p className={`text-xs ${descriptionClass}`}>{description}</p>
@@ -111,6 +117,7 @@ function ToggleRow({
 }
 
 export default function SettingsPage() {
+  const { t } = useTranslation();
   const [settings, setSettings] = useState<RetinaSettings>(
     getDefaultRetinaSettings(),
   );
@@ -162,7 +169,7 @@ export default function SettingsPage() {
       });
 
       if (!res.ok) {
-        throw new Error("Ayarlar veritabanına kaydedilemedi");
+        throw new Error("Settings could not be saved");
       }
 
       const data = (await res.json()) as {
@@ -174,16 +181,16 @@ export default function SettingsPage() {
       saveRetinaSettingsToStorage(next);
 
       toast({
-        title: "Ayarlar kaydedildi",
-        description: "Klinik tercihleri merkezi veritabanına kaydedildi.",
+        title: t("settingsPage.toastSavedTitle"),
+        description: t("settingsPage.toastSavedDesc"),
       });
     } catch {
       setSettings(validated);
       saveRetinaSettingsToStorage(validated);
       toast({
         variant: "destructive",
-        title: "Uyarı",
-        description: "Merkezi kayıt başarısız. Ayarlar yerel olarak saklandı.",
+        title: t("settingsPage.warnTitle"),
+        description: t("settingsPage.toastCentralSaveFail"),
       });
     } finally {
       setIsSaving(false);
@@ -201,24 +208,23 @@ export default function SettingsPage() {
       });
 
       if (!res.ok) {
-        throw new Error("Varsayılan ayarlar kaydedilemedi");
+        throw new Error("Default settings could not be saved");
       }
 
       setSettings(defaults);
       saveRetinaSettingsToStorage(defaults);
 
       toast({
-        title: "Varsayılana dönüldü",
-        description: "Ayarlar merkezi olarak sıfırlandı.",
+        title: t("settingsPage.toastResetTitle"),
+        description: t("settingsPage.toastResetDesc"),
       });
     } catch {
       setSettings(defaults);
       saveRetinaSettingsToStorage(defaults);
       toast({
         variant: "destructive",
-        title: "Uyarı",
-        description:
-          "Merkezi sıfırlama başarısız. Varsayılanlar yerel olarak uygulandı.",
+        title: t("settingsPage.warnTitle"),
+        description: t("settingsPage.toastCentralResetFail"),
       });
     } finally {
       setIsSaving(false);
@@ -296,14 +302,39 @@ export default function SettingsPage() {
       <div className={contentContainerClass}>
         <div>
           <h1 className={`text-2xl font-bold tracking-tight ${titleClass}`}>
-            Sistem Ayarları
+            {t("settingsPage.title")}
           </h1>
           <p className={`text-sm ${subtitleClass}`}>
-            Uygulamanın raporlama ve görünüm ayarlarını yönetin.
+            {t("settingsPage.description")}
           </p>
         </div>
 
         <div className="grid gap-6">
+          <Card className={cardClass}>
+            <CardHeader className="flex flex-row items-center gap-4">
+              <div
+                className={`rounded-lg p-2 ${
+                  isDark
+                    ? "bg-cyan-900/40 text-cyan-200"
+                    : "bg-cyan-100 text-cyan-700"
+                }`}
+              >
+                <ShieldCheck size={20} />
+              </div>
+              <div>
+                <CardTitle className={titleClass}>
+                  {t("settingsPage.languageTitle")}
+                </CardTitle>
+                <CardDescription className={cardDescriptionClass}>
+                  {t("settingsPage.languageDesc")}
+                </CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <LanguageSwitcher />
+            </CardContent>
+          </Card>
+
           <Card className={cardClass}>
             <CardHeader className="flex flex-row items-center gap-4">
               <div
@@ -316,16 +347,16 @@ export default function SettingsPage() {
                 <Building2 size={20} />
               </div>
               <div>
-                <CardTitle className={titleClass}>Klinik Bilgileri</CardTitle>
+                <CardTitle className={titleClass}>{t("settingsPage.clinicTitle")}</CardTitle>
                 <CardDescription className={cardDescriptionClass}>
-                  Kurum adı, rapor başlığı ve adres gibi temel tanımlar.
+                  {t("settingsPage.clinicDesc")}
                 </CardDescription>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label className={labelClass}>Klinik Adı</Label>
+                  <Label className={labelClass}>{t("settingsPage.clinicName")}</Label>
                   <Input
                     className={inputClass}
                     value={settings.clinic.clinicName}
@@ -333,7 +364,7 @@ export default function SettingsPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label className={labelClass}>PDF Rapor Başlığı</Label>
+                  <Label className={labelClass}>{t("settingsPage.reportHeader")}</Label>
                   <Input
                     className={inputClass}
                     value={settings.clinic.reportHeader}
@@ -344,12 +375,12 @@ export default function SettingsPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label className={labelClass}>Klinik Adresi</Label>
+                <Label className={labelClass}>{t("settingsPage.clinicAddress")}</Label>
                 <Textarea
                   className={inputClass}
                   value={settings.clinic.address}
                   onChange={(e) => updateClinic("address", e.target.value)}
-                  placeholder="Adres, il/ilçe"
+                  placeholder={t("settingsPage.clinicAddressPlaceholder")}
                 />
               </div>
             </CardContent>
@@ -368,45 +399,55 @@ export default function SettingsPage() {
               </div>
               <div>
                 <CardTitle className={titleClass}>
-                  Raporlama Tercihleri
+                  {t("settingsPage.reportPrefsTitle")}
                 </CardTitle>
                 <CardDescription className={cardDescriptionClass}>
-                  Oluşturulan PDF raporlarının içeriğini belirleyin.
+                  {t("settingsPage.reportPrefsDesc")}
                 </CardDescription>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <ToggleRow
-                label="Doktor Notlarını Dahil Et"
-                description="Yazdığınız manuel yorumları rapora ekler."
+                label={t("settingsPage.includeDoctorNotes")}
+                description={t("settingsPage.includeDoctorNotesDesc")}
+                onText={t("settingsPage.on")}
+                offText={t("settingsPage.off")}
                 checked={settings.report.includeDoctorNotes}
                 darkMode={isDark}
                 onCheckedChange={(v) => updateReport("includeDoctorNotes", v)}
               />
               <ToggleRow
-                label="Isı Haritasını Dahil Et"
-                description="Görsel rapor kısmında heatmap paneli ekler."
+                label={t("settingsPage.includeHeatmap")}
+                description={t("settingsPage.includeHeatmapDesc")}
+                onText={t("settingsPage.on")}
+                offText={t("settingsPage.off")}
                 checked={settings.report.includeHeatmap}
                 darkMode={isDark}
                 onCheckedChange={(v) => updateReport("includeHeatmap", v)}
               />
               <ToggleRow
-                label="İlaç Planını Dahil Et"
-                description="Tedavi ve ilaç önerilerini PDF raporda gösterir."
+                label={t("settingsPage.includeMedications")}
+                description={t("settingsPage.includeMedicationsDesc")}
+                onText={t("settingsPage.on")}
+                offText={t("settingsPage.off")}
                 checked={settings.report.includeMedications}
                 darkMode={isDark}
                 onCheckedChange={(v) => updateReport("includeMedications", v)}
               />
               <ToggleRow
-                label="Önizlemeyi Otomatik Aç"
-                description="PDF oluşturulduğunda önce önizleme sekmesini açar."
+                label={t("settingsPage.autoOpenPreview")}
+                description={t("settingsPage.autoOpenPreviewDesc")}
+                onText={t("settingsPage.on")}
+                offText={t("settingsPage.off")}
                 checked={settings.report.autoOpenPreview}
                 darkMode={isDark}
                 onCheckedChange={(v) => updateReport("autoOpenPreview", v)}
               />
               <ToggleRow
-                label="Kompakt PDF Düzeni"
-                description="Yazı boyutunu azaltarak raporu daha az sayfada tutar."
+                label={t("settingsPage.compactPdf")}
+                description={t("settingsPage.compactPdfDesc")}
+                onText={t("settingsPage.on")}
+                offText={t("settingsPage.off")}
                 checked={settings.report.compactPdf}
                 darkMode={isDark}
                 onCheckedChange={(v) => updateReport("compactPdf", v)}
@@ -427,17 +468,17 @@ export default function SettingsPage() {
               </div>
               <div>
                 <CardTitle className={titleClass}>
-                  Triage ve Klinik Eşikler
+                  {t("settingsPage.triageTitle")}
                 </CardTitle>
                 <CardDescription className={cardDescriptionClass}>
-                  Risk seviyesine göre kontrol süresi ve AI güven eşiği.
+                  {t("settingsPage.triageDesc")}
                 </CardDescription>
               </div>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label className={labelClass}>
-                  Yüksek Risk Kontrol Süresi (gün)
+                  {t("settingsPage.highRiskDays")}
                 </Label>
                 <Input
                   className={inputClass}
@@ -452,7 +493,7 @@ export default function SettingsPage() {
               </div>
               <div className="space-y-2">
                 <Label className={labelClass}>
-                  Orta Risk Kontrol Süresi (gün)
+                  {t("settingsPage.mediumRiskDays")}
                 </Label>
                 <Input
                   className={inputClass}
@@ -470,7 +511,7 @@ export default function SettingsPage() {
               </div>
               <div className="space-y-2">
                 <Label className={labelClass}>
-                  Düşük Risk Kontrol Süresi (gün)
+                  {t("settingsPage.lowRiskDays")}
                 </Label>
                 <Input
                   className={inputClass}
@@ -485,7 +526,7 @@ export default function SettingsPage() {
               </div>
               <div className="space-y-2">
                 <Label className={labelClass}>
-                  AI Güven Eşiği (0.50 - 0.99)
+                  {t("settingsPage.aiThreshold")}
                 </Label>
                 <Input
                   className={inputClass}
@@ -518,18 +559,20 @@ export default function SettingsPage() {
               </div>
               <div>
                 <CardTitle className={titleClass}>
-                  Bildirim Tercihleri
+                  {t("settingsPage.notificationsTitle")}
                 </CardTitle>
                 <CardDescription className={cardDescriptionClass}>
-                  Kritik vaka ve takip hatırlatma bildirimlerini yönetin.
+                  {t("settingsPage.notificationsDesc")}
                 </CardDescription>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <ToggleRow
                 tone="amber"
-                label="Kritik Vaka Uyarısı"
-                description="Yüksek riskli analizlerde anlık uyarı verir."
+                label={t("settingsPage.criticalAlert")}
+                description={t("settingsPage.criticalAlertDesc")}
+                onText={t("settingsPage.on")}
+                offText={t("settingsPage.off")}
                 checked={settings.notifications.criticalCaseAlert}
                 darkMode={isDark}
                 onCheckedChange={(v) =>
@@ -538,8 +581,10 @@ export default function SettingsPage() {
               />
               <ToggleRow
                 tone="amber"
-                label="Kontrol Takip Hatırlatması"
-                description="Planlanan takip günü yaklaşan hastaları listeler."
+                label={t("settingsPage.followupReminder")}
+                description={t("settingsPage.followupReminderDesc")}
+                onText={t("settingsPage.on")}
+                offText={t("settingsPage.off")}
                 checked={settings.notifications.followupReminder}
                 darkMode={isDark}
                 onCheckedChange={(v) =>
@@ -561,17 +606,19 @@ export default function SettingsPage() {
                 <Moon size={20} />
               </div>
               <div>
-                <CardTitle className={titleClass}>Görünüm Tercihleri</CardTitle>
+                <CardTitle className={titleClass}>{t("settingsPage.appearanceTitle")}</CardTitle>
                 <CardDescription className={cardDescriptionClass}>
-                  Arayüz temasını kişiselleştirin.
+                  {t("settingsPage.appearanceDesc")}
                 </CardDescription>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <ToggleRow
                 tone="indigo"
-                label="Gece Modu"
-                description="Sistemi koyu renk şemasına geçirir."
+                label={t("settingsPage.darkMode")}
+                description={t("settingsPage.darkModeDesc")}
+                onText={t("settingsPage.on")}
+                offText={t("settingsPage.off")}
                 checked={settings.appearance.darkMode}
                 darkMode={isDark}
                 onCheckedChange={(v) => updateAppearance("darkMode", v)}
@@ -590,7 +637,7 @@ export default function SettingsPage() {
             }`}
             onClick={handleResetDefaults}
           >
-            <RotateCcw size={16} /> Varsayılana Dön
+            <RotateCcw size={16} /> {t("settingsPage.resetDefault")}
           </Button>
           <Button
             className={`gap-2 px-8 text-white ${
@@ -602,7 +649,7 @@ export default function SettingsPage() {
             disabled={isSaving}
           >
             <Save size={18} />{" "}
-            {isSaving ? "Kaydediliyor..." : "Ayarları Kaydet"}
+            {isSaving ? t("settingsPage.saving") : t("settingsPage.save")}
           </Button>
         </div>
       </div>

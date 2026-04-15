@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { drLabelTr } from "@/lib/dr-label-tr";
+import { useTranslation } from "@/components/providers/i18n-provider";
 
 type HistoryRow = {
   id: string;
@@ -124,6 +125,7 @@ function toCsv(rows: HistoryRow[]) {
 }
 
 export default function HistoryClient({ rows }: { rows: HistoryRow[] }) {
+  const { t } = useTranslation();
   const [search, setSearch] = useState("");
   const [riskFilter, setRiskFilter] = useState<RiskFilter>("all");
   const [noteFilter, setNoteFilter] = useState<NoteFilter>("all");
@@ -222,7 +224,7 @@ export default function HistoryClient({ rows }: { rows: HistoryRow[] }) {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <Input
             className="pl-9"
-            placeholder="Hasta, TC, tanı veya not ara"
+            placeholder={t("history.placeholderSearch")}
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
@@ -239,10 +241,10 @@ export default function HistoryClient({ rows }: { rows: HistoryRow[] }) {
             setPage(1);
           }}
         >
-          <option value="all">Tüm risk grupları</option>
-          <option value="high">Yüksek risk</option>
-          <option value="medium">Orta risk</option>
-          <option value="low">Düşük risk</option>
+          <option value="all">{t("history.riskGroupAll")}</option>
+          <option value="high">{t("history.riskHigh")}</option>
+          <option value="medium">{t("history.riskMedium")}</option>
+          <option value="low">{t("history.riskLow")}</option>
         </select>
 
         <select
@@ -253,9 +255,9 @@ export default function HistoryClient({ rows }: { rows: HistoryRow[] }) {
             setPage(1);
           }}
         >
-          <option value="all">Tüm not durumları</option>
-          <option value="with">Not girilmiş</option>
-          <option value="without">Not girilmemiş</option>
+          <option value="all">{t("history.noteAll")}</option>
+          <option value="with">{t("history.noteWith")}</option>
+          <option value="without">{t("history.noteWithout")}</option>
         </select>
 
         <Input
@@ -267,7 +269,7 @@ export default function HistoryClient({ rows }: { rows: HistoryRow[] }) {
             setMinConfidence(e.target.value);
             setPage(1);
           }}
-          placeholder="Minimum güven %"
+          placeholder={t("history.minConfidence")}
         />
 
         <Input
@@ -296,21 +298,21 @@ export default function HistoryClient({ rows }: { rows: HistoryRow[] }) {
             setPage(1);
           }}
         >
-          <option value="createdAt_desc">En yeni kayıtlar</option>
-          <option value="createdAt_asc">En eski kayıtlar</option>
-          <option value="confidence_desc">Güveni en yüksekten</option>
+          <option value="createdAt_desc">{t("history.sortNewest")}</option>
+          <option value="createdAt_asc">{t("history.sortOldest")}</option>
+          <option value="confidence_desc">{t("history.sortConfidence")}</option>
         </select>
 
         <div className="lg:col-span-4 flex items-center justify-between gap-2">
           <span className="text-sm text-slate-600">
-            Toplam sonuç: {filtered.length}
+            {t("pagination.totalResults", { count: filtered.length })}
           </span>
           <Button
             variant="outline"
             onClick={exportCsv}
             disabled={filtered.length === 0}
           >
-            <Download className="mr-2 h-4 w-4" /> Filtreyi CSV indir
+            <Download className="mr-2 h-4 w-4" /> {t("history.exportCsv")}
           </Button>
         </div>
       </div>
@@ -319,19 +321,19 @@ export default function HistoryClient({ rows }: { rows: HistoryRow[] }) {
         <table className="w-full text-sm">
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
-              <th className="p-3 text-left">Hasta</th>
-              <th className="p-3 text-left">Final Tanı</th>
-              <th className="p-3 text-left">Güven</th>
-              <th className="p-3 text-left">Not</th>
-              <th className="p-3 text-left">Tarih</th>
-              <th className="p-3 text-right">İşlem</th>
+              <th className="p-3 text-left">{t("history.colPatient")}</th>
+              <th className="p-3 text-left">{t("history.colFinal")}</th>
+              <th className="p-3 text-left">{t("history.colConfidence")}</th>
+              <th className="p-3 text-left">{t("history.colNote")}</th>
+              <th className="p-3 text-left">{t("history.colDate")}</th>
+              <th className="p-3 text-right">{t("history.colAction")}</th>
             </tr>
           </thead>
           <tbody>
             {paged.length === 0 ? (
               <tr>
                 <td colSpan={6} className="p-8 text-center text-slate-500">
-                  Filtrelere uygun geçmiş kayıt bulunamadı.
+                  {t("history.empty")}
                 </td>
               </tr>
             ) : (
@@ -348,7 +350,7 @@ export default function HistoryClient({ rows }: { rows: HistoryRow[] }) {
                         {row.patient.fullName}
                       </div>
                       <div className="text-xs text-slate-500">
-                        TC: {row.patient.tcNo}
+                        {t("history.tcPrefix")} {row.patient.tcNo}
                       </div>
                     </td>
                     <td className="p-3">
@@ -371,7 +373,7 @@ export default function HistoryClient({ rows }: { rows: HistoryRow[] }) {
                     <td className="p-3 text-right">
                       <Button asChild size="sm" variant="outline">
                         <Link href={`/dashboard/hastalar/${row.patient.id}`}>
-                          Hasta Detayı
+                          {t("history.patientDetail")}
                         </Link>
                       </Button>
                     </td>
@@ -385,11 +387,11 @@ export default function HistoryClient({ rows }: { rows: HistoryRow[] }) {
 
       <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 md:flex-row md:items-center md:justify-between">
         <div className="text-sm text-slate-600">
-          Sayfa {safePage} / {totalPages}
+          {t("pagination.pageOf", { current: safePage, total: totalPages })}
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-sm text-slate-600">Sayfa boyutu</span>
+          <span className="text-sm text-slate-600">{t("pagination.pageSize")}</span>
           <select
             className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm"
             value={pageSize}
@@ -414,14 +416,14 @@ export default function HistoryClient({ rows }: { rows: HistoryRow[] }) {
             disabled={safePage <= 1}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
           >
-            Önceki
+            {t("pagination.previous")}
           </Button>
           <Button
             variant="outline"
             disabled={safePage >= totalPages}
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
           >
-            Sonraki
+            {t("pagination.next")}
           </Button>
         </div>
       </div>

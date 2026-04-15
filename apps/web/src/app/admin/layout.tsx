@@ -2,12 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import { Eye, LogOut, ShieldCheck } from "lucide-react";
+import { useTranslation } from "@/components/providers/i18n-provider";
 
 export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const { t } = useTranslation();
   const router = useRouter();
 
   const handleLogout = async () => {
@@ -26,10 +28,12 @@ export default function AdminLayout({
             <div className="flex flex-col">
               <h1 className="text-lg font-black leading-none tracking-tight text-slate-900">
                 RETİNA{" "}
-                <span className="text-[var(--retina-secondary)]">ADMİN</span>
+                <span className="text-[var(--retina-secondary)]">
+                  {t("adminLayout.admin")}
+                </span>
               </h1>
               <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                Yönetim Paneli
+                {t("adminLayout.panel")}
               </span>
             </div>
           </div>
@@ -37,14 +41,14 @@ export default function AdminLayout({
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-semibold text-blue-700">
               <ShieldCheck className="h-4 w-4" />
-              Admin
+              {t("adminLayout.admin")}
             </div>
             <button
               onClick={handleLogout}
               className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
             >
               <LogOut className="h-4 w-4" />
-              Çıkış
+              {t("adminLayout.logout")}
             </button>
           </div>
         </div>

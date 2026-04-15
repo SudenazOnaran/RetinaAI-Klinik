@@ -11,7 +11,6 @@ import {
 import { RetinaAiLogo } from "@/components/icons/logo";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { LogoutButton } from "@/components/layout/logout-button";
-import { LanguageSwitcher } from "@/components/layout/language-switcher";
 import {
   Sidebar,
   SidebarContent,
@@ -115,7 +114,6 @@ export default function DashboardLayout({
             )}
 
             <div className="ml-auto flex items-center gap-2">
-              <LanguageSwitcher />
               <LogoutButton />
             </div>
           </header>

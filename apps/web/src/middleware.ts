@@ -34,6 +34,13 @@ function decodeSessionRole(token?: string | null) {
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  const queryLocaleRaw = req.nextUrl.searchParams.get("locale");
+  const queryLocale =
+    queryLocaleRaw && queryLocaleRaw.toLowerCase().startsWith("en")
+      ? "en"
+      : queryLocaleRaw && queryLocaleRaw.toLowerCase().startsWith("tr")
+        ? "tr"
+        : null;
   if (pathname === "/en/login" || pathname === "/tr/login") {
     const target = new URL("/login", req.url);
     target.search = req.nextUrl.search;
@@ -46,9 +53,24 @@ export function middleware(req: NextRequest) {
   const requestHeaders = new Headers(req.headers);
   requestHeaders.set("x-request-id", requestId);
   const localeCookie = req.cookies.get(LOCALE_COOKIE_NAME)?.value;
-  const localeToPersist = isLocale(localeCookie)
+  const localeToPersist = queryLocale
+    ? queryLocale
+    : isLocale(localeCookie)
     ? localeCookie
     : normalizeLocale(req.headers.get("accept-language"));
+
+  if (queryLocale) {
+    const cleanUrl = req.nextUrl.clone();
+    cleanUrl.searchParams.delete("locale");
+    const response = NextResponse.redirect(cleanUrl);
+    response.headers.set("x-request-id", requestId);
+    response.cookies.set(LOCALE_COOKIE_NAME, localeToPersist, {
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365,
+      sameSite: "lax",
+    });
+    return response;
+  }
 
   if (pathname.startsWith("/admin") && !hasSession) {
     const loginUrl = new URL("/login", req.url);
@@ -91,7 +113,7 @@ export function middleware(req: NextRequest) {
     },
   });
   response.headers.set("x-request-id", requestId);
-  if (!isLocale(localeCookie)) {
+  if (!isLocale(localeCookie) || localeCookie !== localeToPersist) {
     response.cookies.set(LOCALE_COOKIE_NAME, localeToPersist ?? DEFAULT_LOCALE, {
       path: "/",
       maxAge: 60 * 60 * 24 * 365,

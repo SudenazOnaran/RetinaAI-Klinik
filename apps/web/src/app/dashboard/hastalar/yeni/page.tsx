@@ -16,8 +16,10 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, ArrowLeft, UserPlus } from "lucide-react";
 import { createPatientAction } from "@/app/actions/create-patient";
+import { useTranslation } from "@/components/providers/i18n-provider";
 
 export default function YeniHastaPage() {
+  const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(false);
   const [gender, setGender] = useState("");
   const router = useRouter();
@@ -41,12 +43,15 @@ export default function YeniHastaPage() {
     });
 
     if (result.success) {
-      toast({ title: "Başarılı", description: "Hasta kaydı oluşturuldu." });
+      toast({
+        title: t("newPatientPage.toastSuccessTitle"),
+        description: t("newPatientPage.toastSuccessDesc"),
+      });
       router.push("/dashboard/hastalar");
     } else {
       toast({
         variant: "destructive",
-        title: "Hata",
+        title: t("errorPage.title"),
         description: result.error,
       });
     }
@@ -60,7 +65,7 @@ export default function YeniHastaPage() {
         onClick={() => router.back()}
         className="gap-2 border border-[var(--retina-border)] bg-white text-[var(--retina-primary)]"
       >
-        <ArrowLeft size={16} /> Geri Dön
+        <ArrowLeft size={16} /> {t("newPatientPage.back")}
       </Button>
 
       <Card className="border border-[var(--retina-border)] bg-white shadow-sm">
@@ -69,13 +74,13 @@ export default function YeniHastaPage() {
             <div className="rounded-lg bg-[#edf5ff] p-2 text-[var(--retina-primary)]">
               <UserPlus className="h-4 w-4" />
             </div>
-            <CardTitle>Yeni Hasta Kaydı</CardTitle>
+            <CardTitle>{t("newPatientPage.title")}</CardTitle>
           </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-2">
-              <Label>Ad Soyad</Label>
+              <Label>{t("newPatientPage.fields.fullName")}</Label>
               <Input
                 name="fullName"
                 required
@@ -85,7 +90,7 @@ export default function YeniHastaPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>TC No</Label>
+                <Label>{t("newPatientPage.fields.tcNo")}</Label>
                 <Input
                   name="tcNo"
                   required
@@ -102,7 +107,7 @@ export default function YeniHastaPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>Yaş</Label>
+                <Label>{t("newPatientPage.fields.age")}</Label>
                 <Input
                   name="age"
                   type="number"
@@ -113,35 +118,35 @@ export default function YeniHastaPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>Cinsiyet</Label>
+              <Label>{t("newPatientPage.fields.gender")}</Label>
               <Select onValueChange={setGender}>
                 <SelectTrigger className="border-[var(--retina-border)] focus:ring-[#edf5ff]">
-                  <SelectValue placeholder="Seçiniz" />
+                  <SelectValue placeholder={t("newPatientPage.fields.genderPlaceholder")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Erkek">Erkek</SelectItem>
-                  <SelectItem value="Kadın">Kadın</SelectItem>
+                  <SelectItem value="Erkek">{t("newPatientPage.fields.genderMale")}</SelectItem>
+                  <SelectItem value="Kadın">{t("newPatientPage.fields.genderFemale")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="grid grid-cols-2 gap-4 pt-4 border-t">
               <div className="space-y-2">
-                <Label>Diyabet Yılı (Opsiyonel)</Label>
+                <Label>{t("newPatientPage.fields.diabetesYearsOptional")}</Label>
                 <Input
                   name="diabetesYears"
                   type="number"
-                  placeholder="Örn: 5"
+                  placeholder={t("newPatientPage.fields.diabetesYearsPlaceholder")}
                   className="border-[var(--retina-border)] focus-visible:ring-[#edf5ff]"
                 />
               </div>
               <div className="space-y-2">
-                <Label>HbA1c (Opsiyonel)</Label>
+                <Label>{t("newPatientPage.fields.hba1cOptional")}</Label>
                 <Input
                   name="hba1c"
                   type="number"
                   step="0.1"
-                  placeholder="Örn: 6.5"
+                  placeholder={t("newPatientPage.fields.hba1cPlaceholder")}
                   className="border-[var(--retina-border)] focus-visible:ring-[#edf5ff]"
                 />
               </div>
@@ -152,7 +157,7 @@ export default function YeniHastaPage() {
               className="w-full bg-[var(--retina-primary)] text-white hover:bg-[var(--retina-primary-deep)]"
               disabled={isLoading}
             >
-              {isLoading ? <Loader2 className="animate-spin" /> : "Kaydet"}
+              {isLoading ? <Loader2 className="animate-spin" /> : t("newPatientPage.save")}
             </Button>
           </form>
         </CardContent>

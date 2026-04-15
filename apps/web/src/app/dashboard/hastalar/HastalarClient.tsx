@@ -20,6 +20,7 @@ import { useToast } from "@/hooks/use-toast";
 import { bulkDeletePatientsAction } from "@/app/actions/bulk-delete-patients";
 import { bulkUpdatePatientRiskAction } from "@/app/actions/bulk-update-patient-risk";
 import { drLabelTr } from "@/lib/dr-label-tr";
+import { useTranslation } from "@/components/providers/i18n-provider";
 
 type Patient = {
   id: string;
@@ -73,7 +74,7 @@ function normalizeRisk(value?: string) {
 function getEffectiveRisk(patient: Patient): string {
   const analysesCount = Number(patient._count?.analyses || 0);
   if (analysesCount === 0) {
-    return "Analiz Yapılmadı";
+    return "analiz_yapilmadi";
   }
 
   const feedback = patient.drFeedback;
@@ -83,93 +84,99 @@ function getEffectiveRisk(patient: Patient): string {
       ? feedback
       : undefined;
 
-  return cleanFeedback || patient.aiResult || patient.risk || "Yok";
+  return cleanFeedback || patient.aiResult || patient.risk || "yok";
 }
 
-function getRiskStyle(risk: string) {
+function getRiskStyle(
+  risk: string,
+  t: (key: string, params?: Record<string, string | number>) => string,
+) {
   const normalized = normalizeRisk(risk);
 
   if (["analiz_yapilmadi", "analiz_bekliyor"].includes(normalized)) {
     return {
-      label: "ANALİZ YAPILMADI",
+      label: t("patientsList.badgeNoAnalysis"),
       className: "bg-slate-100 text-slate-600 border-slate-200",
     };
   }
 
   if (["proliferative_dr", "cok_ileri_evre"].includes(normalized)) {
     return {
-      label: "ÇOK YÜKSEK RİSK",
+      label: t("patientsList.badgeVeryHighRisk"),
       className: "bg-amber-100/80 text-amber-700 border-amber-200",
     };
   }
 
   if (["agir_evre", "severe"].includes(normalized)) {
     return {
-      label: "YÜKSEK RİSK",
+      label: t("patientsList.badgeHighRisk"),
       className: "bg-amber-100/80 text-amber-700 border-amber-200",
     };
   }
 
   if (["kritik_risk"].includes(normalized)) {
     return {
-      label: "ÇOK YÜKSEK RİSK",
+      label: t("patientsList.badgeVeryHighRisk"),
       className: "bg-amber-100/80 text-amber-700 border-amber-200",
     };
   }
 
   if (["yuksek_risk"].includes(normalized)) {
     return {
-      label: "YÜKSEK RİSK",
+      label: t("patientsList.badgeHighRisk"),
       className: "bg-amber-100/80 text-amber-700 border-amber-200",
     };
   }
 
   if (["moderate", "orta_evre", "orta"].includes(normalized)) {
     return {
-      label: "ORTA RİSK",
+      label: t("patientsList.badgeMediumRisk"),
       className: "bg-[#efe7da] text-[#8b6a49] border-[#d9cab5]",
     };
   }
 
   if (["orta_risk"].includes(normalized)) {
     return {
-      label: "ORTA RİSK",
+      label: t("patientsList.badgeMediumRisk"),
       className: "bg-[#efe7da] text-[#8b6a49] border-[#d9cab5]",
     };
   }
 
   if (["mild", "hafif_evre"].includes(normalized)) {
     return {
-      label: "DÜŞÜK RİSK",
+      label: t("patientsList.badgeLowRisk"),
       className: "bg-[#e8f2ef] text-[#5b8d82] border-[#cfe0dc]",
     };
   }
 
   if (["dusuk_risk"].includes(normalized)) {
     return {
-      label: "DÜŞÜK RİSK",
+      label: t("patientsList.badgeLowRisk"),
       className: "bg-[#e8f2ef] text-[#5b8d82] border-[#cfe0dc]",
     };
   }
 
   if (["no_dr", "healthy", "saglikli", "yok"].includes(normalized)) {
     return {
-      label: "SAĞLIKLI",
+      label: t("patientsList.badgeHealthy"),
       className: "bg-[#dff0ea] text-[#4c8a7d] border-[#c5ddd6]",
     };
   }
 
   return {
-    label: "ANALİZ BEKLİYOR",
+    label: t("patientsList.badgeAwaitingAnalysis"),
     className: "bg-slate-100 text-slate-500 border-slate-200",
   };
 }
 
-function getEmergencyTag(patient: Patient) {
+function getEmergencyTag(
+  patient: Patient,
+  t: (key: string, params?: Record<string, string | number>) => string,
+) {
   const analysesCount = Number(patient._count?.analyses || 0);
   if (analysesCount === 0) {
     return {
-      label: "DEĞERLENDİRME",
+      label: t("patientsList.emergencyAssessment"),
       className: "bg-slate-100 text-slate-600 border-slate-200",
       isEmergency: false,
     };
@@ -187,14 +194,14 @@ function getEmergencyTag(patient: Patient) {
 
   if (emergencyLabels.includes(normalized)) {
     return {
-      label: "ACİL",
+      label: t("patientsList.emergencyUrgent"),
       className: "bg-rose-100 text-rose-700 border-rose-200",
       isEmergency: true,
     };
   }
 
   return {
-    label: "RUTİN",
+    label: t("patientsList.emergencyRoutine"),
     className: "bg-emerald-100 text-emerald-700 border-emerald-200",
     isEmergency: false,
   };
@@ -234,6 +241,7 @@ export default function HastalarClient({
   pageSize,
   initialFilters,
 }: HastalarClientProps) {
+  const { t } = useTranslation();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
@@ -382,19 +390,19 @@ export default function HastalarClient({
       }
 
       toast({
-        title: "Toplu risk güncellendi",
-        description: `${res.updatedCount} hasta kaydı güncellendi.`,
+        title: t("patientsList.toastBulkRiskOk"),
+        description: t("patientsList.toastBulkRiskDesc", { count: res.updatedCount ?? 0 }),
       });
       clearSelection();
       router.refresh();
     } catch (error) {
       toast({
         variant: "destructive",
-        title: "Hata",
+        title: t("errorPage.title"),
         description:
           error instanceof Error
             ? error.message
-            : "Toplu güncelleme başarısız.",
+            : t("patientsList.toastBulkRiskFail"),
       });
     } finally {
       setIsBulkBusy(false);
@@ -405,7 +413,7 @@ export default function HastalarClient({
     if (selectedIds.length === 0) return;
 
     const ok = window.confirm(
-      `${selectedIds.length} hasta kaydi silinecek. Bu isleme bagli analizler de kalici olarak silinir. Devam edilsin mi?`,
+      t("patientsList.bulkDeleteConfirm", { count: selectedIds.length }),
     );
 
     if (!ok) return;
@@ -418,17 +426,17 @@ export default function HastalarClient({
       }
 
       toast({
-        title: "Toplu silme tamamlandı",
-        description: `${res.deletedCount} hasta kaydı silindi.`,
+        title: t("patientsList.toastBulkDeleteOk"),
+        description: t("patientsList.toastBulkDeleteDesc", { count: res.deletedCount ?? 0 }),
       });
       clearSelection();
       router.refresh();
     } catch (error) {
       toast({
         variant: "destructive",
-        title: "Hata",
+        title: t("errorPage.title"),
         description:
-          error instanceof Error ? error.message : "Toplu silme başarısız.",
+          error instanceof Error ? error.message : t("patientsList.toastBulkDeleteFail"),
       });
     } finally {
       setIsBulkBusy(false);
@@ -438,13 +446,16 @@ export default function HastalarClient({
   return (
     <div className="space-y-6">
       <div className="sr-only" aria-live="polite">
-        Toplam {totalFiltered} sonuç. Sayfada {patients.length} kayıt, seçili{" "}
-        {selectedIds.length} kayıt.
+        {t("patientsList.a11ySummary", {
+          total: totalFiltered,
+          pageCount: patients.length,
+          selected: selectedIds.length,
+        })}
       </div>
 
       <section
         className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5"
-        aria-label="Hasta filtreleme ve toplu işlem alanı"
+        aria-label={t("patientsList.searchArea")}
       >
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="sm:col-span-2 lg:col-span-1">
@@ -452,13 +463,13 @@ export default function HastalarClient({
               htmlFor="patients-search"
               className="mb-1 block text-xs font-medium text-slate-600"
             >
-              Hasta Arama
+              {t("patientsList.patientSearch")}
             </label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <Input
                 id="patients-search"
-                placeholder="Ad veya TC ile ara"
+                placeholder={t("patientsList.placeholderSearch")}
                 className="pl-9"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -472,7 +483,7 @@ export default function HastalarClient({
               htmlFor="risk-filter"
               className="mb-1 block text-xs font-medium text-slate-600"
             >
-              Risk
+              {t("patientsList.riskLabelShort")}
             </label>
             <select
               id="risk-filter"
@@ -483,13 +494,13 @@ export default function HastalarClient({
                 setRiskFilter(value);
                 updateQuery({ risk: value, page: 1 });
               }}
-              aria-label="Risk filtresi"
+              aria-label={t("patientsList.a11yRiskFilter")}
             >
-              <option value="all">Tüm riskler</option>
-              <option value="high">Yüksek risk</option>
-              <option value="medium">Orta risk</option>
-              <option value="low">Düşük risk</option>
-              <option value="none">Analiz bekliyor</option>
+              <option value="all">{t("patientsList.riskAll")}</option>
+              <option value="high">{t("patientsList.riskHigh")}</option>
+              <option value="medium">{t("patientsList.riskMedium")}</option>
+              <option value="low">{t("patientsList.riskLow")}</option>
+              <option value="none">{t("patientsList.riskNone")}</option>
             </select>
           </div>
 
@@ -498,7 +509,7 @@ export default function HastalarClient({
               htmlFor="analysis-filter"
               className="mb-1 block text-xs font-medium text-slate-600"
             >
-              Analiz Sayısı
+              {t("patientsList.analysisCount")}
             </label>
             <select
               id="analysis-filter"
@@ -509,12 +520,12 @@ export default function HastalarClient({
                 setAnalysisFilter(value);
                 updateQuery({ analysis: value, page: 1 });
               }}
-              aria-label="Analiz sayısı filtresi"
+              aria-label={t("patientsList.a11yAnalysisCountFilter")}
             >
-              <option value="all">Tüm analiz sayıları</option>
-              <option value="none">Analizsiz</option>
-              <option value="1-3">1-3 analiz</option>
-              <option value="4+">4+ analiz</option>
+              <option value="all">{t("patientsList.analysisAll")}</option>
+              <option value="none">{t("patientsList.analysisNone")}</option>
+              <option value="1-3">{t("patientsList.analysis13")}</option>
+              <option value="4+">{t("patientsList.analysis4plus")}</option>
             </select>
           </div>
 
@@ -523,7 +534,7 @@ export default function HastalarClient({
               htmlFor="sort-filter"
               className="mb-1 block text-xs font-medium text-slate-600"
             >
-              Sıralama
+              {t("patientsList.sort")}
             </label>
             <select
               id="sort-filter"
@@ -534,13 +545,13 @@ export default function HastalarClient({
                 setSort(value);
                 updateQuery({ sort: value, page: 1 });
               }}
-              aria-label="Sıralama"
+              aria-label={t("patientsList.a11ySort")}
             >
-              <option value="createdAt_desc">En yeni kayıtlar</option>
-              <option value="createdAt_asc">En eski kayıtlar</option>
-              <option value="fullName_asc">Ada göre A-Z</option>
-              <option value="fullName_desc">Ada göre Z-A</option>
-              <option value="analysis_desc">Analiz sayısı fazla olandan</option>
+              <option value="createdAt_desc">{t("patientsList.sortNewest")}</option>
+              <option value="createdAt_asc">{t("patientsList.sortOldest")}</option>
+              <option value="fullName_asc">{t("patientsList.sortNameAZ")}</option>
+              <option value="fullName_desc">{t("patientsList.sortNameZA")}</option>
+              <option value="analysis_desc">{t("patientsList.sortAnalysisDesc")}</option>
             </select>
           </div>
         </div>
@@ -551,7 +562,7 @@ export default function HastalarClient({
               htmlFor="date-from-filter"
               className="mb-1 block text-xs font-medium text-slate-600"
             >
-              Başlangıç
+              {t("patientsList.dateStart")}
             </label>
             <Input
               id="date-from-filter"
@@ -563,7 +574,7 @@ export default function HastalarClient({
                 setDateFrom(value);
                 updateQuery({ dateFrom: value, page: 1 });
               }}
-              aria-label="Başlangıç tarihi"
+              aria-label={t("patientsList.a11yStartDate")}
             />
           </div>
 
@@ -572,7 +583,7 @@ export default function HastalarClient({
               htmlFor="date-to-filter"
               className="mb-1 block text-xs font-medium text-slate-600"
             >
-              Bitiş
+              {t("patientsList.dateEnd")}
             </label>
             <Input
               id="date-to-filter"
@@ -584,7 +595,7 @@ export default function HastalarClient({
                 setDateTo(value);
                 updateQuery({ dateTo: value, page: 1 });
               }}
-              aria-label="Bitiş tarihi"
+              aria-label={t("patientsList.a11yEndDate")}
             />
           </div>
 
@@ -594,9 +605,9 @@ export default function HastalarClient({
             className="h-10 border-[var(--retina-secondary)] text-[var(--retina-secondary)] transition-colors hover:bg-[var(--retina-secondary)] hover:text-white lg:justify-self-end"
             onClick={resetFilters}
             disabled={!hasActiveFilters}
-            aria-label="Filtreleri sıfırla"
+            aria-label={t("patientsList.a11yResetFilters")}
           >
-            <RefreshCw className="mr-2 h-4 w-4" /> Filtreleri Sıfırla
+            <RefreshCw className="mr-2 h-4 w-4" /> {t("patientsList.resetFilters")}
           </Button>
         </div>
 
@@ -605,33 +616,33 @@ export default function HastalarClient({
             <Checkbox
               checked={isAllPageSelected}
               onCheckedChange={(value) => toggleSelectPage(Boolean(value))}
-              aria-label="Bu sayfadaki tüm kayıtları seç"
+              aria-label={t("patientsList.selectPageAria")}
             />
-            <span>Bu sayfadaki tüm kayıtları seç ({patients.length})</span>
+            <span>{t("patientsList.selectPageLabel", { count: patients.length })}</span>
           </div>
         </div>
 
         <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
           <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-[var(--retina-secondary)]">
-            Toplu İşlemler
+            {t("patientsList.bulkSection")}
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <label htmlFor="bulk-risk-value" className="sr-only">
-              Toplu risk değeri
+              {t("patientsList.bulkRisk")}
             </label>
             <select
               id="bulk-risk-value"
               className="h-10 min-w-[170px] rounded-md border border-slate-300 bg-white px-3 text-sm"
               value={bulkRiskValue}
               onChange={(e) => setBulkRiskValue(e.target.value)}
-              aria-label="Toplu risk değeri"
+              aria-label={t("patientsList.a11yBulkRiskValue")}
             >
-              <option value="No_DR">Toplu risk: {drLabelTr("No_DR")}</option>
-              <option value="Mild">Toplu risk: {drLabelTr("Mild")}</option>
-              <option value="Moderate">Toplu risk: {drLabelTr("Moderate")}</option>
-              <option value="Severe">Toplu risk: {drLabelTr("Severe")}</option>
+              <option value="No_DR">{t("patientsList.bulkRiskPrefix")}{drLabelTr("No_DR")}</option>
+              <option value="Mild">{t("patientsList.bulkRiskPrefix")}{drLabelTr("Mild")}</option>
+              <option value="Moderate">{t("patientsList.bulkRiskPrefix")}{drLabelTr("Moderate")}</option>
+              <option value="Severe">{t("patientsList.bulkRiskPrefix")}{drLabelTr("Severe")}</option>
               <option value="Proliferative_DR">
-                Toplu risk: {drLabelTr("Proliferative_DR")}
+                {t("patientsList.bulkRiskPrefix")}{drLabelTr("Proliferative_DR")}
               </option>
             </select>
 
@@ -639,22 +650,22 @@ export default function HastalarClient({
               variant="outline"
               disabled={selectedIds.length === 0 || isBulkBusy}
               onClick={runBulkRiskUpdate}
-              aria-label="Seçili hastaların riskini güncelle"
+              aria-label={t("patientsList.a11yBulkUpdateSelected")}
             >
-              <RefreshCw className="mr-2 h-4 w-4" /> Seçilileri Güncelle
+              <RefreshCw className="mr-2 h-4 w-4" /> {t("patientsList.bulkUpdate")}
             </Button>
 
             <Button
               variant="destructive"
               disabled={selectedIds.length === 0 || isBulkBusy}
               onClick={runBulkDelete}
-              aria-label="Seçili hastaları sil"
+              aria-label={t("patientsList.a11yBulkDeleteSelected")}
             >
-              <Trash2 className="mr-2 h-4 w-4" /> Seçilileri Sil
+              <Trash2 className="mr-2 h-4 w-4" /> {t("patientsList.bulkDelete")}
             </Button>
 
             <span className="ml-auto text-xs font-medium text-[var(--retina-secondary)]">
-              Seçili: {selectedIds.length}
+              {t("patientsList.selectedCount", { count: selectedIds.length })}
             </span>
           </div>
         </div>
@@ -668,12 +679,12 @@ export default function HastalarClient({
                 <Checkbox
                   checked={isAllPageSelected}
                   onCheckedChange={(v) => toggleSelectPage(Boolean(v))}
-                  aria-label="Bu sayfadaki tüm kayıtları seç"
+                  aria-label={t("patientsList.a11ySelectAllOnPage")}
                 />
-                <span>Tümünü seç ({patients.length})</span>
+                <span>{t("patientsList.selectAllShort", { count: patients.length })}</span>
               </div>
               <span id="patients-filter-summary">
-                Toplam sonuç: {totalFiltered}
+                {t("pagination.totalResults", { count: totalFiltered })}
               </span>
             </div>
 
@@ -682,32 +693,31 @@ export default function HastalarClient({
                 <div className="hidden overflow-x-auto md:block">
                   <table
                     className="w-full text-sm"
-                    aria-label="Hasta listesi tablosu"
+                    aria-label={t("patientsList.a11yPatientsTable")}
                   >
                     <caption className="sr-only">
-                      Son analiz tarihi, güven skoru ve acil etiketi ile hasta
-                      listesi
+                      {t("patientsList.a11yPatientsTableCaption")}
                     </caption>
                     <thead className="bg-slate-50 text-slate-600">
                       <tr>
                         <th scope="col" className="w-10 px-3 py-3 text-left" />
                         <th scope="col" className="px-3 py-3 text-left">
-                          Hasta
+                          {t("patientsList.colPatient")}
                         </th>
                         <th scope="col" className="px-3 py-3 text-left">
-                          Son Analiz Tarihi
+                          {t("patientsList.colLastAnalysis")}
                         </th>
                         <th scope="col" className="px-3 py-3 text-left">
-                          Son Güven Skoru
+                          {t("patientsList.colConfidence")}
                         </th>
                         <th scope="col" className="px-3 py-3 text-left">
-                          Acil Etiketi
+                          {t("patientsList.colEmergency")}
                         </th>
                         <th scope="col" className="px-3 py-3 text-left">
-                          Dr Risk Seviyesi
+                          {t("patientsList.colDrRisk")}
                         </th>
                         <th scope="col" className="px-3 py-3 text-right">
-                          Eylem
+                          {t("patientsList.colActions")}
                         </th>
                       </tr>
                     </thead>
@@ -717,11 +727,8 @@ export default function HastalarClient({
                         const analysisCount = Number(
                           patient._count?.analyses || 0,
                         );
-                        const riskInfo =
-                          analysisCount === 0
-                            ? getRiskStyle("Analiz Yapılmadı")
-                            : getRiskStyle(effectiveRisk);
-                        const emergencyTag = getEmergencyTag(patient);
+                        const riskInfo = getRiskStyle(effectiveRisk, t);
+                        const emergencyTag = getEmergencyTag(patient, t);
                         const checked = selectedIds.includes(patient.id);
 
                         return (
@@ -743,7 +750,7 @@ export default function HastalarClient({
                                 {patient.fullName}
                               </div>
                               <div className="mt-1 text-xs text-slate-500">
-                                TC: {patient.tcNo}
+                                {t("patientsList.tcPrefix")} {patient.tcNo}
                               </div>
                             </td>
                             <td className="px-3 py-3 text-slate-700">
@@ -778,7 +785,7 @@ export default function HastalarClient({
                                   href={`/dashboard/hastalar/${patient.id}?tab=report-create`}
                                   className="inline-flex items-center gap-1 px-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--retina-primary)]"
                                 >
-                                  Rapor Oluştur <ChevronRight size={14} />
+                                  {t("patientsList.createReport")} <ChevronRight size={14} />
                                 </Link>
                               </Button>
                             </td>
@@ -793,11 +800,8 @@ export default function HastalarClient({
                   {patients.map((patient) => {
                     const effectiveRisk = getEffectiveRisk(patient);
                     const analysisCount = Number(patient._count?.analyses || 0);
-                    const riskInfo =
-                      analysisCount === 0
-                        ? getRiskStyle("Analiz Yapılmadı")
-                        : getRiskStyle(effectiveRisk);
-                    const emergencyTag = getEmergencyTag(patient);
+                    const riskInfo = getRiskStyle(effectiveRisk, t);
+                    const emergencyTag = getEmergencyTag(patient, t);
                     const checked = selectedIds.includes(patient.id);
 
                     return (
@@ -818,7 +822,7 @@ export default function HastalarClient({
                               {patient.fullName}
                             </p>
                             <p className="mt-1 text-xs text-slate-500">
-                              TC: {patient.tcNo}
+                              {t("patientsList.tcPrefix")} {patient.tcNo}
                             </p>
                           </div>
                           <Badge
@@ -830,11 +834,11 @@ export default function HastalarClient({
                         </div>
                         <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
                           <div className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
-                            Son analiz:{" "}
+                            {t("patientsList.lastAnalysisShort")}{" "}
                             {formatDateCell(patient.latestAnalysisAt)}
                           </div>
                           <div className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
-                            Güven: {formatConfidence(patient.latestConfidence)}
+                            {t("patientsList.confidenceLabel")} {formatConfidence(patient.latestConfidence)}
                           </div>
                         </div>
                         <div className="mt-3 flex items-center justify-between">
@@ -853,7 +857,7 @@ export default function HastalarClient({
                               href={`/dashboard/hastalar/${patient.id}?tab=report-create`}
                               className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--retina-primary)]"
                             >
-                              Rapor Oluştur
+                              {t("patientsList.createReport")}
                             </Link>
                           </Button>
                         </div>
@@ -868,10 +872,10 @@ export default function HastalarClient({
                   <Search className="h-8 w-8 text-slate-400" />
                 </div>
                 <p className="text-lg font-medium text-slate-600">
-                  Sonuç bulunamadı
+                  {t("patientsList.emptyTitle")}
                 </p>
                 <p className="text-sm text-slate-400">
-                  Filtreleri genişletip tekrar deneyin.
+                  {t("patientsList.emptyHint")}
                 </p>
               </div>
             )}
@@ -879,11 +883,11 @@ export default function HastalarClient({
 
           <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 md:flex-row md:items-center md:justify-between">
             <div className="text-sm text-slate-600">
-              Sayfa {page} / {totalPages}
+          {t("pagination.pageOf", { current: page, total: totalPages })}
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="text-sm text-slate-600">Sayfa boyutu</span>
+          <span className="text-sm text-slate-600">{t("pagination.pageSize")}</span>
               <select
                 className="h-10 rounded-md border border-slate-300 bg-white px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--retina-primary)]"
                 value={pageSize}
@@ -895,7 +899,7 @@ export default function HastalarClient({
                     page: 1,
                   });
                 }}
-                aria-label="Sayfa boyutu seçimi"
+                aria-label={t("patientsList.a11yPageSize")}
               >
                 {PAGE_SIZE_OPTIONS.map((size) => (
                   <option key={size} value={size}>
@@ -912,7 +916,7 @@ export default function HastalarClient({
                 disabled={page <= 1}
                 onClick={() => updateQuery({ page: Math.max(1, page - 1) })}
               >
-                Önceki
+                {t("pagination.previous")}
               </Button>
               <Button
                 variant="outline"
@@ -922,7 +926,7 @@ export default function HastalarClient({
                   updateQuery({ page: Math.min(totalPages, page + 1) })
                 }
               >
-                Sonraki
+                {t("pagination.next")}
               </Button>
             </div>
           </div>
@@ -931,10 +935,10 @@ export default function HastalarClient({
         <aside className="hidden xl:block">
           <div
             className="sticky top-24 space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-            aria-label="Hızlı işlemler"
+            aria-label={t("patientsList.quickActionsAria")}
           >
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[var(--retina-secondary)]">
-              Hızlı İşlemler
+              {t("patientsList.quickActions")}
             </p>
 
             <Button
@@ -942,7 +946,7 @@ export default function HastalarClient({
               className="h-11 w-full justify-between bg-[var(--retina-primary)] text-white hover:bg-[var(--retina-primary-deep)] hover:text-white"
             >
               <Link href="/dashboard/hastalar/yeni">
-                Yeni Hasta Kaydı <Plus className="h-4 w-4" />
+                {t("patientsList.newPatientFull")} <Plus className="h-4 w-4" />
               </Link>
             </Button>
 
@@ -952,7 +956,7 @@ export default function HastalarClient({
               className="h-11 w-full justify-between"
             >
               <Link href="/dashboard/raporlar">
-                Rapor Geçmişi <FileText className="h-4 w-4" />
+                {t("patientsList.reportHistory")} <FileText className="h-4 w-4" />
               </Link>
             </Button>
 
@@ -962,7 +966,7 @@ export default function HastalarClient({
 
       <nav
         className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 p-3 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur xl:hidden"
-        aria-label="Mobil hızlı işlemler"
+        aria-label={t("patientsList.mobileQuickAria")}
       >
         <div className="mx-auto grid max-w-7xl grid-cols-2 gap-2">
           <Button
@@ -970,12 +974,12 @@ export default function HastalarClient({
             className="h-12 rounded-xl bg-[var(--retina-primary)] text-white"
           >
             <Link href="/dashboard/hastalar/yeni">
-              <Plus className="mr-2 h-4 w-4" /> Yeni Hasta
+              <Plus className="mr-2 h-4 w-4" /> {t("patientsList.newPatientShort")}
             </Link>
           </Button>
           <Button asChild variant="outline" className="h-12 rounded-xl">
             <Link href="/dashboard/raporlar">
-              Raporlar <ArrowUpRight className="ml-2 h-4 w-4" />
+              {t("patientsList.reportsShort")} <ArrowUpRight className="ml-2 h-4 w-4" />
             </Link>
           </Button>
         </div>

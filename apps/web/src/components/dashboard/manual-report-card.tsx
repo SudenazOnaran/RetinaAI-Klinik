@@ -23,6 +23,7 @@ import {
   ImageAnalysisCard,
 } from "@/components/dashboard/image-analysis-card";
 import { ChevronDown, ClipboardPlus, Sparkles, X } from "lucide-react";
+import { useTranslation } from "@/components/providers/i18n-provider";
 
 type ManualReportCardProps = {
   patientId: string;
@@ -91,11 +92,12 @@ export function ManualReportCard({
   patientInfo,
   doctorName,
 }: ManualReportCardProps) {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
   const [aiDraft, setAiDraft] = useState<AiAnalysisDraft | null>(null);
   const [isAiOpen, setIsAiOpen] = useState(false);
-  const [reportTitle, setReportTitle] = useState("Göz Muayene Raporu");
+  const [reportTitle, setReportTitle] = useState("");
   const [anamnesis, setAnamnesis] = useState("");
   const [examFindings, setExamFindings] = useState("");
   const [labResults, setLabResults] = useState("");
@@ -117,15 +119,15 @@ export function ManualReportCard({
 
       const aiSummary = aiDraft
         ? [
-            `AI Analiz Sonucu: ${aiDraft.aiResult}`,
-            `AI Güven Oranı: %${Math.round((aiDraft.confidence || 0) * 100)}`,
-            `AI Düzeltme: ${aiDraft.correctionLabel || "Yok"}`,
+            `${t("manualReport.aiResult")}: ${aiDraft.aiResult}`,
+            `${t("manualReport.aiConfidence")}: %${Math.round((aiDraft.confidence || 0) * 100)}`,
+            `${t("manualReport.aiCorrection")}: ${aiDraft.correctionLabel || t("manualReport.none")}`,
           ].join(" | ")
-        : "AI Analizi Eklenmedi";
+        : t("manualReport.aiNotIncluded");
 
       const reportBody = JSON.stringify({
         version: REPORT_FORMAT_VERSION,
-        reportTitle: reportTitle.trim() || "Göz Muayene Raporu",
+        reportTitle: reportTitle.trim() || t("manualReport.defaultTitle"),
         reportDate: reportDate || "-",
         aiIncluded: Boolean(aiDraft),
         patientInfo: {
@@ -134,7 +136,7 @@ export function ManualReportCard({
           age: patientInfo.age ?? null,
           gender: patientInfo.gender ?? null,
         },
-        doctorName: doctorName || "Belirtilmedi",
+        doctorName: doctorName || t("manualReport.notSpecified"),
         sections: {
           anamnesis: anamnesis.trim() || "-",
           examFindings: examFindings.trim() || "-",
@@ -160,10 +162,10 @@ export function ManualReportCard({
       });
 
       toast({
-        title: "Rapor kaydedildi",
+        title: t("manualReport.toastSavedTitle"),
         description: aiDraft
-          ? "AI destekli klinik rapor başarıyla oluşturuldu."
-          : "Görüntü yüklemeden klinik rapor başarıyla oluşturuldu.",
+          ? t("manualReport.toastSavedWithAi")
+          : t("manualReport.toastSavedNoAi"),
         duration: 4000,
       });
 
@@ -177,11 +179,11 @@ export function ManualReportCard({
     } catch (error) {
       toast({
         variant: "destructive",
-        title: "Hata",
+        title: t("errorPage.title"),
         description:
           error instanceof Error
             ? error.message
-            : "Manuel rapor kaydedilemedi.",
+            : t("manualReport.toastSaveFail"),
       });
     } finally {
       setBusy(false);
@@ -193,11 +195,10 @@ export function ManualReportCard({
       <CardHeader className="border-b border-slate-100">
         <CardTitle className="flex items-center gap-2 text-slate-900">
           <ClipboardPlus className="h-5 w-5 text-[var(--retina-primary)]" />
-          Rapor Oluştur
+          {t("manualReport.title")}
         </CardTitle>
         <CardDescription>
-          Görsel yükleme zorunlu değildir. Standart göz kliniği rapor alanlarını
-          doldurarak doğrudan rapor oluşturabilirsiniz.
+          {t("manualReport.description")}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 pt-4">
@@ -205,10 +206,10 @@ export function ManualReportCard({
           <div className="flex items-start justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
             <div>
               <p className="flex items-center gap-2 font-medium">
-                <Sparkles className="h-4 w-4" /> AI analizi rapora eklenecek
+                <Sparkles className="h-4 w-4" /> {t("manualReport.aiWillInclude")}
               </p>
               <p className="mt-1 text-xs text-emerald-800">
-                Sonuç: {aiDraft.correctionLabel || aiDraft.aiResult} | Güven: %
+                {t("manualReport.resultPrefix")} {aiDraft.correctionLabel || aiDraft.aiResult} | {t("manualReport.confidencePrefix")} %
                 {Math.round((aiDraft.confidence || 0) * 100)}
               </p>
             </div>
@@ -223,24 +224,22 @@ export function ManualReportCard({
           </div>
         ) : (
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-            AI analizi zorunlu değildir. İsterseniz aşağıdaki AI bölümünden
-            analiz yaparak sonucu bu rapora tek kaydetme akışıyla dahil
-            edebilirsiniz.
+            {t("manualReport.aiOptionalHint")}
           </div>
         )}
 
         <div className="grid gap-3 md:grid-cols-2">
           <label className="space-y-1 text-sm text-slate-700 md:col-span-2">
-            <span>Rapor Başlığı</span>
+            <span>{t("manualReport.reportTitle")}</span>
             <Input
               value={reportTitle}
               onChange={(e) => setReportTitle(e.target.value)}
-              placeholder="Örn: Göz Muayene Raporu"
+              placeholder={t("manualReport.reportTitlePlaceholder")}
             />
           </label>
 
           <label className="space-y-1 text-sm text-slate-700">
-            <span>Hasta Kimlik Bilgileri</span>
+            <span>{t("manualReport.patientIdentity")}</span>
             <Input
               value={`${patientInfo.fullName} | T.C: ${patientInfo.tcNo}`}
               disabled
@@ -248,7 +247,7 @@ export function ManualReportCard({
           </label>
 
           <label className="space-y-1 text-sm text-slate-700">
-            <span>Rapor Tarihi</span>
+            <span>{t("manualReport.reportDate")}</span>
             <Input
               type="date"
               value={reportDate}
@@ -257,57 +256,57 @@ export function ManualReportCard({
           </label>
 
           <label className="space-y-1 text-sm text-slate-700">
-            <span>Doktor Bilgisi</span>
-            <Input value={doctorName || "Belirtilmedi"} disabled />
+            <span>{t("manualReport.doctorInfo")}</span>
+            <Input value={doctorName || t("manualReport.notSpecified")} disabled />
           </label>
         </div>
 
         <label className="space-y-1 text-sm text-slate-700 block">
-          <span>Klinik Öykü (Anamnez)</span>
+          <span>{t("manualReport.anamnesis")}</span>
           <Textarea
             value={anamnesis}
             onChange={(e) => setAnamnesis(e.target.value)}
-            placeholder="Hastanın şikayeti, semptom süresi, önceki tedavi öyküsü"
+            placeholder={t("manualReport.anamnesisPlaceholder")}
             rows={3}
           />
         </label>
 
         <label className="space-y-1 text-sm text-slate-700 block">
-          <span>Muayene Bulguları</span>
+          <span>{t("manualReport.examFindings")}</span>
           <Textarea
             value={examFindings}
             onChange={(e) => setExamFindings(e.target.value)}
-            placeholder="Görme keskinliği, biyomikroskopi, fundus muayenesi bulguları"
+            placeholder={t("manualReport.examFindingsPlaceholder")}
             rows={3}
           />
         </label>
 
         <label className="space-y-1 text-sm text-slate-700 block">
-          <span>Laboratuvar Sonuçları</span>
+          <span>{t("manualReport.labResults")}</span>
           <Textarea
             value={labResults}
             onChange={(e) => setLabResults(e.target.value)}
-            placeholder="HbA1c, glukoz, lipid profili gibi laboratuvar bilgileri"
+            placeholder={t("manualReport.labResultsPlaceholder")}
             rows={3}
           />
         </label>
 
         <label className="space-y-1 text-sm text-slate-700 block">
-          <span>Teşhis / Klinik Değerlendirme</span>
+          <span>{t("manualReport.clinicalAssessment")}</span>
           <Textarea
             value={clinicalAssessment}
             onChange={(e) => setClinicalAssessment(e.target.value)}
-            placeholder="Klinik değerlendirme ve nihai tanı"
+            placeholder={t("manualReport.clinicalAssessmentPlaceholder")}
             rows={4}
           />
         </label>
 
         <label className="space-y-1 text-sm text-slate-700 block">
-          <span>Tedavi ve Öneriler</span>
+          <span>{t("manualReport.treatment")}</span>
           <Textarea
             value={treatmentRecommendations}
             onChange={(e) => setTreatmentRecommendations(e.target.value)}
-            placeholder="Tedavi planı, ilaç önerileri ve kontrol önerisi"
+            placeholder={t("manualReport.treatmentPlaceholder")}
             rows={4}
           />
         </label>
@@ -323,7 +322,7 @@ export function ManualReportCard({
               variant="ghost"
               className="flex w-full items-center justify-between rounded-none px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-100"
             >
-              <span>AI Analiz (Opsiyonel)</span>
+              <span>{t("manualReport.aiOptional")}</span>
               <ChevronDown
                 className={`h-4 w-4 transition-transform ${isAiOpen ? "rotate-180" : ""}`}
               />
@@ -346,11 +345,11 @@ export function ManualReportCard({
         </Collapsible>
 
         <label className="space-y-1 text-sm text-slate-700 block">
-          <span>Doktor Notları</span>
+          <span>{t("manualReport.doctorNotes")}</span>
           <Textarea
             value={doctorNotes}
             onChange={(e) => setDoctorNotes(e.target.value)}
-            placeholder="Ek klinik notlar, özel uyarılar veya takip planı"
+            placeholder={t("manualReport.doctorNotesPlaceholder")}
             rows={4}
           />
         </label>
@@ -362,10 +361,10 @@ export function ManualReportCard({
             className="min-w-[200px] rounded-lg bg-[var(--retina-primary)] px-5 text-white shadow-sm transition-all duration-200 hover:bg-[var(--retina-primary-deep)] hover:shadow-md"
           >
             {busy
-              ? "Kaydediliyor..."
+              ? t("manualReport.saving")
               : aiDraft
-                ? "Rapor + AI Sonucunu Kaydet"
-                : "Raporu Kaydet"}
+                ? t("manualReport.saveWithAi")
+                : t("manualReport.save")}
           </Button>
         </div>
       </CardContent>

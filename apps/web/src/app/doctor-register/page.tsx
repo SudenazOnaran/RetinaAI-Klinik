@@ -3,8 +3,11 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Eye, EyeOff, UserPlus, CheckCircle } from "lucide-react";
+import { useTranslation } from "@/components/providers/i18n-provider";
+import { LanguageSwitcher } from "@/components/layout/language-switcher";
 
 export default function DoctorRegisterPage() {
+  const { t } = useTranslation();
   const [name, setName] = useState("");
   const [surname, setSurname] = useState("");
   const [email, setEmail] = useState("");
@@ -23,17 +26,17 @@ export default function DoctorRegisterPage() {
     setError("");
 
     if (!name || !surname || !email || !password || !specialty || !hospital) {
-      setError("Tüm alanlar zorunludur.");
+      setError(t("doctorRegister.errors.requiredFields"));
       return;
     }
 
     if (password.length < 8) {
-      setError("Şifre en az 8 karakter olmalıdır.");
+      setError(t("doctorRegister.errors.passwordLength"));
       return;
     }
 
     if (password !== confirmPassword) {
-      setError("Şifreler eşleşmiyor.");
+      setError(t("doctorRegister.errors.passwordMatch"));
       return;
     }
 
@@ -48,10 +51,10 @@ export default function DoctorRegisterPage() {
       if (res.ok && data.success) {
         setIsSuccess(true);
       } else {
-        setError(data.error || "Kayıt sırasında bir hata oluştu.");
+        setError(data.error || t("doctorRegister.errors.registerFailed"));
       }
     } catch {
-      setError("Sunucuya bağlanırken hata oluştu.");
+      setError(t("doctorRegister.errors.server"));
     } finally {
       setIsLoading(false);
     }
@@ -65,20 +68,18 @@ export default function DoctorRegisterPage() {
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
               <CheckCircle className="h-8 w-8 text-emerald-600" />
             </div>
-            <h2 className="text-2xl font-bold text-slate-900">Başvurunuz Alındı</h2>
+            <h2 className="text-2xl font-bold text-slate-900">{t("doctorRegister.success.title")}</h2>
             <p className="mt-3 text-sm text-slate-600">
-              Kayıt başvurunuz başarıyla oluşturuldu. Admin onayından sonra
-              sisteme giriş yapabilirsiniz. Onay durumunuz e-posta ile
-              bildirilecektir.
+              {t("doctorRegister.success.description")}
             </p>
             <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              Başvurunuz şu anda <span className="font-semibold">beklemede</span> durumundadır.
+              {t("doctorRegister.success.pending")}
             </div>
             <Link
               href="/login"
               className="mt-6 inline-flex items-center gap-2 rounded-lg bg-[var(--retina-primary)] px-6 py-2.5 font-semibold text-white hover:bg-[var(--retina-primary-deep)]"
             >
-              Giriş Sayfasına Dön
+              {t("doctorRegister.success.backLogin")}
             </Link>
           </div>
         </div>
@@ -93,40 +94,42 @@ export default function DoctorRegisterPage() {
           <div className="hidden border-r border-[var(--retina-border)] bg-gradient-to-br from-[#006B8F] to-[#00A8CC] p-10 text-white md:flex md:flex-col md:justify-between">
             <div>
               <p className="clinic-wood-strip inline-flex items-center gap-2 rounded-md px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em]">
-                <Eye className="h-3.5 w-3.5" /> Retina Klinik
+                <Eye className="h-3.5 w-3.5" /> {t("doctorRegister.side.brand")}
               </p>
               <h1 className="mt-4 text-3xl font-bold leading-tight">
-                Doktor Kayıt Formu
+                {t("doctorRegister.side.title")}
               </h1>
               <p className="mt-3 text-sm text-blue-100">
-                Sisteme erişim için kayıt formunu doldurun. Başvurunuz admin
-                tarafından incelenecek ve onaylandığında giriş yapabileceksiniz.
+                {t("doctorRegister.side.description")}
               </p>
             </div>
 
             <div className="space-y-3">
               <div className="rounded-xl border border-white/25 bg-white/10 p-4 text-sm text-blue-50 backdrop-blur-sm">
-                <p className="font-semibold mb-2">Kayıt Süreci</p>
+                <p className="font-semibold mb-2">{t("doctorRegister.side.processTitle")}</p>
                 <ol className="space-y-1 text-xs text-blue-100 list-decimal list-inside">
-                  <li>Formu doldurup başvurunuzu gönderin</li>
-                  <li>Admin başvurunuzu inceleyecektir</li>
-                  <li>Onay sonrası sisteme giriş yapabilirsiniz</li>
+                  <li>{t("doctorRegister.side.step1")}</li>
+                  <li>{t("doctorRegister.side.step2")}</li>
+                  <li>{t("doctorRegister.side.step3")}</li>
                 </ol>
               </div>
             </div>
           </div>
 
           <form onSubmit={handleRegister} className="p-8 md:p-10">
-            <h2 className="text-2xl font-bold text-slate-900">Doktor Kaydı</h2>
+            <div className="mb-4 flex justify-end">
+              <LanguageSwitcher />
+            </div>
+            <h2 className="text-2xl font-bold text-slate-900">{t("doctorRegister.form.title")}</h2>
             <p className="mt-1 text-sm text-slate-600">
-              Bilgilerinizi girerek kayıt başvurusunda bulunun.
+              {t("doctorRegister.form.subtitle")}
             </p>
 
             <div className="mt-6 space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-700">
-                    Ad
+                    {t("doctorRegister.form.name")}
                   </label>
                   <input
                     type="text"
@@ -138,7 +141,7 @@ export default function DoctorRegisterPage() {
                 </div>
                 <div>
                   <label className="mb-1 block text-sm font-medium text-slate-700">
-                    Soyad
+                    {t("doctorRegister.form.surname")}
                   </label>
                   <input
                     type="text"
@@ -152,7 +155,7 @@ export default function DoctorRegisterPage() {
 
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">
-                  E-posta
+                  {t("doctorRegister.form.email")}
                 </label>
                 <input
                   type="email"
@@ -165,12 +168,12 @@ export default function DoctorRegisterPage() {
 
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">
-                  Uzmanlık Alanı
+                  {t("doctorRegister.form.specialty")}
                 </label>
                 <input
                   type="text"
                   className="w-full rounded-lg border border-[var(--retina-border)] px-3 py-2.5 outline-none focus:border-[var(--retina-primary)]"
-                  placeholder="Örn: Göz Hastalıkları"
+                  placeholder={t("doctorRegister.form.specialtyPlaceholder")}
                   value={specialty}
                   onChange={(e) => setSpecialty(e.target.value)}
                   required
@@ -179,7 +182,7 @@ export default function DoctorRegisterPage() {
 
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">
-                  Hastane / Kurum
+                  {t("doctorRegister.form.hospital")}
                 </label>
                 <input
                   type="text"
@@ -192,7 +195,7 @@ export default function DoctorRegisterPage() {
 
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">
-                  Şifre
+                  {t("doctorRegister.form.password")}
                 </label>
                 <div className="relative">
                   <input
@@ -212,12 +215,12 @@ export default function DoctorRegisterPage() {
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-                <p className="mt-1 text-xs text-slate-500">En az 8 karakter</p>
+                <p className="mt-1 text-xs text-slate-500">{t("doctorRegister.form.passwordHint")}</p>
               </div>
 
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">
-                  Şifre Tekrar
+                  {t("doctorRegister.form.confirmPassword")}
                 </label>
                 <div className="relative">
                   <input
@@ -251,13 +254,13 @@ export default function DoctorRegisterPage() {
                 className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--retina-primary)] px-4 py-2.5 font-semibold text-white hover:bg-[var(--retina-primary-deep)] disabled:opacity-70"
               >
                 <UserPlus className="h-4 w-4" />
-                {isLoading ? "Gönderiliyor..." : "Kayıt Ol"}
+                {isLoading ? t("doctorRegister.form.submitting") : t("doctorRegister.form.submit")}
               </button>
 
               <p className="text-center text-xs text-slate-500 mt-2">
-                Zaten hesabınız var mı?{" "}
+                {t("doctorRegister.form.hasAccount")}{" "}
                 <Link href="/login" className="underline font-semibold text-[var(--retina-primary)]">
-                  Giriş Yap
+                  {t("doctorRegister.form.login")}
                 </Link>
               </p>
             </div>

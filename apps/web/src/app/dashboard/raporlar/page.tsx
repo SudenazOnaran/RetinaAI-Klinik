@@ -10,8 +10,11 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { FileText } from "lucide-react";
+import { getRequestMessages } from "@/lib/i18n/server";
 
 export default async function ReportsPage() {
+  const messages = await getRequestMessages();
+  const t = messages.dashboardReportsPage;
   const doctor = await getCurrentDoctorSession();
   if (!doctor) {
     redirect("/login");
@@ -59,11 +62,10 @@ export default async function ReportsPage() {
       <div className="mx-auto max-w-7xl space-y-6">
         <div className="rounded-2xl border border-[#d8e0df] bg-white px-6 py-5 shadow-sm">
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">
-            Rapor Yönetimi
+            {t.title}
           </h1>
           <p className="mt-2 text-sm text-slate-600">
-            Bu sayfada tüm hastaların genel rapor özetini görüntüleyebilir,
-            ilgili hastanın rapor geçmişine hızlıca geçebilirsiniz
+            {t.subtitle}
           </p>
         </div>
 
@@ -71,10 +73,10 @@ export default async function ReportsPage() {
           <CardHeader className="border-b border-slate-100">
             <CardTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5 text-[var(--retina-secondary)]" />
-              Genel Hasta Raporları
+              {t.cardTitle}
             </CardTitle>
             <CardDescription>
-              Gelişmiş filtreleme ve sayfalama ile hasta bazlı rapor yönetimi
+              {t.cardDescription}
             </CardDescription>
           </CardHeader>
 

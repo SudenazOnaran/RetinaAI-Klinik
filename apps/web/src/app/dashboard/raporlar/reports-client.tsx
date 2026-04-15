@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { useTranslation } from "@/components/providers/i18n-provider";
 
 type PatientReportSummary = {
   patientId: string;
@@ -45,6 +46,7 @@ export default function ReportsClient({
 }: {
   reports: PatientReportSummary[];
 }) {
+  const { t } = useTranslation();
   const { toast } = useToast();
 
   const [search, setSearch] = useState("");
@@ -104,8 +106,8 @@ export default function ReportsClient({
     if (filtered.length === 0) {
       toast({
         variant: "destructive",
-        title: "Uyarı",
-        description: "Dışa aktarım için listede veri bulunamadı.",
+        title: t("reportsFull.warnTitle"),
+        description: t("reportsFull.warnEmptyExport"),
       });
       return;
     }
@@ -136,12 +138,12 @@ export default function ReportsClient({
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-12">
           <div className="relative sm:col-span-2 xl:col-span-4">
             <label className="mb-1 block text-xs font-medium text-slate-600">
-              Hasta Arama
+              {t("reportsFull.labelSearch")}
             </label>
             <Search className="absolute left-3 top-[34px] h-4 w-4 -translate-y-1/2 text-slate-400" />
             <Input
               className="pl-9"
-              placeholder="Hasta adı veya T.C. ile ara"
+              placeholder={t("reportsFull.placeholderSearch")}
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
@@ -152,7 +154,7 @@ export default function ReportsClient({
 
           <div className="xl:col-span-2">
             <label className="mb-1 block text-xs font-medium text-slate-600">
-              Minimum Rapor
+              {t("reportsFull.minReports")}
             </label>
             <Input
               type="number"
@@ -162,13 +164,13 @@ export default function ReportsClient({
                 setMinReportCount(e.target.value);
                 setPage(1);
               }}
-              placeholder="Min. rapor"
+              placeholder={t("reportsFull.minReportsPlaceholder")}
             />
           </div>
 
           <div className="xl:col-span-2">
             <label className="mb-1 block text-xs font-medium text-slate-600">
-              Başlangıç Tarihi
+              {t("reportsFull.dateFrom")}
             </label>
             <Input
               type="date"
@@ -182,7 +184,7 @@ export default function ReportsClient({
 
           <div className="xl:col-span-2">
             <label className="mb-1 block text-xs font-medium text-slate-600">
-              Bitiş Tarihi
+              {t("reportsFull.dateTo")}
             </label>
             <Input
               type="date"
@@ -203,45 +205,45 @@ export default function ReportsClient({
               disabled={!hasActiveFilters}
             >
               <RefreshCw className="mr-2 h-4 w-4" />
-              Filtreleri Sıfırla
+              {t("reportsFull.resetFilters")}
             </Button>
           </div>
         </div>
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 pt-3">
           <span className="text-xs font-medium text-slate-600">
-            Toplam hasta: {filtered.length}
+            {t("reportsFull.totalPatients", { count: filtered.length })}
           </span>
           <Button
             className="bg-[var(--retina-primary)] text-white hover:bg-[var(--retina-primary-deep)]"
             onClick={exportSelectedCsv}
           >
-            <Download className="mr-2 h-4 w-4" /> CSV Dışa Aktar
+            <Download className="mr-2 h-4 w-4" /> {t("reportsFull.exportCsv")}
           </Button>
         </div>
       </div>
 
       <div className="rounded-lg border border-slate-200 overflow-hidden">
         <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3 text-sm">
-          <span>Hasta bazlı genel rapor özeti</span>
-          <span>Toplam sonuç: {filtered.length}</span>
+          <span>{t("reportsFull.summaryTitle")}</span>
+          <span>{t("reportsFull.totalResults", { count: filtered.length })}</span>
         </div>
 
         <table className="w-full text-sm">
           <thead className="bg-white border-b border-slate-200">
             <tr>
-              <th className="p-3 text-left">Hasta</th>
-              <th className="p-3 text-left">TC</th>
-              <th className="p-3 text-left">Son Rapor Tarihi</th>
-              <th className="p-3 text-left">Rapor Sayısı</th>
-              <th className="p-3 text-left">İşlem</th>
+              <th className="p-3 text-left">{t("reportsFull.colPatient")}</th>
+              <th className="p-3 text-left">{t("reportsFull.colTc")}</th>
+              <th className="p-3 text-left">{t("reportsFull.colLastReport")}</th>
+              <th className="p-3 text-left">{t("reportsFull.colReportCount")}</th>
+              <th className="p-3 text-left">{t("reportsFull.colAction")}</th>
             </tr>
           </thead>
           <tbody>
             {paged.length === 0 ? (
               <tr>
                 <td colSpan={5} className="p-8 text-center text-slate-500">
-                  Filtrelere uygun hasta raporu bulunamadı.
+                  {t("reportsFull.emptyRow")}
                 </td>
               </tr>
             ) : (
@@ -276,7 +278,7 @@ export default function ReportsClient({
                         <Link
                           href={`/dashboard/hastalar/${row.patientId}?tab=reports`}
                         >
-                          Detay <ChevronRight className="ml-1 h-4 w-4" />
+                          {t("reportsFull.detail")} <ChevronRight className="ml-1 h-4 w-4" />
                         </Link>
                       </Button>
                     </td>
@@ -290,11 +292,11 @@ export default function ReportsClient({
 
       <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 md:flex-row md:items-center md:justify-between">
         <div className="text-sm text-slate-600">
-          Sayfa {safePage} / {totalPages}
+          {t("pagination.pageOf", { current: safePage, total: totalPages })}
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-sm text-slate-600">Sayfa boyutu</span>
+          <span className="text-sm text-slate-600">{t("pagination.pageSize")}</span>
           <select
             className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm"
             value={pageSize}
@@ -319,14 +321,14 @@ export default function ReportsClient({
             disabled={safePage <= 1}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
           >
-            Önceki
+            {t("pagination.previous")}
           </Button>
           <Button
             variant="outline"
             disabled={safePage >= totalPages}
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
           >
-            Sonraki
+            {t("pagination.next")}
           </Button>
         </div>
       </div>

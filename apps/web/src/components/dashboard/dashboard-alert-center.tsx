@@ -17,6 +17,7 @@ import {
   daysUntil,
   isCriticalAlertCandidate,
 } from "@/lib/risk-alerts";
+import { useTranslation } from "@/components/providers/i18n-provider";
 
 type AlertPatient = {
   id: string;
@@ -38,6 +39,7 @@ function formatDate(date: Date): string {
 }
 
 export function DashboardAlertCenter({ patients }: DashboardAlertCenterProps) {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const [settings, setSettings] = useState(getDefaultRetinaSettings());
 
@@ -134,8 +136,11 @@ export function DashboardAlertCenter({ patients }: DashboardAlertCenterProps) {
             .join(", ");
 
           toast({
-            title: "Takip zamanı yaklaşıyor",
-            description: `${dueSoon.length} hasta için kontrol tarihi yakın: ${firstThree}${
+            title: t("alertCenter.followupSoonTitle"),
+            description: t("alertCenter.followupSoonDesc", {
+              count: dueSoon.length,
+              names: firstThree,
+            }) + `${
               dueSoon.length > 3 ? "..." : ""
             }`,
           });
@@ -167,8 +172,11 @@ export function DashboardAlertCenter({ patients }: DashboardAlertCenterProps) {
 
           toast({
             variant: "destructive",
-            title: "Kritik vaka uyarısı",
-            description: `${criticalCases.length} hastada yüksek risk tespit edildi: ${names}${
+            title: t("alertCenter.criticalTitle"),
+            description: t("alertCenter.criticalDesc", {
+              count: criticalCases.length,
+              names,
+            }) + `${
               criticalCases.length > 3 ? "..." : ""
             }`,
           });
@@ -184,13 +192,13 @@ export function DashboardAlertCenter({ patients }: DashboardAlertCenterProps) {
       <CardHeader className="border-b border-slate-200 pb-4">
         <CardTitle className="flex items-center gap-2 text-slate-900">
           <CalendarClock className="h-5 w-5 text-indigo-600" />
-          Planlanan Takipler
+          {t("alertCenter.title")}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 pt-4">
         {plannedFollowups.length === 0 ? (
           <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">
-            Planlanmış takip bulunmuyor.
+            {t("alertCenter.empty")}
           </p>
         ) : (
           plannedFollowups.slice(0, 8).map((item) => (
@@ -204,19 +212,19 @@ export function DashboardAlertCenter({ patients }: DashboardAlertCenterProps) {
                   {item.fullName}
                 </p>
                 <p className="text-xs text-slate-600">
-                  Takip: {formatDate(item.plannedDate)}
+                  {t("alertCenter.followupPrefix")} {formatDate(item.plannedDate)}
                 </p>
               </div>
               <div className="flex items-center gap-2">
                 {item.remainingDays <= 2 && (
                   <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">
-                    <AlertTriangle className="mr-1 h-3 w-3" /> Yakın
+                    <AlertTriangle className="mr-1 h-3 w-3" /> {t("alertCenter.near")}
                   </Badge>
                 )}
                 <Badge variant="secondary" className="text-xs">
                   {item.remainingDays < 0
-                    ? `${Math.abs(item.remainingDays)} gün gecikmiş`
-                    : `${item.remainingDays} gün kaldı`}
+                    ? t("alertCenter.daysLate", { count: Math.abs(item.remainingDays) })
+                    : t("alertCenter.daysLeft", { count: item.remainingDays })}
                 </Badge>
               </div>
             </Link>

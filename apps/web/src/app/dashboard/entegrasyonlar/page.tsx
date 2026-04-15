@@ -11,8 +11,11 @@ import IntegrationsClient from "@/components/dashboard/integrations-client";
 import { getCurrentDoctorSession } from "@/lib/auth-session";
 import { isRoleAllowed } from "@/lib/roles";
 import { prisma } from "@/lib/prisma";
+import { getRequestMessages } from "@/lib/i18n/server";
 
 export default async function IntegrationsPage() {
+  const messages = await getRequestMessages();
+  const t = messages.integrationsPage;
   const session = await getCurrentDoctorSession();
 
   if (!session) {
@@ -59,14 +62,13 @@ export default async function IntegrationsPage() {
       <div className="mx-auto max-w-7xl space-y-6">
         <div className="rounded-2xl border border-[#cfe0e8] bg-gradient-to-r from-[#eef6fb] via-white to-[#edf7f4] px-6 py-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#5f90ad]">
-            Ayarlar / Klinik Entegrasyon
+            {t.eyebrow}
           </p>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-            Klinik Entegrasyon Merkezi
+            {t.title}
           </h1>
           <p className="mt-2 text-sm text-slate-600">
-            Hasta ve analiz verilerini HL7 FHIR veya HBYS API sistemlerine
-            aktarın, gönderim loglarını takip edin.
+            {t.description}
           </p>
         </div>
 
@@ -76,10 +78,10 @@ export default async function IntegrationsPage() {
               <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-[#e6f0f7] text-[#4c7da5]">
                 <Link2 className="h-5 w-5" />
               </span>
-              Entegrasyon Aktarım İşlemleri
+              {t.cardTitle}
             </CardTitle>
             <CardDescription className="text-slate-600">
-              FHIR için JSON Bundle, HBYS için klinik payload gönderimi yapılır.
+              {t.cardDescription}
             </CardDescription>
           </CardHeader>
           <CardContent className="p-4 md:p-5">

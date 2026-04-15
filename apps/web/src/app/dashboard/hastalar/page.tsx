@@ -6,6 +6,7 @@ import HastalarClient from "./HastalarClient";
 import { Card, CardContent } from "@/components/ui/card";
 import { User, Activity, AlertTriangle } from "lucide-react";
 import { isHighRiskLabel } from "@/lib/risk-alerts";
+import { getRequestMessages } from "@/lib/i18n/server";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
 type RiskFilter = "all" | "high" | "medium" | "low" | "none";
@@ -41,6 +42,8 @@ export default async function HastalarPage({
 }: {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const messages = await getRequestMessages();
+  const t = messages.dashboardPatients;
   const doctor = await getCurrentDoctorSession();
   if (!doctor) {
     redirect("/login");
@@ -305,11 +308,10 @@ export default async function HastalarPage({
           <div className="flex flex-col gap-4">
             <div>
               <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
-                Hasta Yönetimi
+                {t.title}
               </h1>
               <p className="mt-2 text-sm text-slate-600 md:text-base">
-                Hasta portföyünüz ve analiz yükünüzün güncel özetini buradan
-                takip edebilirsiniz
+                {t.subtitle}
               </p>
             </div>
           </div>
@@ -317,27 +319,27 @@ export default async function HastalarPage({
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <StatCard
-            title="Toplam Hasta"
+            title={t.stats.totalPatients}
             value={totalPatients}
             icon={<User className="h-5 w-5" />}
             color="blue"
-            subText="Aktif Kayıt"
+            subText={t.stats.activeRecords}
           />
 
           <StatCard
-            title="Toplam Analizler"
+            title={t.stats.totalAnalyses}
             value={totalAnalyses}
             icon={<Activity className="h-5 w-5" />}
             color="emerald"
-            subText="Tamamlanan İşlem"
+            subText={t.stats.completed}
           />
 
           <StatCard
-            title="Yüksek Riskli"
+            title={t.stats.highRisk}
             value={highRiskCount}
             icon={<AlertTriangle className="h-5 w-5" />}
             color="amber"
-            subText="Acil İlgi Gereken"
+            subText={t.stats.urgent}
           />
         </div>
 

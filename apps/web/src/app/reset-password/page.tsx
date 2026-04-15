@@ -2,8 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useTranslation } from "@/components/providers/i18n-provider";
+import { LanguageSwitcher } from "@/components/layout/language-switcher";
 
 export default function ResetPasswordPage() {
+  const { t } = useTranslation();
   const [email, setEmail] = useState("");
   const [temporaryPassword, setTemporaryPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -27,15 +30,15 @@ export default function ResetPasswordPage() {
 
       if (res.ok && data.success) {
         setMessage(
-          "Sifreniz basariyla guncellendi. Simdi giris yapabilirsiniz.",
+          t("resetPassword.messages.success"),
         );
         setTemporaryPassword("");
         setNewPassword("");
       } else {
-        setError(data.error || "Sifre guncellenemedi.");
+        setError(data.error || t("resetPassword.messages.updateFailed"));
       }
     } catch {
-      setError("Sunucuya baglanirken hata olustu.");
+      setError(t("resetPassword.messages.server"));
     } finally {
       setLoading(false);
     }
@@ -44,17 +47,20 @@ export default function ResetPasswordPage() {
   return (
     <div className="clinic-app-bg min-h-screen px-4 py-8">
       <div className="mx-auto max-w-lg rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="mb-4 flex justify-end">
+          <LanguageSwitcher />
+        </div>
         <h1 className="text-xl font-bold text-slate-900">
-          Ilk Giris Sifre Yenileme
+          {t("resetPassword.title")}
         </h1>
         <p className="mt-2 text-sm text-slate-600">
-          Gecici sifreniz ile yeni sifrenizi belirleyin.
+          {t("resetPassword.subtitle")}
         </p>
 
         <form onSubmit={handleSubmit} className="mt-5 space-y-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">
-              E-posta
+              {t("resetPassword.email")}
             </label>
             <input
               type="email"
@@ -67,7 +73,7 @@ export default function ResetPasswordPage() {
 
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">
-              Gecici Sifre
+              {t("resetPassword.temporaryPassword")}
             </label>
             <input
               type="password"
@@ -80,7 +86,7 @@ export default function ResetPasswordPage() {
 
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">
-              Yeni Sifre
+              {t("resetPassword.newPassword")}
             </label>
             <input
               type="password"
@@ -91,7 +97,7 @@ export default function ResetPasswordPage() {
               className="w-full rounded-lg border border-[var(--retina-border)] px-3 py-2.5 outline-none"
             />
             <p className="mt-1 text-xs text-slate-500">
-              En az 10 karakter, buyuk harf, kucuk harf ve rakam icermelidir.
+              {t("resetPassword.passwordHint")}
             </p>
           </div>
 
@@ -111,7 +117,7 @@ export default function ResetPasswordPage() {
             disabled={loading}
             className="w-full rounded-lg bg-[var(--retina-primary)] px-4 py-2.5 font-semibold text-white"
           >
-            {loading ? "Guncelleniyor..." : "Sifreyi Guncelle"}
+            {loading ? t("resetPassword.updating") : t("resetPassword.submit")}
           </button>
         </form>
 
@@ -120,7 +126,7 @@ export default function ResetPasswordPage() {
             href="/login"
             className="font-semibold text-[var(--retina-secondary)]"
           >
-            Giris sayfasina don
+            {t("resetPassword.backToLogin")}
           </Link>
         </div>
       </div>

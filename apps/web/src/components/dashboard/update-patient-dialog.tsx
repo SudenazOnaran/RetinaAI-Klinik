@@ -13,10 +13,12 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { updatePatientAction } from "@/app/actions/update-patient";
 import { useToast } from "@/hooks/use-toast";
+import { useTranslation } from "@/components/providers/i18n-provider";
 
 export function UpdatePatientDialog({ open, onOpenChange, patient }: any) {
   const { toast } = useToast();
   const router = useRouter();
+  const { t } = useTranslation();
 
   function handleSubmit(formData: FormData) {
     startTransition(async () => {
@@ -24,8 +26,8 @@ export function UpdatePatientDialog({ open, onOpenChange, patient }: any) {
         await updatePatientAction(formData);
 
         toast({
-          title: "Başarılı",
-          description: "Hasta bilgileri güncellendi",
+          title: t("modal.updatePatient.toast.successTitle"),
+          description: t("modal.updatePatient.toast.successDescription"),
           duration: 3000,
         });
         onOpenChange(false); // modal kapat
@@ -35,8 +37,8 @@ export function UpdatePatientDialog({ open, onOpenChange, patient }: any) {
       } catch {
         toast({
           variant: "destructive",
-          title: "Hata",
-          description: "Güncelleme başarısız",
+          title: t("modal.updatePatient.toast.errorTitle"),
+          description: t("modal.updatePatient.toast.errorDescription"),
         });
       }
     });
@@ -46,7 +48,7 @@ export function UpdatePatientDialog({ open, onOpenChange, patient }: any) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Hasta Bilgilerini Güncelle</DialogTitle>
+          <DialogTitle>{t("modal.updatePatient.title")}</DialogTitle>
         </DialogHeader>
 
         <form
@@ -59,22 +61,22 @@ export function UpdatePatientDialog({ open, onOpenChange, patient }: any) {
           <input type="hidden" name="id" value={patient.id} />
 
           <div>
-            <Label>Yaş</Label>
+            <Label>{t("modal.updatePatient.fields.age")}</Label>
             <Input name="age" defaultValue={patient.age} />
           </div>
 
           <div>
-            <Label>Diyabet Süresi</Label>
+            <Label>{t("modal.updatePatient.fields.diabetesYears")}</Label>
             <Input name="diabetesYears" defaultValue={patient.diabetesYears} />
           </div>
 
           <div>
-            <Label>HbA1c</Label>
+            <Label>{t("modal.updatePatient.fields.hba1c")}</Label>
             <Input name="hba1c" defaultValue={patient.hba1c} />
           </div>
 
           <Button type="submit" className="w-full">
-            Güncelle
+            {t("modal.updatePatient.submit")}
           </Button>
         </form>
       </DialogContent>

@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { AddPatientDialog } from './add-patient-dialog';
+import { useTranslation } from '@/components/providers/i18n-provider';
 
 export default function PatientsToolbar({
   search,
@@ -23,14 +24,14 @@ export default function PatientsToolbar({
   risk: 'all' | 'Yüksek' | 'Orta' | 'Yok';
   onRiskChange: (value: 'all' | 'Yüksek' | 'Orta' | 'Yok') => void;
 }) {
-  
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
 
   return (
     <div className="flex flex-wrap items-center gap-4">
       {/* TC ile Arama */}
       <Input
-        placeholder="Hasta TC KİMLİK NUMARASI ile ara..."
+        placeholder={t("patientsToolbar.searchPlaceholder")}
         className="max-w-sm"
         value={search}
         onChange={(e) => onSearchChange(e.target.value)}
@@ -39,20 +40,20 @@ export default function PatientsToolbar({
       {/* Risk Filtresi (şimdilik sadece UI) */}
       <Select value={risk} onValueChange={onRiskChange}>
         <SelectTrigger className="w-44">
-          <SelectValue placeholder="Tüm Riskler" />
+          <SelectValue placeholder={t("patientsToolbar.riskAll")} />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all">Tüm Riskler</SelectItem>
-          <SelectItem value="Yüksek">Yüksek</SelectItem>
-          <SelectItem value="Orta">Orta</SelectItem>
-          <SelectItem value="Düşük">Düşük</SelectItem>
-          <SelectItem value="Yok">Analiz Yapılmadı</SelectItem>
+          <SelectItem value="all">{t("patientsToolbar.riskAll")}</SelectItem>
+          <SelectItem value="Yüksek">{t("patientsToolbar.riskHigh")}</SelectItem>
+          <SelectItem value="Orta">{t("patientsToolbar.riskMedium")}</SelectItem>
+          <SelectItem value="Düşük">{t("patientsToolbar.riskLow")}</SelectItem>
+          <SelectItem value="Yok">{t("patientsToolbar.riskNone")}</SelectItem>
         </SelectContent>
       </Select>
 
       {/* Yeni Hasta */}
       <Button onClick={() => setOpen(true)}>
-        Yeni Hasta Ekle
+        {t("patientsToolbar.addPatient")}
       </Button>
 
       {/* Modal */}

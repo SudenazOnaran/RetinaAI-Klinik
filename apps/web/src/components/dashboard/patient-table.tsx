@@ -1,19 +1,21 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useTranslation } from "@/components/providers/i18n-provider";
 
 export default function PatientTable({ patients }: { patients: any[] }) {
+  const { t, locale } = useTranslation();
   return (
     <div className="border rounded-lg overflow-hidden">
       <table className="w-full text-sm">
         <thead className="bg-muted">
           <tr>
-            <th className="p-3 text-left">Hasta Adı</th>
-            <th className="p-3 text-left">TC</th>
-            <th className="p-3 text-left">Kayıt Tarihi</th>
-            <th className="p-3 text-left">Yaş</th>
-            <th className="p-3 text-left">Risk Seviyesi</th>
-            <th className="p-3 text-right">Eylemler</th>
+            <th className="p-3 text-left">{t("patientTable.colName")}</th>
+            <th className="p-3 text-left">{t("patientTable.colTc")}</th>
+            <th className="p-3 text-left">{t("patientTable.colCreated")}</th>
+            <th className="p-3 text-left">{t("patientTable.colAge")}</th>
+            <th className="p-3 text-left">{t("patientTable.colRisk")}</th>
+            <th className="p-3 text-right">{t("patientTable.colActions")}</th>
           </tr>
         </thead>
 
@@ -26,7 +28,9 @@ export default function PatientTable({ patients }: { patients: any[] }) {
                 <td className="p-3">{p.fullName}</td>
                 <td className="p-3">{p.tcNo}</td>
                 <td className="p-3">
-                  {new Date(p.createdAt).toLocaleDateString("tr-TR")}
+                  {new Date(p.createdAt).toLocaleDateString(
+                    locale === "en" ? "en-US" : "tr-TR",
+                  )}
                 </td>
 
                 <td className="p-3">{p.age}</td>
@@ -42,13 +46,13 @@ export default function PatientTable({ patients }: { patients: any[] }) {
                             : "border"
                     }
                   >
-                    {risk || "Analiz yapılmadı"}
+                    {risk || t("patientTable.noAnalysis")}
                   </Badge>
                 </td>
                 <td className="p-3 text-right">
                   <Link href={`/dashboard/hastalar/${p.id}`}>
                     <Button variant="outline" size="sm">
-                      Detay
+                      {t("patientTable.detail")}
                     </Button>
                   </Link>
                 </td>
