@@ -1,18 +1,5 @@
 import { z } from "zod";
 
-function isValidTcNo(tcNo: string) {
-  if (!/^\d{11}$/.test(tcNo)) return false;
-  if (tcNo[0] === "0") return false;
-
-  const digits = tcNo.split("").map(Number);
-  const oddSum = digits[0] + digits[2] + digits[4] + digits[6] + digits[8];
-  const evenSum = digits[1] + digits[3] + digits[5] + digits[7];
-  const tenth = (((oddSum * 7 - evenSum) % 10) + 10) % 10;
-  const eleventh = digits.slice(0, 10).reduce((sum, d) => sum + d, 0) % 10;
-
-  return digits[9] === tenth && digits[10] === eleventh;
-}
-
 const normalizedText = z
   .string()
   .trim()
@@ -24,8 +11,7 @@ const createPatientSchema = z.object({
   tcNo: z
     .string()
     .trim()
-    .regex(/^\d{11}$/, "TC No 11 haneli sayi olmalidir")
-    .refine(isValidTcNo, "TC No dogrulamasi basarisiz"),
+    .regex(/^\d{11}$/, "TC No 11 haneli sayi olmalidir"),
   age: z
     .number()
     .int()
