@@ -1,0 +1,2 @@
+ALTER TABLE "Analysis"
+ALTER COLUMN "ilaclar" TYPE VARCHAR(1500);

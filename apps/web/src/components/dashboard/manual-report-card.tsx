@@ -38,6 +38,7 @@ type ManualReportCardProps = {
 };
 
 const REPORT_FORMAT_VERSION = "manual_report_v2";
+const MAX_FIELD_LENGTH = 1500;
 const CANONICAL_RISK_LABELS = new Set([
   "No_DR",
   "Mild",
@@ -111,6 +112,21 @@ export function ManualReportCard({
   const handleSave = async () => {
     setBusy(true);
     try {
+      const exceededField = [
+        { label: t("manualReport.anamnesis"), value: anamnesis },
+        { label: t("manualReport.examFindings"), value: examFindings },
+        { label: t("manualReport.labResults"), value: labResults },
+        { label: t("manualReport.clinicalAssessment"), value: clinicalAssessment },
+        { label: t("manualReport.treatment"), value: treatmentRecommendations },
+        { label: t("manualReport.doctorNotes"), value: doctorNotes },
+      ].find((field) => field.value.length > MAX_FIELD_LENGTH);
+
+      if (exceededField) {
+        throw new Error(
+          `${exceededField.label} alanında maksimum karakter sınırı aşıldı (${exceededField.value.length}/${MAX_FIELD_LENGTH}).`,
+        );
+      }
+
       const riskForSave = resolveRiskForSave(patientInfo.risk);
       const finalAiLabel = aiDraft?.correctionLabel || aiDraft?.aiResult;
       const finalRiskForSave = finalAiLabel || riskForSave;
@@ -148,7 +164,7 @@ export function ManualReportCard({
         aiSummary,
       });
 
-      await saveAnalysisAction({
+      const saveResult = await saveAnalysisAction({
         patientId,
         aiResult: finalRiskForSave,
         confidence: finalConfidence,
@@ -160,6 +176,10 @@ export function ManualReportCard({
         ilaclar: treatmentRecommendations.trim(),
         drFeedback: aiDraft?.correctionLabel,
       });
+
+      if (!saveResult?.ok) {
+        throw new Error(saveResult?.error || t("manualReport.toastSaveFail"));
+      }
 
       toast({
         title: t("manualReport.toastSavedTitle"),
@@ -177,13 +197,14 @@ export function ManualReportCard({
       setDoctorNotes("");
       window.location.reload();
     } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : t("manualReport.toastSaveFail");
       toast({
         variant: "destructive",
         title: t("errorPage.title"),
-        description:
-          error instanceof Error
-            ? error.message
-            : t("manualReport.toastSaveFail"),
+        description: errorMessage,
       });
     } finally {
       setBusy(false);
@@ -197,19 +218,20 @@ export function ManualReportCard({
           <ClipboardPlus className="h-5 w-5 text-[var(--retina-primary)]" />
           {t("manualReport.title")}
         </CardTitle>
-        <CardDescription>
-          {t("manualReport.description")}
-        </CardDescription>
+        <CardDescription>{t("manualReport.description")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 pt-4">
         {aiDraft ? (
           <div className="flex items-start justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
             <div>
               <p className="flex items-center gap-2 font-medium">
-                <Sparkles className="h-4 w-4" /> {t("manualReport.aiWillInclude")}
+                <Sparkles className="h-4 w-4" />{" "}
+                {t("manualReport.aiWillInclude")}
               </p>
               <p className="mt-1 text-xs text-emerald-800">
-                {t("manualReport.resultPrefix")} {aiDraft.correctionLabel || aiDraft.aiResult} | {t("manualReport.confidencePrefix")} %
+                {t("manualReport.resultPrefix")}{" "}
+                {aiDraft.correctionLabel || aiDraft.aiResult} |{" "}
+                {t("manualReport.confidencePrefix")} %
                 {Math.round((aiDraft.confidence || 0) * 100)}
               </p>
             </div>
@@ -257,7 +279,10 @@ export function ManualReportCard({
 
           <label className="space-y-1 text-sm text-slate-700">
             <span>{t("manualReport.doctorInfo")}</span>
-            <Input value={doctorName || t("manualReport.notSpecified")} disabled />
+            <Input
+              value={doctorName || t("manualReport.notSpecified")}
+              disabled
+            />
           </label>
         </div>
 
@@ -268,6 +293,7 @@ export function ManualReportCard({
             onChange={(e) => setAnamnesis(e.target.value)}
             placeholder={t("manualReport.anamnesisPlaceholder")}
             rows={3}
+            maxLength={MAX_FIELD_LENGTH}
           />
         </label>
 
@@ -278,6 +304,7 @@ export function ManualReportCard({
             onChange={(e) => setExamFindings(e.target.value)}
             placeholder={t("manualReport.examFindingsPlaceholder")}
             rows={3}
+            maxLength={MAX_FIELD_LENGTH}
           />
         </label>
 
@@ -288,6 +315,7 @@ export function ManualReportCard({
             onChange={(e) => setLabResults(e.target.value)}
             placeholder={t("manualReport.labResultsPlaceholder")}
             rows={3}
+            maxLength={MAX_FIELD_LENGTH}
           />
         </label>
 
@@ -298,6 +326,7 @@ export function ManualReportCard({
             onChange={(e) => setClinicalAssessment(e.target.value)}
             placeholder={t("manualReport.clinicalAssessmentPlaceholder")}
             rows={4}
+            maxLength={MAX_FIELD_LENGTH}
           />
         </label>
 
@@ -308,6 +337,7 @@ export function ManualReportCard({
             onChange={(e) => setTreatmentRecommendations(e.target.value)}
             placeholder={t("manualReport.treatmentPlaceholder")}
             rows={4}
+            maxLength={MAX_FIELD_LENGTH}
           />
         </label>
 
@@ -351,6 +381,7 @@ export function ManualReportCard({
             onChange={(e) => setDoctorNotes(e.target.value)}
             placeholder={t("manualReport.doctorNotesPlaceholder")}
             rows={4}
+            maxLength={MAX_FIELD_LENGTH}
           />
         </label>
 

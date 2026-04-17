@@ -67,7 +67,7 @@ model Analysis {
   createdAt         DateTime @default(now())
   aiOdriLabels      String?
   aiOdriConfidences String?
-  ilaclar           String?  @db.VarChar(200)
+  ilaclar           String?  @db.VarChar(1500)
   drFeedback        String?
   patient           Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
 }

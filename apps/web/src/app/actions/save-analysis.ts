@@ -28,6 +28,58 @@ export async function saveAnalysisAction({
   aiOdriConfidences?: number[];
   drFeedback?: string; // Bu değer varsa DOKTOR DÜZELTMİŞTİR, yoksa AI DOĞRUDUR.
 }) {
+  const MAX_FIELD_LENGTH = 1500;
+  const getExceededReportField = (rawDoctorNote: string) => {
+    if (!rawDoctorNote) return null;
+
+    let parsed: {
+      sections?: {
+        anamnesis?: string;
+        examFindings?: string;
+        labResults?: string;
+        clinicalAssessment?: string;
+      };
+      doctorNotes?: string;
+    } | null = null;
+
+    try {
+      parsed = JSON.parse(rawDoctorNote) as {
+        sections?: {
+          anamnesis?: string;
+          examFindings?: string;
+          labResults?: string;
+          clinicalAssessment?: string;
+        };
+        doctorNotes?: string;
+      };
+    } catch {
+      return null;
+    }
+
+    return [
+      {
+        label: "Klinik Öykü (Anamnez)",
+        value: String(parsed?.sections?.anamnesis || ""),
+      },
+      {
+        label: "Muayene Bulguları",
+        value: String(parsed?.sections?.examFindings || ""),
+      },
+      {
+        label: "Laboratuvar Sonuçları",
+        value: String(parsed?.sections?.labResults || ""),
+      },
+      {
+        label: "Teşhis / Klinik Değerlendirme",
+        value: String(parsed?.sections?.clinicalAssessment || ""),
+      },
+      {
+        label: "Doktor Notları",
+        value: String(parsed?.doctorNotes || ""),
+      },
+    ].find((field) => field.value.length > MAX_FIELD_LENGTH);
+  };
+
   try {
     const normalize = (value: string) =>
       value.trim().toLowerCase().replace(/\s+/g, "_");
@@ -42,10 +94,27 @@ export async function saveAnalysisAction({
       drFeedback && validDrLabels.has(normalize(drFeedback))
         ? drFeedback
         : undefined;
+    const rawIlaclar = String(ilaclar || "");
+    const sanitizedIlaclar = rawIlaclar.trim();
+    if (rawIlaclar.length > MAX_FIELD_LENGTH) {
+      return {
+        ok: false as const,
+        error: `Tedavi ve Öneriler alanında maksimum karakter sınırı aşıldı (${rawIlaclar.length}/${MAX_FIELD_LENGTH}).`,
+      };
+    }
+
+    const rawDoctorNote = String(doctorNote || "");
+    const exceededField = getExceededReportField(rawDoctorNote);
+    if (exceededField) {
+      return {
+        ok: false as const,
+        error: `${exceededField.label} alanında maksimum karakter sınırı aşıldı (${exceededField.value.length}/${MAX_FIELD_LENGTH}).`,
+      };
+    }
 
     const doctor = await getCurrentDoctorSession();
     if (!doctor) {
-      throw new Error("Oturum bulunamadı");
+      return { ok: false as const, error: "Oturum bulunamadı" };
     }
 
     const patient = await prisma.patient.findFirst({
@@ -54,7 +123,7 @@ export async function saveAnalysisAction({
     });
 
     if (!patient) {
-      throw new Error("Bu hasta için işlem yetkiniz yok");
+      return { ok: false as const, error: "Bu hasta için işlem yetkiniz yok" };
     }
 
     // 🔹 1. Analysis tablosuna kaydet
@@ -84,7 +153,7 @@ export async function saveAnalysisAction({
         heatmapUrl: storedHeatmapImage?.url,
         originalImage: storedOriginalImage?.url,
         doctorNote,
-        ilaclar,
+        ilaclar: sanitizedIlaclar || undefined,
         aiOdriLabels: aiOdriLabels ? JSON.stringify(aiOdriLabels) : null,
         aiOdriConfidences: aiOdriConfidences
           ? JSON.stringify(aiOdriConfidences)
@@ -132,6 +201,7 @@ export async function saveAnalysisAction({
     });
 
     return {
+      ok: true as const,
       analysisId: savedAnalysis.id,
       createdAt: savedAnalysis.createdAt.toISOString(),
       finalRiskStatus,
@@ -139,6 +209,36 @@ export async function saveAnalysisAction({
     };
   } catch (error) {
     console.error("Error saving analysis:", error);
-    throw error;
+    const message = error instanceof Error ? error.message : "";
+    const looksLikeColumnLengthError =
+      /P2000|too long|value for the column is too long|character varying/i.test(
+        message,
+      );
+    if (looksLikeColumnLengthError) {
+      const exceededFieldAfterCatch = getExceededReportField(
+        String(doctorNote || ""),
+      );
+      if (exceededFieldAfterCatch) {
+        return {
+          ok: false as const,
+          error: `${exceededFieldAfterCatch.label} alanında maksimum karakter sınırı aşıldı (${exceededFieldAfterCatch.value.length}/${MAX_FIELD_LENGTH}).`,
+        };
+      }
+      if (String(ilaclar || "").length > MAX_FIELD_LENGTH) {
+        return {
+          ok: false as const,
+          error: `Tedavi ve Öneriler alanında maksimum karakter sınırı aşıldı (${String(ilaclar || "").length}/${MAX_FIELD_LENGTH}).`,
+        };
+      }
+      return {
+        ok: false as const,
+        error:
+          "Veritabanı alan uzunluğu güncel değil. Lütfen migration çalıştırın ve tekrar deneyin.",
+      };
+    }
+    return {
+      ok: false as const,
+      error: message || "Kayıt sırasında beklenmeyen bir hata oluştu.",
+    };
   }
 }
