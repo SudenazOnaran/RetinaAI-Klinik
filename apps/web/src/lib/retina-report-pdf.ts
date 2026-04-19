@@ -54,6 +54,80 @@ function loadImage(src: string) {
   });
 }
 
+/** Tek bir "kelime" max genişlikten büyükse (boşluksuz URL vb.) karakter bazlı böler. */
+function breakLongWord(
+  ctx: CanvasRenderingContext2D,
+  word: string,
+  maxWidth: number,
+): string[] {
+  if (!word) return [];
+  const lines: string[] = [];
+  let remaining = word;
+  while (remaining.length > 0) {
+    if (ctx.measureText(remaining).width <= maxWidth) {
+      lines.push(remaining);
+      break;
+    }
+    let lo = 1;
+    let hi = remaining.length;
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2);
+      if (ctx.measureText(remaining.slice(0, mid)).width <= maxWidth) {
+        lo = mid;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    const take = Math.max(1, lo);
+    lines.push(remaining.slice(0, take));
+    remaining = remaining.slice(take);
+  }
+  return lines;
+}
+
+function buildWrappedLines(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+): string[] {
+  const words = text.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let line = "";
+
+  const flushLine = () => {
+    if (line) {
+      lines.push(line);
+      line = "";
+    }
+  };
+
+  for (const word of words) {
+    if (ctx.measureText(word).width <= maxWidth) {
+      const candidate = line ? `${line} ${word}` : word;
+      if (ctx.measureText(candidate).width <= maxWidth) {
+        line = candidate;
+      } else {
+        flushLine();
+        line = word;
+      }
+    } else {
+      flushLine();
+      const chunks = breakLongWord(ctx, word, maxWidth);
+      for (const chunk of chunks) {
+        const candidate = line ? `${line} ${chunk}` : chunk;
+        if (ctx.measureText(candidate).width <= maxWidth) {
+          line = candidate;
+        } else {
+          flushLine();
+          line = chunk;
+        }
+      }
+    }
+  }
+  flushLine();
+  return lines;
+}
+
 function wrapCanvasText(
   ctx: CanvasRenderingContext2D,
   text: string,
@@ -62,23 +136,12 @@ function wrapCanvasText(
   maxWidth: number,
   lineHeight: number,
 ) {
-  const words = text.split(" ");
-  let line = "";
-
-  for (let n = 0; n < words.length; n += 1) {
-    const testLine = `${line}${words[n]} `;
-    const testWidth = ctx.measureText(testLine).width;
-    if (testWidth > maxWidth && n > 0) {
-      ctx.fillText(line, x, y);
-      line = `${words[n]} `;
-      y += lineHeight;
-    } else {
-      line = testLine;
-    }
+  const lines = buildWrappedLines(ctx, text, maxWidth);
+  for (const line of lines) {
+    ctx.fillText(line, x, y);
+    y += lineHeight;
   }
-
-  ctx.fillText(line, x, y);
-  return y + lineHeight;
+  return y;
 }
 
 function toSafeFileName(value: string) {
@@ -241,7 +304,8 @@ async function buildRetinaReportPdf(input: RetinaReportPdfInput) {
   }
 
   canvas.width = 1240;
-  canvas.height = reportSettings.compactPdf ? 2900 : 3300;
+  /** Uzun metinlerde dikey taşmayı önlemek için geniş çizim alanı; PDF’e yalnızca gerçek içerik yüksekliği aktarılır. */
+  canvas.height = reportSettings.compactPdf ? 12000 : 14000;
 
   // A4 page height projected onto canvas coordinates.
   const pageHeightInCanvas = (841.89 * canvas.width) / 595.28;
@@ -278,14 +342,37 @@ async function buildRetinaReportPdf(input: RetinaReportPdfInput) {
 
   ctx.fillStyle = "#0A2540";
   ctx.font = "bold 42px Arial";
-  ctx.fillText(reportTitle.toUpperCase(), left, y);
-  y += 52;
+  const mainTitleLineH = 50;
+  y = wrapCanvasText(
+    ctx,
+    reportTitle.toUpperCase(),
+    left,
+    y,
+    contentWidth,
+    mainTitleLineH,
+  );
+  y += 8;
 
   ctx.fillStyle = "#4B5563";
   ctx.font = "20px Arial";
-  ctx.fillText(reportDate.toLocaleString("tr-TR"), left, y);
-  ctx.fillText(`Rapor No: ${reportNo}`, left + 520, y);
-  y += 40;
+  const metaLineH = 28;
+  y = wrapCanvasText(
+    ctx,
+    reportDate.toLocaleString("tr-TR"),
+    left,
+    y,
+    contentWidth,
+    metaLineH,
+  );
+  y = wrapCanvasText(
+    ctx,
+    `Rapor No: ${reportNo}`,
+    left,
+    y,
+    contentWidth,
+    metaLineH,
+  );
+  y += 12;
 
   ctx.strokeStyle = "#DBE6F5";
   ctx.lineWidth = 3;
@@ -295,35 +382,71 @@ async function buildRetinaReportPdf(input: RetinaReportPdfInput) {
   ctx.stroke();
   y += 50;
 
-  // Klinik özet kutusu: raporun en üstünde hızlı karar bilgisi.
-  ctx.fillStyle = "#EEF6FF";
-  ctx.fillRect(left, y, contentWidth, 138);
-  ctx.strokeStyle = "#BFDBFE";
-  ctx.lineWidth = 2;
-  ctx.strokeRect(left, y, contentWidth, 138);
+  // Klinik özet kutusu: raporun en üstünde hızlı karar bilgisi (metin uzunsa kutu genişler).
+  const summaryBoxTop = y;
+  const summaryLeftPad = left + 24;
+  const summaryLeftMax = contentWidth - 310 - 48;
+  const summaryTitleLineH = 30;
+  const summaryBodyLineH = 26;
 
-  ctx.fillStyle = "#1E3A8A";
   ctx.font = "bold 24px Arial";
-  ctx.fillText("Klinik Özet", left + 24, y + 38);
-
-  ctx.fillStyle = "#334155";
+  const klinikTitleLines = buildWrappedLines(ctx, "Klinik Özet", summaryLeftMax);
   ctx.font = "20px Arial";
-  ctx.fillText(`Nihai Sonuç: ${finalResult}`, left + 24, y + 76);
-  ctx.fillText(
+  const nihaiLines = buildWrappedLines(
+    ctx,
+    `Nihai Sonuç: ${finalResult}`,
+    summaryLeftMax,
+  );
+  const aiGuvLines = buildWrappedLines(
+    ctx,
     `AI Güven: %${(input.confidence * 100).toFixed(1)}`,
-    left + 24,
-    y + 108,
+    summaryLeftMax,
   );
 
+  const innerTextHeight =
+    38 +
+    klinikTitleLines.length * summaryTitleLineH +
+    8 +
+    (nihaiLines.length + aiGuvLines.length) * summaryBodyLineH +
+    20;
+  const summaryBoxH = Math.max(138, innerTextHeight);
+  const prioH = Math.max(82, summaryBoxH - 52);
+
+  ctx.fillStyle = "#EEF6FF";
+  ctx.fillRect(left, y, contentWidth, summaryBoxH);
+  ctx.strokeStyle = "#BFDBFE";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(left, y, contentWidth, summaryBoxH);
+
+  let drawY = y + 38;
+  ctx.fillStyle = "#1E3A8A";
+  ctx.font = "bold 24px Arial";
+  for (const tl of klinikTitleLines) {
+    ctx.fillText(tl, summaryLeftPad, drawY);
+    drawY += summaryTitleLineH;
+  }
+  drawY += 4;
+  ctx.fillStyle = "#334155";
+  ctx.font = "20px Arial";
+  for (const line of nihaiLines) {
+    ctx.fillText(line, summaryLeftPad, drawY);
+    drawY += summaryBodyLineH;
+  }
+  for (const line of aiGuvLines) {
+    ctx.fillText(line, summaryLeftPad, drawY);
+    drawY += summaryBodyLineH;
+  }
+
   ctx.fillStyle = priorityColors.fill;
-  ctx.fillRect(left + contentWidth - 310, y + 26, 280, 82);
+  ctx.fillRect(left + contentWidth - 310, y + 26, 280, prioH);
   ctx.strokeStyle = priorityColors.stroke;
-  ctx.strokeRect(left + contentWidth - 310, y + 26, 280, 82);
+  ctx.strokeRect(left + contentWidth - 310, y + 26, 280, prioH);
   ctx.fillStyle = priorityColors.text;
   ctx.font = "bold 22px Arial";
-  ctx.fillText(`Öncelik: ${priority}`, left + contentWidth - 286, y + 74);
+  const prioBaselineY = y + 26 + Math.floor(prioH / 2) + 8;
+  ctx.fillText(`Öncelik: ${priority}`, left + contentWidth - 286, prioBaselineY);
 
-  y += 180;
+  y = summaryBoxTop + summaryBoxH + 42;
 
   ctx.fillStyle = "#0A2540";
   ctx.font = "bold 30px Arial";
@@ -332,18 +455,40 @@ async function buildRetinaReportPdf(input: RetinaReportPdfInput) {
 
   ctx.fillStyle = "#1F2937";
   ctx.font = "22px Arial";
-  ctx.fillText(`Rapor Adı / Tipi: ${reportTitle}`, left, y);
-  y += 36;
-  ctx.fillText(
+  const idLineH = 32;
+  y = wrapCanvasText(
+    ctx,
+    `Rapor Adı / Tipi: ${reportTitle}`,
+    left,
+    y,
+    contentWidth,
+    idLineH,
+  );
+  y = wrapCanvasText(
+    ctx,
     `Rapor Tarihi / Saati: ${reportDate.toLocaleString("tr-TR")}`,
     left,
     y,
+    contentWidth,
+    idLineH,
   );
-  y += 36;
-  ctx.fillText(`Rapor Numarası: ${reportNo}`, left, y);
-  y += 36;
-  ctx.fillText(`Klinik / Sistem Adı: ${clinicName}`, left, y);
-  y += 56;
+  y = wrapCanvasText(
+    ctx,
+    `Rapor Numarası: ${reportNo}`,
+    left,
+    y,
+    contentWidth,
+    idLineH,
+  );
+  y = wrapCanvasText(
+    ctx,
+    `Klinik / Sistem Adı: ${clinicName}`,
+    left,
+    y,
+    contentWidth,
+    idLineH,
+  );
+  y += 24;
 
   ctx.fillStyle = "#0A2540";
   ctx.font = "bold 30px Arial";
@@ -352,20 +497,31 @@ async function buildRetinaReportPdf(input: RetinaReportPdfInput) {
 
   ctx.fillStyle = "#1F2937";
   ctx.font = "22px Arial";
-  ctx.fillText(
+  y = wrapCanvasText(
+    ctx,
     `Hasta Adı Soyadı: ${input.patientInfo?.fullName ?? "Belirtilmedi"}`,
     left,
     y,
+    contentWidth,
+    idLineH,
   );
-  y += 36;
-  ctx.fillText(
+  y = wrapCanvasText(
+    ctx,
     `TC / ID No: ${input.patientInfo?.tcNo ?? "Belirtilmedi"}`,
     left,
     y,
+    contentWidth,
+    idLineH,
   );
-  y += 36;
-  ctx.fillText(`Yaş: ${input.patientInfo?.age ?? "Belirtilmedi"}`, left, y);
-  y += 56;
+  y = wrapCanvasText(
+    ctx,
+    `Yaş: ${input.patientInfo?.age ?? "Belirtilmedi"}`,
+    left,
+    y,
+    contentWidth,
+    idLineH,
+  );
+  y += 24;
 
   ctx.fillStyle = "#0A2540";
   ctx.font = "bold 30px Arial";
@@ -423,12 +579,15 @@ async function buildRetinaReportPdf(input: RetinaReportPdfInput) {
 
   ctx.fillStyle = "#1F2937";
   ctx.font = "22px Arial";
-  ctx.fillText(
+  y = wrapCanvasText(
+    ctx,
     `AI/DR Risk Tahmini - Güven: ${formatLabel(input.aiResult)} (%${(input.confidence * 100).toFixed(1)})`,
     left,
     y,
+    contentWidth,
+    bodyLineHeight,
   );
-  y += 40;
+  y += 8;
 
   y = wrapCanvasText(
     ctx,
@@ -574,22 +733,29 @@ async function buildRetinaReportPdf(input: RetinaReportPdfInput) {
   ctx.font = "bold 28px Arial";
   ctx.fillText("7) Uyarı ve Sorumluluk Notu", left, disclaimerY - 24);
 
+  const disclaimerBody =
+    "Bu rapor AI bulgularını klinik karar destek amacıyla sunar. Nihai tanı ve tedavi sorumluluğu doktordadır.";
+  ctx.font = "17px Arial";
+  const discLines = buildWrappedLines(ctx, disclaimerBody, contentWidth - 32);
+  const discLineH = 21;
+  const discBoxH = Math.max(78, 34 + discLines.length * discLineH + 20);
+
   ctx.fillStyle = "#F8FAFC";
-  ctx.fillRect(left, disclaimerY, contentWidth, 78);
+  ctx.fillRect(left, disclaimerY, contentWidth, discBoxH);
   ctx.strokeStyle = "#E2E8F0";
-  ctx.strokeRect(left, disclaimerY, contentWidth, 78);
+  ctx.strokeRect(left, disclaimerY, contentWidth, discBoxH);
   ctx.fillStyle = "#475569";
   ctx.font = "17px Arial";
-  wrapCanvasText(
+  const discEndY = wrapCanvasText(
     ctx,
-    "Bu rapor AI bulgularını klinik karar destek amacıyla sunar. Nihai tanı ve tedavi sorumluluğu doktordadır.",
+    disclaimerBody,
     left + 16,
     disclaimerY + 34,
     contentWidth - 32,
-    21,
+    discLineH,
   );
 
-  const signTop = disclaimerY + 140;
+  const signTop = disclaimerY + discBoxH + 62;
   ctx.strokeStyle = "#9CA3AF";
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -600,7 +766,19 @@ async function buildRetinaReportPdf(input: RetinaReportPdfInput) {
   ctx.fillStyle = "#374151";
   ctx.font = "18px Arial";
   ctx.fillText("Doktor İmza / Kaşe", canvas.width - 430, signTop - 20);
-  ctx.fillText(doctorDisplayName, canvas.width - 430, signTop + 12);
+  const nameEndY = wrapCanvasText(
+    ctx,
+    doctorDisplayName,
+    canvas.width - 430,
+    signTop + 12,
+    400,
+    22,
+  );
+
+  const exportHeight = Math.min(
+    canvas.height,
+    Math.ceil(Math.max(discEndY, nameEndY, disclaimerY + discBoxH) + 40),
+  );
 
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -611,10 +789,10 @@ async function buildRetinaReportPdf(input: RetinaReportPdfInput) {
   let renderedHeight = 0;
   let pageIndex = 0;
 
-  while (renderedHeight < canvas.height) {
+  while (renderedHeight < exportHeight) {
     const sliceHeight = Math.min(
       pageHeightInCanvasForSplit,
-      canvas.height - renderedHeight,
+      exportHeight - renderedHeight,
     );
 
     const pageCanvas = document.createElement("canvas");
