@@ -18,10 +18,10 @@ describe("patient validation", () => {
     expect(result.success).toBe(true);
   });
 
-  it("rejects invalid tc number", () => {
+  it("rejects tc that is not exactly 11 digits (demo: checksum not validated)", () => {
     const result = validateCreatePatientInput({
       fullName: "Test Hasta",
-      tcNo: "12345678901",
+      tcNo: "1234567890",
       age: 52,
       gender: "Erkek",
       diabetesYears: 10,

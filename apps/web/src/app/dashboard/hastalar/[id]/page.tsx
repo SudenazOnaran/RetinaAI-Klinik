@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { getCurrentDoctorSession } from "@/lib/auth-session";
@@ -41,5 +42,13 @@ export default async function HastaDetayPage({
     description: "Hasta detay sayfasi goruntulendi",
   });
 
-  return <PatientDetailClient patient={patient} />;
+  return (
+    <Suspense
+      fallback={
+        <div className="p-6 text-sm text-slate-600">Yükleniyor…</div>
+      }
+    >
+      <PatientDetailClient patient={patient} />
+    </Suspense>
+  );
 }

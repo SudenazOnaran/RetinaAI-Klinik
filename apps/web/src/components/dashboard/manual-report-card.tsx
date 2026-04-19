@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -93,6 +94,7 @@ export function ManualReportCard({
   patientInfo,
   doctorName,
 }: ManualReportCardProps) {
+  const router = useRouter();
   const { t } = useTranslation();
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
@@ -195,7 +197,10 @@ export function ManualReportCard({
       setClinicalAssessment("");
       setTreatmentRecommendations("");
       setDoctorNotes("");
-      window.location.reload();
+      setReportTitle("");
+      setReportDate(new Date().toISOString().slice(0, 10));
+      setAiDraft(null);
+      router.refresh();
     } catch (error) {
       const errorMessage =
         error instanceof Error

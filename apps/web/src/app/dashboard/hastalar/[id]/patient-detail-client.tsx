@@ -480,7 +480,7 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
             </CardDescription>
           </CardHeader>
 
-          <CardContent className="space-y-4 pt-4">
+          <CardContent className="min-w-0 space-y-4 overflow-x-hidden pt-4">
             {[...reports]
               .sort(
                 (a: any, b: any) =>
@@ -502,7 +502,7 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
                 return (
                   <div
                     key={r.id}
-                    className={`rounded-xl border border-slate-200 border-l-4 p-4 shadow-sm ${getReportAccentClass(idx)}`}
+                    className={`max-w-full min-w-0 overflow-hidden rounded-xl border border-slate-200 border-l-4 p-4 shadow-sm ${getReportAccentClass(idx)}`}
                   >
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
                       <div className="flex items-center gap-2">
@@ -533,12 +533,12 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
                       </Button>
                     </div>
 
-                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                      <div className="rounded-lg border border-slate-200 bg-white p-3">
+                    <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                      <div className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white p-3">
                         <p className="text-xs font-semibold text-slate-500">
                           {t("patientDetailReports.anamnesis")}
                         </p>
-                        <p className="mt-1 text-sm text-slate-800">
+                        <p className="mt-1 break-words text-sm text-slate-800 [overflow-wrap:anywhere]">
                           {getReportSectionValue(
                             r,
                             "anamnesis",
@@ -547,11 +547,11 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
                         </p>
                       </div>
 
-                      <div className="rounded-lg border border-slate-200 bg-white p-3">
+                      <div className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white p-3">
                         <p className="text-xs font-semibold text-slate-500">
                           {t("patientDetailReports.examFindings")}
                         </p>
-                        <p className="mt-1 text-sm text-slate-800">
+                        <p className="mt-1 break-words text-sm text-slate-800 [overflow-wrap:anywhere]">
                           {getReportSectionValue(
                             r,
                             "examFindings",
@@ -560,11 +560,11 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
                         </p>
                       </div>
 
-                      <div className="rounded-lg border border-slate-200 bg-white p-3">
+                      <div className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white p-3">
                         <p className="text-xs font-semibold text-slate-500">
                           {t("patientDetailReports.labResults")}
                         </p>
-                        <p className="mt-1 text-sm text-slate-800">
+                        <p className="mt-1 break-words text-sm text-slate-800 [overflow-wrap:anywhere]">
                           {getReportSectionValue(
                             r,
                             "labResults",
@@ -573,11 +573,11 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
                         </p>
                       </div>
 
-                      <div className="rounded-lg border border-slate-200 bg-white p-3">
+                      <div className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white p-3">
                         <p className="text-xs font-semibold text-slate-500">
                           {t("patientDetailReports.clinicalAssessment")}
                         </p>
-                        <p className="mt-1 text-sm text-slate-800">
+                        <p className="mt-1 break-words text-sm text-slate-800 [overflow-wrap:anywhere]">
                           {getReportSectionValue(
                             r,
                             "clinicalAssessment",
@@ -591,21 +591,23 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
                         </p>
                       </div>
 
-                      <div className="rounded-lg border border-slate-200 bg-white p-3">
+                      <div className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white p-3">
                         <p className="text-xs font-semibold text-slate-500">
                           {t("patientDetailReports.treatment")}
                         </p>
-                        <p className="mt-1 text-sm text-slate-800">
+                        <p className="mt-1 break-words text-sm text-slate-800 [overflow-wrap:anywhere]">
                           {getTreatmentText(r)}
                         </p>
                       </div>
 
-                      <div className="rounded-lg border border-slate-200 bg-white p-3">
+                      <div className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white p-3">
                         <p className="text-xs font-semibold text-slate-500">
                           {t("patientDetailReports.aiDrRiskConfidence")}
                         </p>
-                        <div className="mt-1 flex flex-wrap items-center gap-2">
-                          <Badge>{aiRiskLabel}</Badge>
+                        <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
+                          <Badge className="max-w-full break-words [overflow-wrap:anywhere]">
+                            {aiRiskLabel}
+                          </Badge>
                           <Badge
                             variant="outline"
                             className="border-[#c5d8d3] bg-[#edf6f3] text-[#446b62]"
@@ -615,11 +617,11 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
                         </div>
                       </div>
 
-                      <div className="rounded-lg border border-slate-200 bg-white p-3 md:col-span-2 xl:col-span-1">
+                      <div className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white p-3 md:col-span-2 xl:col-span-1">
                         <p className="text-xs font-semibold text-slate-500">
                           {t("patientDetailReports.aiOtherRiskConfidence")}
                         </p>
-                        <p className="mt-1 text-sm text-slate-800">
+                        <p className="mt-1 break-words text-sm text-slate-800 [overflow-wrap:anywhere]">
                           {odirLabels.length > 0
                             ? odirLabels
                                 .map(
@@ -631,7 +633,7 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
                         </p>
                       </div>
 
-                      <div className="rounded-lg border border-slate-200 bg-white p-3">
+                      <div className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white p-3">
                         <p className="text-xs font-semibold text-slate-500">
                           {t("patientDetailReports.fundusImage")}
                         </p>
@@ -649,7 +651,7 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
                         )}
                       </div>
 
-                      <div className="rounded-lg border border-slate-200 bg-white p-3">
+                      <div className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white p-3">
                         <p className="text-xs font-semibold text-slate-500">
                           {t("patientDetailReports.heatmap")}
                         </p>
