@@ -53,6 +53,60 @@ function getFromAddress(): string {
   return "Retina AI <noreply@invalid.local>";
 }
 
+/** Yeni doktor kayıt bildiriminin gideceği adres; yoksa klinik gelen kutusu. */
+function getAdminRegistrationNotifyTo(): string {
+  const explicit = trimEnv("ADMIN_REGISTRATION_NOTIFY_EMAIL");
+  if (explicit) return explicit;
+  return "retinai.klinik@gmail.com";
+}
+
+/**
+ * Yeni doktor kayıt başvurusunda admin gelen kutusuna bilgi maili gönderir.
+ * SMTP yoksa uyarı loglar ve sessizce döner (kayıt yine de tamamlanır).
+ */
+export async function sendDoctorRegistrationRequestNotifyEmail(params: {
+  doctorDisplayName: string;
+  doctorEmail: string;
+}): Promise<void> {
+  if (!isDoctorApprovalEmailConfigured()) {
+    console.warn(
+      "[doctor-approval-email] Kayıt bildirimi atlandı: SMTP_HOST / SMTP_USER / SMTP_PASS eksik.",
+    );
+    return;
+  }
+
+  const display = params.doctorDisplayName.trim() || "Bilinmeyen";
+  const email = params.doctorEmail.trim();
+  const adminUrl = `${getPublicAppBaseUrl()}/admin`;
+  const subject = "Retina AI — Yeni doktor kayıt başvurusu";
+  const text = `${display} adlı doktor kayıt başvurusu gönderdi.
+
+E-posta: ${email}
+
+Başvuruyu incelemek için: ${adminUrl}
+
+Retina AI`;
+
+  const safeDisplay = escapeHtml(display);
+  const safeEmail = escapeHtml(email);
+  const safeAdminUrl = escapeHtml(adminUrl);
+  const mailtoHref = `mailto:${encodeURIComponent(email)}`;
+  const html = `<p><strong>${safeDisplay}</strong> adlı doktor kayıt başvurusu gönderdi.</p>
+<p>E-posta: <a href="${mailtoHref}">${safeEmail}</a></p>
+<p>Başvuruyu incelemek için: <a href="${safeAdminUrl}">${safeAdminUrl}</a></p>
+<p>Retina AI</p>`;
+
+  const transporter = createTransporter();
+  await transporter.sendMail({
+    from: getFromAddress(),
+    to: getAdminRegistrationNotifyTo(),
+    subject,
+    text,
+    html,
+  });
+  console.error("[retina-mail] registration notify SENT ok");
+}
+
 /**
  * Admin onayı sonrası doktora giriş linki içeren e-posta gönderir.
  * SMTP yapılandırması yoksa uyarı loglar ve sessizce döner.

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { sendDoctorRegistrationRequestNotifyEmail } from "@/lib/doctor-approval-email";
 
 export async function POST(req: Request) {
   try {
@@ -49,6 +50,14 @@ export async function POST(req: Request) {
         CURRENT_TIMESTAMP
       )
     `;
+
+    const displayName = `${String(name).trim()} ${String(surname).trim()}`.trim();
+    void sendDoctorRegistrationRequestNotifyEmail({
+      doctorDisplayName: displayName,
+      doctorEmail: String(email).trim(),
+    }).catch((err) => {
+      console.error("[public-register] Kayıt bildirim e-postası gönderilemedi:", err);
+    });
 
     return NextResponse.json({
       success: true,
