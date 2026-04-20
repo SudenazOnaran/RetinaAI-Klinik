@@ -1,8 +1,13 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getCurrentDoctorSession } from "@/lib/auth-session";
 import { enqueueAiRequest, callAiServiceWithRetry } from "@/lib/ai-gateway";
 import { logAuditEvent } from "@/lib/audit-log";
 import { createMonitoringAlert } from "@/lib/monitoring-alerts";
+import {
+  formatErrorCause,
+  logStructuredError,
+} from "@/lib/structured-error-log";
 
 export const runtime = "nodejs";
 
@@ -19,6 +24,8 @@ export async function POST(req: Request) {
   if (!session) {
     return NextResponse.json({ error: "Oturum bulunamadi" }, { status: 401 });
   }
+
+  const requestId = req.headers.get("x-request-id")?.trim() || randomUUID();
 
   const body = await req.formData();
   const file = body.get("image");
@@ -40,9 +47,12 @@ export async function POST(req: Request) {
   }
 
   try {
-    const aiData = (await callAiServiceWithRetry(
-      upstreamForm,
-    )) as PredictSuccess;
+    const aiData = (await callAiServiceWithRetry(upstreamForm, {
+      requestId,
+      route: "/api/ai/predict",
+      action: "AI_ANALYZE",
+      patientId,
+    })) as PredictSuccess;
 
     await logAuditEvent({
       doctorId: session.id,
@@ -58,58 +68,82 @@ export async function POST(req: Request) {
 
     return NextResponse.json(aiData, { status: 200 });
   } catch (error) {
-    const arrayBuffer = await file.arrayBuffer();
-    const imageBase64 = Buffer.from(arrayBuffer).toString("base64");
     const message = error instanceof Error ? error.message : "AI servis hatasi";
 
-    const queueId = await enqueueAiRequest({
-      doctorId: session.id,
-      endpoint: "/predict",
-      error: message,
-      payload: {
-        patientId,
-        fileName: file.name || "image.jpg",
-        mimeType: file.type || "application/octet-stream",
-        imageBase64,
-        queuedByDoctorId: session.id,
-      },
-    });
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const imageBase64 = Buffer.from(arrayBuffer).toString("base64");
 
-    await createMonitoringAlert({
-      doctorId: session.id,
-      source: "AI_GATEWAY",
-      severity: "CRITICAL",
-      title: "AI servisi ulasilamiyor",
-      detail: "AI analiz istegi kuyruga alindi",
-      metadata: {
-        queueId,
-        reason: message,
-        patientId,
-      },
-    });
+      const queueId = await enqueueAiRequest({
+        doctorId: session.id,
+        endpoint: "/predict",
+        error: message,
+        payload: {
+          patientId,
+          fileName: file.name || "image.jpg",
+          mimeType: file.type || "application/octet-stream",
+          imageBase64,
+          queuedByDoctorId: session.id,
+        },
+      });
 
-    await logAuditEvent({
-      doctorId: session.id,
-      role: session.role,
-      action: "EDIT",
-      entityType: "SYSTEM",
-      entityId: queueId,
-      description: "AI istegi kuyruga alindi",
-      metadata: {
-        reason: message,
-        patientId,
-      },
-    });
+      await createMonitoringAlert({
+        doctorId: session.id,
+        source: "AI_GATEWAY",
+        severity: "CRITICAL",
+        title: "AI servisi ulasilamiyor",
+        detail: "AI analiz istegi kuyruga alindi",
+        metadata: {
+          queueId,
+          reason: message,
+          patientId,
+        },
+      });
 
-    return NextResponse.json(
-      {
-        success: false,
-        queued: true,
-        queueId,
-        error:
-          "AI servisine su an ulasilamadi. Istek kuyruga alindi, daha sonra tekrar denenebilir.",
-      },
-      { status: 202 },
-    );
+      await logAuditEvent({
+        doctorId: session.id,
+        role: session.role,
+        action: "EDIT",
+        entityType: "SYSTEM",
+        entityId: queueId,
+        description: "AI istegi kuyruga alindi",
+        metadata: {
+          reason: message,
+          patientId,
+        },
+      });
+
+      return NextResponse.json(
+        {
+          success: false,
+          queued: true,
+          queueId,
+          error:
+            "AI servisine su an ulasilamadi. Istek kuyruga alindi, daha sonra tekrar denenebilir.",
+        },
+        { status: 202 },
+      );
+    } catch (secondary) {
+      logStructuredError({
+        requestId,
+        route: "/api/ai/predict",
+        action: "AI_ANALYZE_QUEUE_FAIL",
+        patientId,
+        errorMessage:
+          secondary instanceof Error ? secondary.message : String(secondary),
+        stack: secondary instanceof Error ? secondary.stack : undefined,
+        cause: formatErrorCause(secondary),
+        payloadSummary: JSON.stringify({
+          fileName: file.name || "image.jpg",
+          mimeType: file.type || "application/octet-stream",
+          fileSize: file.size,
+          priorErrorLen: message.length,
+        }),
+      });
+      return NextResponse.json(
+        { success: false, error: "AI istegi kuyruga alinamadi." },
+        { status: 500 },
+      );
+    }
   }
 }

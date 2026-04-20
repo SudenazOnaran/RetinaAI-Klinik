@@ -1,9 +1,15 @@
 "use server";
 
+import { headers } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { getCurrentDoctorSession } from "@/lib/auth-session";
 import { logAuditEvent } from "@/lib/audit-log";
 import { saveDataObject } from "@/lib/object-storage";
+import {
+  formatErrorCause,
+  logStructuredError,
+  summarizeSaveAnalysisPayload,
+} from "@/lib/structured-error-log";
 
 export async function saveAnalysisAction({
   patientId,
@@ -208,8 +214,26 @@ export async function saveAnalysisAction({
       confidence,
     };
   } catch (error) {
-    console.error("Error saving analysis:", error);
+    const hdrs = await headers();
+    const requestId = hdrs.get("x-request-id")?.trim() || "unknown";
     const message = error instanceof Error ? error.message : "";
+    logStructuredError({
+      requestId,
+      route: "saveAnalysisAction",
+      action: "SAVE_REPORT",
+      patientId,
+      errorMessage: message || "Kayit hatasi",
+      stack: error instanceof Error ? error.stack : undefined,
+      cause: formatErrorCause(error),
+      payloadSummary: summarizeSaveAnalysisPayload({
+        doctorNoteLen: String(doctorNote || "").length,
+        ilaclarLen: String(ilaclar || "").length,
+        hasHeatmap: Boolean(heatmapUrl),
+        hasOriginalImage: Boolean(originalImage),
+        aiResultLen: String(aiResult || "").length,
+        labelsCount: Array.isArray(aiOdriLabels) ? aiOdriLabels.length : 0,
+      }),
+    });
     const looksLikeColumnLengthError =
       /P2000|too long|value for the column is too long|character varying/i.test(
         message,

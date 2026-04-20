@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { drLabelTr } from "@/lib/dr-label-tr";
 import { useTranslation } from "@/components/providers/i18n-provider";
+import { logStructuredError } from "@/lib/structured-error-log";
 
 type PatientReportInfo = {
   fullName?: string;
@@ -90,6 +91,7 @@ export function ImageAnalysisCard({
   const handleAnalyze = async () => {
     if (!file) return;
     setIsLoading(true);
+    const clientRid = crypto.randomUUID();
     try {
       const fd = new FormData();
       fd.append("image", file);
@@ -99,9 +101,10 @@ export function ImageAnalysisCard({
 
       const res = await fetch("/api/ai/predict", {
         method: "POST",
+        headers: { "x-request-id": clientRid },
         body: fd,
       });
-      const data = await res.json();
+      const data = (await res.json()) as Record<string, unknown>;
       if (res.ok && data.success) {
         setResult(data);
         setIsAddedToForm(false);
@@ -112,9 +115,30 @@ export function ImageAnalysisCard({
           description: t("analysisCard.queueDesc"),
         });
       } else {
-        throw new Error(data.error || data.message || t("analysisCard.analysisFail"));
+        throw new Error(
+          String(data.error || data.message || t("analysisCard.analysisFail")),
+        );
       }
-    } catch {
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      logStructuredError({
+        requestId: clientRid,
+        route:
+          typeof window !== "undefined"
+            ? `${window.location.pathname}(client)`
+            : "/api/ai/predict(client)",
+        action:
+          err instanceof SyntaxError
+            ? "AI_ANALYZE_CLIENT_JSON"
+            : "AI_ANALYZE_CLIENT",
+        patientId,
+        errorMessage: err.message,
+        stack: err.stack,
+        payloadSummary: JSON.stringify({
+          fileName: file?.name,
+          fileSize: file?.size,
+        }),
+      });
       toast({
         variant: "destructive",
         title: t("errorPage.title"),

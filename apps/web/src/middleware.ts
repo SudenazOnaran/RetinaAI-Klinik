@@ -1,138 +1,18 @@
-import { NextResponse, type NextRequest } from "next/server";
-import { DOCTOR_SESSION_COOKIE } from "@/lib/auth-constants";
-import {
-  canAccessDashboardPath,
-  canAccessAdminPath,
-  normalizeDoctorRole,
-} from "@/lib/roles";
-import {
-  DEFAULT_LOCALE,
-  LOCALE_COOKIE_NAME,
-  isLocale,
-  normalizeLocale,
-} from "@/lib/i18n/config";
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 
-function decodeSessionRole(token?: string | null) {
-  if (!token) return null;
-
-  const [payload] = token.split(".");
-  if (!payload) return null;
-
-  try {
-    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
-    const padded = normalized.padEnd(
-      normalized.length + ((4 - (normalized.length % 4)) % 4),
-      "=",
-    );
-    const json = atob(padded);
-    const parsed = JSON.parse(json) as { role?: string };
-    return normalizeDoctorRole(parsed.role);
-  } catch {
-    return null;
+export function middleware(request: NextRequest) {
+  const requestHeaders = new Headers(request.headers);
+  if (!requestHeaders.get("x-request-id")?.trim()) {
+    requestHeaders.set("x-request-id", crypto.randomUUID());
   }
-}
-
-export function middleware(req: NextRequest) {
-  const { pathname } = req.nextUrl;
-  const queryLocaleRaw = req.nextUrl.searchParams.get("locale");
-  const queryLocale =
-    queryLocaleRaw && queryLocaleRaw.toLowerCase().startsWith("en")
-      ? "en"
-      : queryLocaleRaw && queryLocaleRaw.toLowerCase().startsWith("tr")
-        ? "tr"
-        : null;
-  if (pathname === "/en/login" || pathname === "/tr/login") {
-    const target = new URL("/login", req.url);
-    target.search = req.nextUrl.search;
-    return NextResponse.redirect(target);
-  }
-  const token = req.cookies.get(DOCTOR_SESSION_COOKIE)?.value;
-  const role = decodeSessionRole(token);
-  const hasSession = Boolean(token);
-  const requestId = req.headers.get("x-request-id") || crypto.randomUUID();
-  const requestHeaders = new Headers(req.headers);
-  requestHeaders.set("x-request-id", requestId);
-  const localeCookie = req.cookies.get(LOCALE_COOKIE_NAME)?.value;
-  const localeToPersist = queryLocale
-    ? queryLocale
-    : isLocale(localeCookie)
-    ? localeCookie
-    : normalizeLocale(req.headers.get("accept-language"));
-
-  if (queryLocale) {
-    const cleanUrl = req.nextUrl.clone();
-    cleanUrl.searchParams.delete("locale");
-    const response = NextResponse.redirect(cleanUrl);
-    response.headers.set("x-request-id", requestId);
-    response.cookies.set(LOCALE_COOKIE_NAME, localeToPersist, {
-      path: "/",
-      maxAge: 60 * 60 * 24 * 365,
-      sameSite: "lax",
-    });
-    return response;
-  }
-
-  if (pathname.startsWith("/admin") && !hasSession) {
-    const loginUrl = new URL("/login", req.url);
-    const response = NextResponse.redirect(loginUrl);
-    response.headers.set("x-request-id", requestId);
-    return response;
-  }
-
-  if (pathname.startsWith("/admin") && role) {
-    const allowed = canAccessAdminPath(role, pathname);
-    if (!allowed) {
-      const targetUrl = new URL("/login", req.url);
-      const response = NextResponse.redirect(targetUrl);
-      response.headers.set("x-request-id", requestId);
-      return response;
-    }
-  }
-
-  if (pathname.startsWith("/dashboard") && !hasSession) {
-    const loginUrl = new URL("/login", req.url);
-    const response = NextResponse.redirect(loginUrl);
-    response.headers.set("x-request-id", requestId);
-    return response;
-  }
-
-  if (pathname.startsWith("/dashboard") && role) {
-    const allowed = canAccessDashboardPath(role, pathname);
-    if (!allowed) {
-      const targetUrl = new URL("/dashboard", req.url);
-      targetUrl.searchParams.set("forbidden", "1");
-      const response = NextResponse.redirect(targetUrl);
-      response.headers.set("x-request-id", requestId);
-      return response;
-    }
-  }
-
-  const response = NextResponse.next({
-    request: {
-      headers: requestHeaders,
-    },
+  return NextResponse.next({
+    request: { headers: requestHeaders },
   });
-  response.headers.set("x-request-id", requestId);
-  if (!isLocale(localeCookie) || localeCookie !== localeToPersist) {
-    response.cookies.set(LOCALE_COOKIE_NAME, localeToPersist ?? DEFAULT_LOCALE, {
-      path: "/",
-      maxAge: 60 * 60 * 24 * 365,
-      sameSite: "lax",
-    });
-  }
-  return response;
 }
 
 export const config = {
   matcher: [
-    "/",
-    "/dashboard/:path*",
-    "/admin/:path*",
-    "/login",
-    "/register",
-    "/doctor-register",
-    "/reset-password",
-    "/en/login",
-    "/tr/login",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

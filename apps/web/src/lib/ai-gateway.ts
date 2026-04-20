@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
+import { logStructuredError } from "@/lib/structured-error-log";
 
 type QueuePayload = {
   patientId?: string | null;
@@ -91,15 +92,46 @@ async function delay(ms: number) {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export async function callAiServiceWithRetry(formData: FormData) {
+export type AiGatewayCallContext = {
+  requestId: string;
+  route: string;
+  action: string;
+  patientId?: string | null;
+};
+
+function logAndThrow(ctx: AiGatewayCallContext, err: Error, extras?: { aiResponseSummary?: string; payloadSummary?: string }): never {
+  logStructuredError({
+    requestId: ctx.requestId,
+    route: ctx.route,
+    action: ctx.action,
+    patientId: ctx.patientId,
+    errorMessage: err.message,
+    stack: err.stack,
+    aiResponseSummary: extras?.aiResponseSummary,
+    payloadSummary: extras?.payloadSummary,
+  });
+  throw err;
+}
+
+export async function callAiServiceWithRetry(
+  formData: FormData,
+  ctx: AiGatewayCallContext,
+) {
   const url = new URL(getAiServiceUrl());
   if (shouldUseTlsEnforcement(url) && url.protocol !== "https:") {
-    throw new Error("AI servisi production ortaminda HTTPS kullanmalidir.");
+    const err = new Error("AI servisi production ortaminda HTTPS kullanmalidir.");
+    logAndThrow(ctx, err, {
+      payloadSummary: JSON.stringify({ upstream: `${url.host}${url.pathname}` }),
+    });
   }
 
   const timeoutMs = getTimeoutMs();
   const retries = getRetryCount();
   let lastError: Error | null = null;
+  const upstreamSummary = JSON.stringify({
+    upstream: `${url.host}${url.pathname}`,
+    timeoutMs,
+  });
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     const controller = new AbortController();
@@ -111,6 +143,7 @@ export async function callAiServiceWithRetry(formData: FormData) {
         body: formData,
         headers: {
           "X-AI-Gateway-Key": getAiGatewaySecret(),
+          "x-request-id": ctx.requestId,
         },
         signal: controller.signal,
       });
@@ -121,16 +154,35 @@ export async function callAiServiceWithRetry(formData: FormData) {
         const bodyText = await response.text();
         const transient = response.status >= 500 || response.status === 429;
         if (!transient || attempt === retries) {
-          throw new Error(
-            `AI servisi hatasi (${response.status}): ${bodyText}`,
+          const bodySnippet =
+            bodyText.length > 400
+              ? `${bodyText.slice(0, 400)}…`
+              : bodyText;
+          const err = new Error(
+            `AI servisi hatasi (${response.status}): ${bodySnippet}`,
           );
+          logAndThrow(ctx, err, {
+            aiResponseSummary: bodyText.slice(0, 200),
+            payloadSummary: upstreamSummary,
+          });
         }
 
         await delay(300 * (attempt + 1));
         continue;
       }
 
-      return response.json();
+      try {
+        return await response.json();
+      } catch (parseErr) {
+        const err =
+          parseErr instanceof Error
+            ? parseErr
+            : new Error("AI yaniti JSON olarak cozumlenemedi.");
+        logAndThrow(ctx, err, {
+          aiResponseSummary: "json_parse_failed",
+          payloadSummary: upstreamSummary,
+        });
+      }
     } catch (error) {
       clearTimeout(timer);
       const err =
@@ -147,5 +199,6 @@ export async function callAiServiceWithRetry(formData: FormData) {
     }
   }
 
-  throw lastError || new Error("AI servisine ulasilamadi.");
+  const finalErr = lastError || new Error("AI servisine ulasilamadi.");
+  logAndThrow(ctx, finalErr, { payloadSummary: upstreamSummary });
 }

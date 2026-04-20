@@ -3,10 +3,12 @@
 # =========================
 
 import io
+import json
 import base64
 import time
 import threading
 import os
+import traceback
 import numpy as np
 import cv2
 import torch
@@ -20,7 +22,9 @@ from PIL import Image, UnidentifiedImageError
 from dotenv import load_dotenv
 import random
 from collections import defaultdict, deque
-from werkzeug.exceptions import RequestEntityTooLarge
+from werkzeug.exceptions import HTTPException, RequestEntityTooLarge
+
+from structured_error_log import log_structured_error, resolve_request_id
 
 try:
     import redis
@@ -59,7 +63,12 @@ CORS(
         r"/predict": {
             "origins": ALLOWED_CORS_ORIGINS,
             "methods": ["POST", "OPTIONS"],
-            "allow_headers": ["Content-Type", "X-AI-Gateway-Key"],
+            "allow_headers": [
+                "Content-Type",
+                "X-AI-Gateway-Key",
+                "X-Request-Id",
+                "x-request-id",
+            ],
         }
     },
 )
@@ -196,12 +205,80 @@ def _safe_load_image(file_storage):
         raise ValueError("Dosya gecerli bir gorsel degil.")
 
 
+def _predict_payload_summary() -> str:
+    """Ham görüntü/base64 loglanmaz."""
+    try:
+        pid = (request.form.get("patientId") or "").strip()
+        pid_len = len(pid)
+    except Exception:
+        pid_len = 0
+    img = request.files.get("image")
+    roi = request.files.get("roiMask")
+    return json.dumps(
+        {
+            "patientIdFieldLen": pid_len,
+            "hasImageField": img is not None,
+            "imageFilenameLen": len((getattr(img, "filename", None) or "")),
+            "hasRoiMaskField": roi is not None,
+            "contentLength": request.content_length,
+        },
+        ensure_ascii=False,
+    )
+
+
+def _safe_predict_payload_summary() -> str:
+    try:
+        return _predict_payload_summary()
+    except Exception:
+        return json.dumps({"summary": "unavailable"}, ensure_ascii=False)
+
+
 @app.errorhandler(RequestEntityTooLarge)
-def handle_request_entity_too_large(_error):
+def handle_request_entity_too_large(err):
+    request_id = resolve_request_id(request.headers)
+    log_structured_error(
+        request_id=request_id,
+        route=request.path or "/predict",
+        action="REQUEST_TOO_LARGE",
+        error_message=str(err.description or err)[:500],
+        payload_summary=_safe_predict_payload_summary(),
+    )
     return jsonify({
         "success": False,
         "error": "Dosya boyutu limiti asildi. Maksimum 8 MB yukleyebilirsiniz.",
+        "requestId": request_id,
     }), 413
+
+
+@app.errorhandler(Exception)
+def handle_unhandled_exception(err):
+    """500 ve beklenmeyen hatalar; HTTPException (4xx) doğrudan Flask yanıtı."""
+    if isinstance(err, HTTPException):
+        return err.get_response()
+
+    request_id = resolve_request_id(request.headers)
+    patient_id = None
+    try:
+        patient_id = (request.form.get("patientId") or "").strip() or None
+    except Exception:
+        pass
+
+    log_structured_error(
+        request_id=request_id,
+        route=request.path or "unknown",
+        action="UNHANDLED_EXCEPTION",
+        error_message=str(err),
+        stack=traceback.format_exc(),
+        patient_id=patient_id,
+        payload_summary=_safe_predict_payload_summary()
+        if request.path == "/predict"
+        else json.dumps({"path": request.path}, ensure_ascii=False),
+    )
+    return jsonify({
+        "success": False,
+        "error": "Sunucu hatasi.",
+        "requestId": request_id,
+    }), 500
 
 # =========================
 # PyTorch DR MODEL
@@ -499,11 +576,13 @@ def _compute_localization_metrics(cam_map, roi_mask_np):
 # =========================
 @app.route("/predict", methods=["POST"])
 def predict():
+    request_id = resolve_request_id(request.headers)
     gateway_key = request.headers.get("X-AI-Gateway-Key", "")
     if gateway_key != AI_GATEWAY_SHARED_SECRET:
         return jsonify({
             "success": False,
             "error": "Yetkisiz AI erisimi.",
+            "requestId": request_id,
         }), 401
 
     client_ip = (request.headers.get("X-Forwarded-For", "") or request.remote_addr or "unknown").split(",")[0].strip()
@@ -511,7 +590,14 @@ def predict():
         return jsonify({
             "success": False,
             "error": "Cok fazla istek gonderdiniz. Lutfen biraz bekleyin.",
+            "requestId": request_id,
         }), 429
+
+    patient_id = None
+    try:
+        patient_id = (request.form.get("patientId") or "").strip() or None
+    except Exception:
+        patient_id = None
 
     try:
         file = request.files.get("image")
@@ -570,11 +656,36 @@ def predict():
             "localization": localization
         })
     except ValueError as err:
-        return jsonify({"success": False, "error": str(err)}), 400
-    except Exception:
+        log_structured_error(
+            request_id=request_id,
+            route="/predict",
+            action="INVALID_REQUEST",
+            error_message=str(err),
+            patient_id=patient_id,
+            payload_summary=_safe_predict_payload_summary(),
+        )
+        return jsonify({
+            "success": False,
+            "error": str(err),
+            "requestId": request_id,
+        }), 400
+    except Exception as err:
+        cause = getattr(err, "__cause__", None)
+        cause_msg = str(cause) if cause is not None else None
+        log_structured_error(
+            request_id=request_id,
+            route="/predict",
+            action="PREDICT_FAILED",
+            error_message=str(err),
+            stack=traceback.format_exc(),
+            cause=cause_msg,
+            patient_id=patient_id,
+            payload_summary=_safe_predict_payload_summary(),
+        )
         return jsonify({
             "success": False,
             "error": "Analiz sirasinda beklenmeyen bir hata olustu.",
+            "requestId": request_id,
         }), 500
 
 if __name__ == "__main__":

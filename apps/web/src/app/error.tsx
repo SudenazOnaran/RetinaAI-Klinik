@@ -1,37 +1,41 @@
 "use client";
 
-import Link from "next/link";
-import { useTranslation } from "@/components/providers/i18n-provider";
+import { useEffect } from "react";
+import { logStructuredError } from "@/lib/structured-error-log";
+import { Button } from "@/components/ui/button";
 
-export default function GlobalError({
+export default function Error({
+  error,
   reset,
 }: {
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  const { t } = useTranslation();
+  useEffect(() => {
+    logStructuredError({
+      requestId: "client-error-boundary",
+      route:
+        typeof window !== "undefined"
+          ? window.location.pathname
+          : "unknown",
+      action: "SERVER_COMPONENT_RENDER",
+      errorMessage: error.message,
+      stack: error.stack,
+      digest: error.digest,
+    });
+  }, [error]);
 
   return (
-    <div className="clinic-app-bg flex min-h-screen items-center justify-center px-6">
-      <div className="clinic-panel max-w-lg rounded-2xl p-8 text-center">
-        <h1 className="text-3xl font-bold text-slate-900">{t("errorPage.title")}</h1>
-        <p className="mt-3 text-sm text-slate-600">{t("errorPage.description")}</p>
-        <div className="mt-6 flex items-center justify-center gap-3">
-          <button
-            type="button"
-            onClick={reset}
-            className="rounded-lg bg-[var(--retina-primary)] px-4 py-2 text-sm font-semibold text-white"
-          >
-            {t("errorPage.retry")}
-          </button>
-          <Link
-            href="/login"
-            className="rounded-lg border border-[var(--retina-border)] bg-white px-4 py-2 text-sm font-semibold text-slate-700"
-          >
-            {t("errorPage.goHome")}
-          </Link>
-        </div>
-      </div>
+    <div className="mx-auto flex min-h-[50vh] max-w-lg flex-col items-center justify-center gap-4 p-8 text-center">
+      <h2 className="text-lg font-semibold text-slate-900">
+        Sayfa yüklenirken bir hata oluştu
+      </h2>
+      <p className="text-sm text-slate-600">
+        Sorun devam ederse yöneticinize başvurun.
+      </p>
+      <Button type="button" onClick={() => reset()}>
+        Tekrar dene
+      </Button>
     </div>
   );
 }
