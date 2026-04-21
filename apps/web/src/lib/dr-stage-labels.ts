@@ -54,10 +54,9 @@ export function getDrStageIndexFromLabel(
 
   const key = normalizeRiskKey(raw);
 
+  /* "yok" burada yok: eksik veri yer tutucusu ile karışıyordu; DR yok için no_dr / Evre 0 kullanılmalı. */
   if (
-    ["no_dr", "no.dr", "healthy", "saglikli", "yok", "none", "normal"].includes(
-      key,
-    )
+    ["no_dr", "no.dr", "healthy", "saglikli", "none", "normal"].includes(key)
   ) {
     return 0;
   }

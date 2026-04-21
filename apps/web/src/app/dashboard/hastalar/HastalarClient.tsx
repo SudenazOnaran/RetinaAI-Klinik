@@ -88,7 +88,19 @@ function getEffectiveRisk(patient: Patient): string {
       ? feedback
       : undefined;
 
-  return cleanFeedback || patient.aiResult || patient.risk || "yok";
+  const fromFeedback =
+    typeof cleanFeedback === "string" ? cleanFeedback.trim() : "";
+  const fromAi =
+    typeof patient.aiResult === "string" ? patient.aiResult.trim() : "";
+  const fromRisk =
+    typeof patient.risk === "string" ? patient.risk.trim() : "";
+
+  if (fromFeedback) return fromFeedback;
+  if (fromAi) return fromAi;
+  if (fromRisk) return fromRisk;
+
+  /* Analiz sayısı > 0 ama sonuç etiketi gelmediyse "yok" kullanma: o hem DR yok hem eksik veri sanılıyordu. */
+  return "analiz_bekliyor";
 }
 
 function getRiskStyle(
@@ -97,10 +109,16 @@ function getRiskStyle(
 ) {
   const normalized = normalizeRisk(risk);
 
-  if (["analiz_yapilmadi", "analiz_bekliyor"].includes(normalized)) {
+  if (normalized === "analiz_yapilmadi") {
     return {
       label: t("patientsList.badgeNoAnalysis"),
       className: "bg-slate-100 text-slate-600 border-slate-200",
+    };
+  }
+  if (normalized === "analiz_bekliyor") {
+    return {
+      label: t("patientsList.badgeAwaitingAnalysis"),
+      className: "bg-slate-100 text-slate-500 border-slate-200",
     };
   }
 
@@ -136,7 +154,7 @@ function getRiskStyle(
     };
   }
 
-  if (["no_dr", "healthy", "saglikli", "yok"].includes(normalized)) {
+  if (["no_dr", "healthy", "saglikli"].includes(normalized)) {
     return {
       label: t("patientsList.badgeHealthy"),
       className: "bg-[#dff0ea] text-[#4c8a7d] border-[#c5ddd6]",
