@@ -31,10 +31,11 @@ export default async function DashboardPage() {
   }
 
   const highRiskLabels = [
-    "Severe",
-    "Proliferative_DR",
-    "Ağır Evre",
-    "Çok İleri Evre",
+    "Severe NPDR",
+    "Proliferative PDR",
+    "Moderate NPDR",
+    "Mild NPDR",
+    "No DR",
   ];
 
   const [
@@ -194,7 +195,9 @@ export default async function DashboardPage() {
           <Card className="md:col-span-4 border border-slate-200 bg-white shadow-sm">
             <CardHeader className="border-b border-slate-100">
               <CardTitle>{homeT.recentPatients.title}</CardTitle>
-              <CardDescription>{homeT.recentPatients.description}</CardDescription>
+              <CardDescription>
+                {homeT.recentPatients.description}
+              </CardDescription>
             </CardHeader>
 
             <CardContent className="space-y-3 pt-4">
@@ -227,7 +230,8 @@ export default async function DashboardPage() {
                       <Link
                         href={`/dashboard/hastalar/${patient.id}?tab=report-create`}
                       >
-                        {homeT.recentPatients.createReport} <ChevronRight className="ml-1 h-3 w-3" />
+                        {homeT.recentPatients.createReport}{" "}
+                        <ChevronRight className="ml-1 h-3 w-3" />
                       </Link>
                     </Button>
                   </div>

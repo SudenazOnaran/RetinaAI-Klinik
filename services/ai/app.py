@@ -295,11 +295,11 @@ pt_model.eval()
 pt_model.to(DEVICE)
 
 PT_CLASS_NAMES = [
-    "Sağlıklı",
-    "Hafif Evre",
-    "Orta Evre",
-    "Ağır Evre",
-    "Çok İleri Evre"
+    "Evre 0 (Sağlıklı - No DR)",
+    "Evre 1 (Hafif - Mild NPDR)  ",
+    "Evre 2 (Orta - Moderate NPDR) ",
+    "Evre 3 (Şiddetli - Severe NPDR):",
+    "Evre 4 (Proliferatif - PDR)"
 ]
 
 pt_transform = transforms.Compose([

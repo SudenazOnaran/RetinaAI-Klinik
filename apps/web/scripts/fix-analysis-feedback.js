@@ -5,11 +5,11 @@ require("dotenv").config();
 const prisma = new PrismaClient();
 
 const VALID_LABELS = new Set([
-  "no_dr",
-  "mild",
-  "moderate",
-  "severe",
-  "proliferative_dr",
+  "Evre 0 (Sağlıklı - No DR)",
+  "Evre 1 (Hafif - Mild NPDR)  ",
+  "Evre 2 (Orta - Moderate NPDR) ",
+  "Evre 3 (Şiddetli - Severe NPDR):",
+  "Evre 4 (Proliferatif - PDR)",
 ]);
 
 function normalize(value) {
@@ -27,9 +27,10 @@ function toCanonicalLabel(value) {
   if (key === "proliferative" || key === "proliferatif")
     return "proliferative_dr";
   if (key === "yok") return "no_dr";
-  if (key === "hafif") return "mild";
-  if (key === "orta") return "moderate";
-  if (key === "ciddi") return "severe";
+  if (key === "Hafif - Mild NPDR") return "mild";
+  if (key === "Orta - Moderate NPDR") return "moderate";
+  if (key === "Şiddetli - Severe NPDR") return "severe";
+  if (key === "Proliferatif - PDR") return "proliferative_dr";
 
   return null;
 }
