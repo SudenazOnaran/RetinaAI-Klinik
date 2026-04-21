@@ -26,6 +26,12 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { drLabelTr } from "@/lib/dr-label-tr";
+import {
+  DR_STAGE_LABELS_EN,
+  DR_STAGE_LABELS_TR,
+  getStorageDrLabel,
+  resolveDrLabelToStoredForm,
+} from "@/lib/dr-stage-labels";
 import { useTranslation } from "@/components/providers/i18n-provider";
 import { logStructuredError } from "@/lib/structured-error-log";
 
@@ -58,7 +64,7 @@ export function ImageAnalysisCard({
   compact = false,
   onDraftChange,
 }: ImageAnalysisCardProps) {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [base64Image, setBase64Image] = useState<string | null>(null);
@@ -163,8 +169,11 @@ export function ImageAnalysisCard({
 
   const publishDraft = (correction?: string) => {
     if (!result) return;
+    const aiResultStored =
+      resolveDrLabelToStoredForm(result.pytorch?.label, locale) ??
+      getStorageDrLabel(0, locale);
     const draft: AiAnalysisDraft = {
-      aiResult: result.pytorch?.label || "No_DR",
+      aiResult: aiResultStored,
       confidence: Number(result.pytorch?.confidence ?? 0),
       heatmapUrl: result.heatmapPlus,
       originalImage: base64Image || "",
@@ -174,7 +183,7 @@ export function ImageAnalysisCard({
       aiOdriConfidences: Array.isArray(result.odir?.results)
         ? result.odir.results.map((r: any) => Number(r.confidence ?? 0))
         : [],
-      correctionLabel: correction,
+      correctionLabel: correction?.trim() || undefined,
     };
     onDraftChange?.(draft);
     setIsAddedToForm(true);
@@ -261,7 +270,10 @@ export function ImageAnalysisCard({
                   {t("analysisCard.summary")}
                 </p>
                 <p className="mt-3 text-3xl font-bold leading-tight">
-                  {drLabelTr(result.pytorch?.label || "No_DR")}
+                  {drLabelTr(
+                    result.pytorch?.label || getStorageDrLabel(0, locale),
+                    locale,
+                  )}
                 </p>
                 <p className="mt-4 rounded-lg bg-white/15 px-3 py-2 text-sm font-medium">
                   {t("analysisCard.confidencePrefix")}
@@ -515,11 +527,13 @@ export function ImageAnalysisCard({
                   }}
                 >
                   <option value="">{t("analysisCard.correctionPlaceholder")}</option>
-                  {["Mild", "Moderate", "Severe"].map((c) => (
-                    <option key={c} value={c}>
-                      {drLabelTr(c)}
-                    </option>
-                  ))}
+                  {(locale === "tr" ? DR_STAGE_LABELS_TR : DR_STAGE_LABELS_EN).map(
+                    (label) => (
+                      <option key={label} value={label}>
+                        {label.trim()}
+                      </option>
+                    ),
+                  )}
                 </select>
               </div>
             )}

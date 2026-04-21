@@ -1,18 +1,10 @@
-const DR_LABELS_TR: Record<string, string> = {
-  No_DR: "DR Yok",
-  no_dr: "DR Yok",
-  Mild: "Hafif",
-  mild: "Hafif",
-  Moderate: "Orta",
-  moderate: "Orta",
-  Severe: "Ciddi",
-  severe: "Ciddi",
-  Proliferative_DR: "Proliferatif DR",
-  proliferative_dr: "Proliferatif DR",
-};
+import type { Locale } from "@/lib/i18n/config";
+import { formatDrLabelForDisplay } from "@/lib/dr-stage-labels";
 
-export function drLabelTr(value?: string | null): string {
-  if (!value) return "Belirtilmedi";
-  const trimmed = value.trim();
-  return DR_LABELS_TR[trimmed] ?? trimmed.replace(/_/g, " ");
+/** @deprecated Yerine doğrudan `formatDrLabelForDisplay` kullanın; geriye dönük uyumluluk için bırakıldı. */
+export function drLabelTr(
+  value?: string | null,
+  locale: Locale = "tr",
+): string {
+  return formatDrLabelForDisplay(value, locale);
 }

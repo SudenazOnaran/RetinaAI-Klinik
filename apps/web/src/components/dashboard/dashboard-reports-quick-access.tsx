@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useTranslation } from "@/components/providers/i18n-provider";
+import { getDrStageIndexFromLabel } from "@/lib/dr-stage-labels";
 
 type DashboardReportRow = {
   id: string;
@@ -22,30 +23,11 @@ type Props = {
 
 type RiskFilter = "ALL" | "HIGH" | "MEDIUM" | "LOW";
 
-function normalize(value: string) {
-  return String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "_");
-}
-
 function mapRiskBucket(diagnosis: string): RiskFilter {
-  const key = normalize(diagnosis);
-  if (
-    [
-      "severe",
-      "proliferative_dr",
-      "agir_evre",
-      "cok_ileri_evre",
-      "yuksek_risk",
-      "kritik_risk",
-    ].includes(key)
-  ) {
-    return "HIGH";
-  }
-  if (["moderate", "orta_evre", "orta", "orta_risk"].includes(key)) {
-    return "MEDIUM";
-  }
+  const idx = getDrStageIndexFromLabel(diagnosis);
+  if (idx === null) return "LOW";
+  if (idx >= 3) return "HIGH";
+  if (idx === 2) return "MEDIUM";
   return "LOW";
 }
 

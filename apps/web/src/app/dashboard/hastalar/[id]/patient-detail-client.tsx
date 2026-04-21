@@ -38,7 +38,11 @@ import {
 } from "@/lib/retina-report-pdf";
 import { loadRetinaSettingsFromStorage } from "@/lib/retina-settings";
 import { ManualReportCard } from "@/components/dashboard/manual-report-card";
-import { drLabelTr } from "@/lib/dr-label-tr";
+import {
+  formatDrLabelForDisplay,
+  getDrStageIndexFromLabel,
+  getStorageDrLabel,
+} from "@/lib/dr-stage-labels";
 import { useTranslation } from "@/components/providers/i18n-provider";
 
 export default function PatientDetailClient({ patient }: { patient: any }) {
@@ -201,20 +205,8 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
     return null;
   };
 
-  const formatDiagnosisLabel = (label: string) => {
-    if (locale !== "en") return drLabelTr(label);
-
-    const canonical = toReportDiagnosisLabel(label);
-    if (canonical === "No_DR") return t("patientDetailProgress.severityNone");
-    if (canonical === "Mild") return t("patientDetailProgress.severityMild");
-    if (canonical === "Moderate")
-      return t("patientDetailProgress.severityModerate");
-    if (canonical === "Severe") return t("patientDetailProgress.severitySevere");
-    if (canonical === "Proliferative_DR")
-      return t("patientDetailProgress.severityProliferative");
-
-    return String(label || "-");
-  };
+  const formatDiagnosisLabel = (label: string) =>
+    formatDrLabelForDisplay(label, locale);
 
   const isApprovalFeedback = (value: unknown) => {
     const normalized = normalizeDiagnosisKey(value);
@@ -231,51 +223,17 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
     ].includes(normalized);
   };
 
-  // Report saving flow stores these canonical DR labels.
-  const toReportDiagnosisLabel = (value: unknown) => {
-    const normalized = normalizeDiagnosisKey(value);
-
-    if (!normalized) return null;
-    if (normalized === "dusuk_risk") return "Mild";
-    if (normalized === "orta_risk") return "Moderate";
-    if (normalized === "yuksek_risk") return "Severe";
-    if (normalized === "kritik_risk") return "Proliferative_DR";
-    if (normalized === "no_dr") return "No_DR";
-    if (normalized === "mild") return "Mild";
-    if (normalized === "moderate") return "Moderate";
-    if (normalized === "severe") return "Severe";
-    if (normalized === "proliferative_dr") return "Proliferative_DR";
-
-    // Legacy aliases still encountered in older rows.
-    if (["yok", "healthy", "saglikli"].includes(normalized)) return "No_DR";
-    if (["hafif", "hafif_evre"].includes(normalized)) return "Mild";
-    if (["orta", "orta_evre"].includes(normalized)) return "Moderate";
-    if (["ciddi", "agir", "agir_evre"].includes(normalized)) return "Severe";
-    if (
-      ["proliferative", "proliferatif", "cok_ileri_evre"].includes(normalized)
-    )
-      return "Proliferative_DR";
-
-    return null;
-  };
-
   const resolveEffectiveDiagnosis = (report: any) => {
     const doctorFeedback = getDoctorFeedback(report);
     if (doctorFeedback && !isApprovalFeedback(doctorFeedback)) {
       return doctorFeedback;
     }
     if (report?.aiResult) return report.aiResult;
-    return "No_DR";
+    return getStorageDrLabel(0, locale);
   };
 
   const getSeverityScore = (label: string) => {
-    const canonical = toReportDiagnosisLabel(label);
-
-    if (canonical === "Proliferative_DR") return 4;
-    if (canonical === "Severe") return 3;
-    if (canonical === "Moderate") return 2;
-    if (canonical === "Mild") return 1;
-    return 0;
+    return getDrStageIndexFromLabel(label) ?? 0;
   };
 
   const severityLabel = (score: number) => {

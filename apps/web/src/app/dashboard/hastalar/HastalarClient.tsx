@@ -20,6 +20,11 @@ import { useToast } from "@/hooks/use-toast";
 import { bulkDeletePatientsAction } from "@/app/actions/bulk-delete-patients";
 import { bulkUpdatePatientRiskAction } from "@/app/actions/bulk-update-patient-risk";
 import { useTranslation } from "@/components/providers/i18n-provider";
+import {
+  DR_STAGE_LABELS_EN,
+  DR_STAGE_LABELS_TR,
+  getDrStageIndexFromLabel,
+} from "@/lib/dr-stage-labels";
 
 type Patient = {
   id: string;
@@ -99,59 +104,35 @@ function getRiskStyle(
     };
   }
 
-  if (["proliferative_dr", "cok_ileri_evre"].includes(normalized)) {
+  const stageIdx = getDrStageIndexFromLabel(risk);
+  if (stageIdx !== null) {
+    if (stageIdx === 4) {
+      return {
+        label: t("patientsList.badgeVeryHighRisk"),
+        className: "bg-amber-100/80 text-amber-700 border-amber-200",
+      };
+    }
+    if (stageIdx === 3) {
+      return {
+        label: t("patientsList.badgeHighRisk"),
+        className: "bg-amber-100/80 text-amber-700 border-amber-200",
+      };
+    }
+    if (stageIdx === 2) {
+      return {
+        label: t("patientsList.badgeMediumRisk"),
+        className: "bg-[#efe7da] text-[#8b6a49] border-[#d9cab5]",
+      };
+    }
+    if (stageIdx === 1) {
+      return {
+        label: t("patientsList.badgeLowRisk"),
+        className: "bg-[#e8f2ef] text-[#5b8d82] border-[#cfe0dc]",
+      };
+    }
     return {
-      label: t("patientsList.badgeVeryHighRisk"),
-      className: "bg-amber-100/80 text-amber-700 border-amber-200",
-    };
-  }
-
-  if (["agir_evre", "severe"].includes(normalized)) {
-    return {
-      label: t("patientsList.badgeHighRisk"),
-      className: "bg-amber-100/80 text-amber-700 border-amber-200",
-    };
-  }
-
-  if (["kritik_risk"].includes(normalized)) {
-    return {
-      label: t("patientsList.badgeVeryHighRisk"),
-      className: "bg-amber-100/80 text-amber-700 border-amber-200",
-    };
-  }
-
-  if (["yuksek_risk"].includes(normalized)) {
-    return {
-      label: t("patientsList.badgeHighRisk"),
-      className: "bg-amber-100/80 text-amber-700 border-amber-200",
-    };
-  }
-
-  if (["moderate", "orta_evre", "orta"].includes(normalized)) {
-    return {
-      label: t("patientsList.badgeMediumRisk"),
-      className: "bg-[#efe7da] text-[#8b6a49] border-[#d9cab5]",
-    };
-  }
-
-  if (["orta_risk"].includes(normalized)) {
-    return {
-      label: t("patientsList.badgeMediumRisk"),
-      className: "bg-[#efe7da] text-[#8b6a49] border-[#d9cab5]",
-    };
-  }
-
-  if (["mild", "hafif_evre"].includes(normalized)) {
-    return {
-      label: t("patientsList.badgeLowRisk"),
-      className: "bg-[#e8f2ef] text-[#5b8d82] border-[#cfe0dc]",
-    };
-  }
-
-  if (["dusuk_risk"].includes(normalized)) {
-    return {
-      label: t("patientsList.badgeLowRisk"),
-      className: "bg-[#e8f2ef] text-[#5b8d82] border-[#cfe0dc]",
+      label: t("patientsList.badgeHealthy"),
+      className: "bg-[#dff0ea] text-[#4c8a7d] border-[#c5ddd6]",
     };
   }
 
@@ -181,17 +162,9 @@ function getEmergencyTag(
     };
   }
 
-  const normalized = normalizeRisk(getEffectiveRisk(patient));
-  const emergencyLabels = [
-    "severe",
-    "proliferative_dr",
-    "agir_evre",
-    "cok_ileri_evre",
-    "yuksek_risk",
-    "kritik_risk",
-  ];
-
-  if (emergencyLabels.includes(normalized)) {
+  const effective = getEffectiveRisk(patient);
+  const stageIdx = getDrStageIndexFromLabel(effective);
+  if (stageIdx === 3 || stageIdx === 4) {
     return {
       label: t("patientsList.emergencyUrgent"),
       className: "bg-rose-100 text-rose-700 border-rose-200",
@@ -257,8 +230,16 @@ export default function HastalarClient({
   const [sort, setSort] = useState<SortKey>(initialFilters.sort);
   const [searchDebounced, setSearchDebounced] = useState(initialFilters.search);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [bulkRiskValue, setBulkRiskValue] = useState("Moderate");
+  const [bulkRiskValue, setBulkRiskValue] = useState<string>(
+    DR_STAGE_LABELS_TR[2],
+  );
   const [isBulkBusy, setIsBulkBusy] = useState(false);
+
+  useEffect(() => {
+    setBulkRiskValue(
+      locale === "en" ? DR_STAGE_LABELS_EN[2] : DR_STAGE_LABELS_TR[2],
+    );
+  }, [locale]);
 
   useEffect(() => {
     setSearch(initialFilters.search);
@@ -636,36 +617,13 @@ export default function HastalarClient({
               onChange={(e) => setBulkRiskValue(e.target.value)}
               aria-label={t("patientsList.a11yBulkRiskValue")}
             >
-              <option value="No_DR">
-                {t("patientsList.bulkRiskPrefix")}
-                {locale === "en"
-                  ? t("patientsList.bulkRiskNoDrEn")
-                  : t("patientsList.bulkRiskNoDr")}
-              </option>
-              <option value="Mild">
-                {t("patientsList.bulkRiskPrefix")}
-                {locale === "en"
-                  ? t("patientsList.bulkRiskMildEn")
-                  : t("patientsList.bulkRiskMild")}
-              </option>
-              <option value="Moderate">
-                {t("patientsList.bulkRiskPrefix")}
-                {locale === "en"
-                  ? t("patientsList.bulkRiskModerateEn")
-                  : t("patientsList.bulkRiskModerate")}
-              </option>
-              <option value="Severe">
-                {t("patientsList.bulkRiskPrefix")}
-                {locale === "en"
-                  ? t("patientsList.bulkRiskSevereEn")
-                  : t("patientsList.bulkRiskSevere")}
-              </option>
-              <option value="Proliferative_DR">
-                {t("patientsList.bulkRiskPrefix")}
-                {locale === "en"
-                  ? t("patientsList.bulkRiskProliferativeEn")
-                  : t("patientsList.bulkRiskProliferative")}
-              </option>
+              {(locale === "en" ? DR_STAGE_LABELS_EN : DR_STAGE_LABELS_TR).map(
+                (label) => (
+                  <option key={label} value={label}>
+                    {label.trim()}
+                  </option>
+                ),
+              )}
             </select>
 
             <Button

@@ -1,59 +1,22 @@
 import { RetinaSettings } from "@/lib/retina-settings";
-
-const HIGH_RISK_LABELS = new Set([
-  "high",
-  "high_risk",
-  "yuksek",
-  "yuksek_risk",
-  "yuksekrisk",
-  "severe",
-  "proliferative_dr",
-  "agir_evre",
-  "agir",
-  "agir_risk",
-  "çok_ileri_evre",
-  "cok_ileri_evre",
-]);
-
-const MEDIUM_RISK_LABELS = new Set([
-  "medium",
-  "medium_risk",
-  "moderate",
-  "orta",
-  "orta_risk",
-]);
-
-function normalizeRiskLabel(value: string | null | undefined): string {
-  if (!value) return "";
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "_")
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/ı/g, "i")
-    .replace(/ç/g, "c")
-    .replace(/ğ/g, "g")
-    .replace(/ö/g, "o")
-    .replace(/ş/g, "s")
-    .replace(/ü/g, "u");
-}
+import { getDrStageIndexFromLabel } from "@/lib/dr-stage-labels";
 
 export function isHighRiskLabel(value: string | null | undefined): boolean {
-  return HIGH_RISK_LABELS.has(normalizeRiskLabel(value));
+  const idx = getDrStageIndexFromLabel(value);
+  return idx === 3 || idx === 4;
 }
 
 export function getFollowupDaysForRisk(
   risk: string | null | undefined,
   settings: RetinaSettings,
 ): number {
-  const normalized = normalizeRiskLabel(risk);
+  const idx = getDrStageIndexFromLabel(risk);
 
-  if (HIGH_RISK_LABELS.has(normalized)) {
+  if (idx === 3 || idx === 4) {
     return settings.triage.highRiskFollowupDays;
   }
 
-  if (MEDIUM_RISK_LABELS.has(normalized)) {
+  if (idx === 2) {
     return settings.triage.mediumRiskFollowupDays;
   }
 

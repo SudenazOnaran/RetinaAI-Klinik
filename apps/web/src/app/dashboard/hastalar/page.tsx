@@ -124,30 +124,19 @@ export default async function HastalarPage({
   }
 
   if (safeRiskFilter === "none") {
-    whereClauses.push(
-      Prisma.sql`(
-        pb."analysisCount" = 0
-        OR pb."normalizedRisk" IN ('', 'yok', 'analiz_yapilmadi', 'analiz_bekliyor')
-      )`,
-    );
+    whereClauses.push(Prisma.sql`pb."riskBucket" = 'none'`);
   }
 
   if (safeRiskFilter === "high") {
-    whereClauses.push(
-      Prisma.sql`pb."normalizedRisk" IN ('severe', 'proliferative_dr', 'agir_evre', 'cok_ileri_evre', 'yuksek_risk', 'kritik_risk')`,
-    );
+    whereClauses.push(Prisma.sql`pb."riskBucket" = 'high'`);
   }
 
   if (safeRiskFilter === "medium") {
-    whereClauses.push(
-      Prisma.sql`pb."normalizedRisk" IN ('moderate', 'orta_evre', 'orta', 'orta_risk')`,
-    );
+    whereClauses.push(Prisma.sql`pb."riskBucket" = 'medium'`);
   }
 
   if (safeRiskFilter === "low") {
-    whereClauses.push(
-      Prisma.sql`pb."normalizedRisk" IN ('mild', 'hafif_evre', 'healthy', 'saglikli', 'no_dr', 'dusuk_risk')`,
-    );
+    whereClauses.push(Prisma.sql`pb."riskBucket" = 'low'`);
   }
 
   const whereSql = Prisma.sql`${Prisma.join(whereClauses, " AND ")}`;
@@ -198,22 +187,9 @@ export default async function HastalarPage({
       LEFT JOIN "Analysis" a ON a."patientId" = p."id"
       GROUP BY p."id"
     ),
-    patient_enriched AS (
+    patient_norm AS (
       SELECT
-        pb."id",
-        pb."doctorId",
-        pb."fullName",
-        pb."tcNo",
-        pb."createdAt",
-        pb."analysisCount",
-        pb."latestAnalysisAt",
-        pb."latestConfidence",
-        COALESCE(
-          NULLIF(pb."latestDrFeedback", 'null'),
-          NULLIF(pb."latestAiResult", 'null'),
-          NULLIF(pb."risk", ''),
-          'Yok'
-        ) AS "effectiveRisk",
+        pb.*,
         REPLACE(
           TRANSLATE(
             LOWER(
@@ -229,8 +205,61 @@ export default async function HastalarPage({
           ),
           ' ',
           '_'
-        ) AS "normalizedRisk"
+        ) AS "nr"
       FROM patient_base pb
+    ),
+    patient_enriched AS (
+      SELECT
+        pn."id",
+        pn."doctorId",
+        pn."fullName",
+        pn."tcNo",
+        pn."createdAt",
+        pn."risk",
+        pn."analysisCount",
+        pn."latestAnalysisAt",
+        pn."latestDrFeedback",
+        pn."latestAiResult",
+        pn."latestConfidence",
+        COALESCE(
+          NULLIF(pn."latestDrFeedback", 'null'),
+          NULLIF(pn."latestAiResult", 'null'),
+          NULLIF(pn."risk", ''),
+          'Yok'
+        ) AS "effectiveRisk",
+        pn."nr" AS "normalizedRisk",
+        CASE
+          WHEN pn."analysisCount" = 0 THEN 'none'
+          WHEN pn."nr" IN ('', 'yok') THEN 'none'
+          WHEN pn."nr" LIKE '%evre_4%' OR pn."nr" LIKE '%stage_4%'
+            OR pn."nr" IN (
+              'severe',
+              'proliferative_dr',
+              'agir_evre',
+              'cok_ileri_evre',
+              'yuksek_risk',
+              'high_risk',
+              'high',
+              'kritik_risk'
+            )
+            OR pn."nr" LIKE '%proliferatif%' THEN 'high'
+          WHEN pn."nr" LIKE '%evre_3%' OR pn."nr" LIKE '%stage_3%'
+            OR pn."nr" LIKE '%siddetli%' THEN 'high'
+          WHEN pn."nr" LIKE '%evre_2%' OR pn."nr" LIKE '%stage_2%'
+            OR pn."nr" IN ('moderate', 'orta_evre', 'orta', 'orta_risk') THEN 'medium'
+          WHEN pn."nr" LIKE '%evre_1%' OR pn."nr" LIKE '%stage_1%'
+            OR pn."nr" LIKE '%evre_0%' OR pn."nr" LIKE '%stage_0%'
+            OR pn."nr" IN (
+              'mild',
+              'hafif_evre',
+              'healthy',
+              'saglikli',
+              'no_dr',
+              'dusuk_risk'
+            ) THEN 'low'
+          ELSE 'none'
+        END AS "riskBucket"
+      FROM patient_norm pn
     )
   `;
 
@@ -257,6 +286,9 @@ export default async function HastalarPage({
           analysisCount: number;
           latestAnalysisAt: Date | null;
           latestConfidence: number | null;
+          latestDrFeedback: string | null;
+          latestAiResult: string | null;
+          risk: string | null;
           effectiveRisk: string;
         }>
       >`
@@ -269,6 +301,9 @@ export default async function HastalarPage({
           pb."analysisCount",
           pb."latestAnalysisAt",
           pb."latestConfidence",
+          pb."latestDrFeedback",
+          pb."latestAiResult",
+          pb."risk",
           pb."effectiveRisk"
         FROM patient_enriched pb
         WHERE ${whereSql}
@@ -296,9 +331,9 @@ export default async function HastalarPage({
         ? null
         : Number(patient.latestConfidence),
     _count: { analyses: Number(patient.analysisCount || 0) },
-    aiResult: patient.effectiveRisk,
-    drFeedback: patient.effectiveRisk,
-    risk: patient.effectiveRisk,
+    aiResult: patient.latestAiResult ?? undefined,
+    drFeedback: patient.latestDrFeedback ?? undefined,
+    risk: patient.risk ?? "",
   }));
 
   return (

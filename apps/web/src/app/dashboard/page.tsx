@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import "@/app/globals.css";
 import { getCurrentDoctorSession } from "@/lib/auth-session";
 import { redirect } from "next/navigation";
@@ -30,13 +31,22 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const highRiskLabels = [
-    "Severe NPDR",
-    "Proliferative PDR",
-    "Moderate NPDR",
-    "Mild NPDR",
-    "No DR",
-  ];
+  const highRiskWhere: Prisma.PatientWhereInput = {
+    doctorId: doctor.id,
+    OR: [
+      { risk: { contains: "Evre 3", mode: "insensitive" } },
+      { risk: { contains: "Evre 4", mode: "insensitive" } },
+      { risk: { contains: "Stage 3", mode: "insensitive" } },
+      { risk: { contains: "Stage 4", mode: "insensitive" } },
+      { risk: { contains: "Severe NPDR", mode: "insensitive" } },
+      { risk: { contains: "Proliferative", mode: "insensitive" } },
+      {
+        risk: {
+          in: ["Severe", "Proliferative_DR", "severe", "proliferative_dr"],
+        },
+      },
+    ],
+  };
 
   const [
     totalPatients,
@@ -48,10 +58,7 @@ export default async function DashboardPage() {
     prisma.patient.count({ where: { doctorId: doctor.id } }),
     prisma.analysis.count({ where: { patient: { doctorId: doctor.id } } }),
     prisma.patient.findMany({
-      where: {
-        doctorId: doctor.id,
-        risk: { in: highRiskLabels },
-      },
+      where: highRiskWhere,
       take: 5,
       orderBy: { createdAt: "desc" },
       include: {
@@ -97,10 +104,7 @@ export default async function DashboardPage() {
   ]);
 
   const highRiskCount = await prisma.patient.count({
-    where: {
-      doctorId: doctor.id,
-      risk: { in: highRiskLabels },
-    },
+    where: highRiskWhere,
   });
 
   const highRiskRate = totalPatients

@@ -25,6 +25,12 @@ import {
 } from "@/components/dashboard/image-analysis-card";
 import { ChevronDown, ClipboardPlus, Sparkles, X } from "lucide-react";
 import { useTranslation } from "@/components/providers/i18n-provider";
+import {
+  DR_STAGE_LABELS_EN,
+  DR_STAGE_LABELS_TR,
+  formatDrLabelForDisplay,
+  resolveDrLabelToStoredForm,
+} from "@/lib/dr-stage-labels";
 
 type ManualReportCardProps = {
   patientId: string;
@@ -40,54 +46,6 @@ type ManualReportCardProps = {
 
 const REPORT_FORMAT_VERSION = "manual_report_v2";
 const MAX_FIELD_LENGTH = 1500;
-const CANONICAL_RISK_LABELS = new Set([
-  "No_DR",
-  "Mild",
-  "Moderate",
-  "Severe",
-  "Proliferative_DR",
-]);
-
-const normalizeRisk = (value?: string | null) =>
-  String(value || "")
-    .trim()
-    .toLocaleLowerCase("tr-TR")
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/ı/g, "i")
-    .replace(/ç/g, "c")
-    .replace(/ğ/g, "g")
-    .replace(/ö/g, "o")
-    .replace(/ş/g, "s")
-    .replace(/ü/g, "u")
-    .replace(/\s+/g, "_");
-
-const resolveRiskForSave = (value?: string | null) => {
-  if (CANONICAL_RISK_LABELS.has(String(value || ""))) {
-    return String(value);
-  }
-
-  const key = normalizeRisk(value);
-  if (
-    ["dusuk_risk", "hafif", "hafif_evre", "healthy", "saglikli"].includes(key)
-  ) {
-    return "Mild";
-  }
-  if (["orta_risk", "orta", "orta_evre"].includes(key)) {
-    return "Moderate";
-  }
-  if (["yuksek_risk", "agir", "agir_evre", "ciddi"].includes(key)) {
-    return "Severe";
-  }
-  if (["kritik_risk", "cok_ileri_evre", "proliferative"].includes(key)) {
-    return "Proliferative_DR";
-  }
-  if (["yok", "none", "normal", "no_dr"].includes(key)) {
-    return "No_DR";
-  }
-
-  return "No_DR";
-};
 
 export function ManualReportCard({
   patientId,
@@ -95,7 +53,7 @@ export function ManualReportCard({
   doctorName,
 }: ManualReportCardProps) {
   const router = useRouter();
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
   const [aiDraft, setAiDraft] = useState<AiAnalysisDraft | null>(null);
@@ -129,17 +87,23 @@ export function ManualReportCard({
         );
       }
 
-      const riskForSave = resolveRiskForSave(patientInfo.risk);
+      const defaultEvre0 =
+        locale === "tr" ? DR_STAGE_LABELS_TR[0] : DR_STAGE_LABELS_EN[0];
+      const riskForSave =
+        resolveDrLabelToStoredForm(patientInfo.risk, locale) ?? defaultEvre0;
       const finalAiLabel = aiDraft?.correctionLabel || aiDraft?.aiResult;
-      const finalRiskForSave = finalAiLabel || riskForSave;
+      const finalRiskForSave =
+        (finalAiLabel
+          ? resolveDrLabelToStoredForm(finalAiLabel, locale)
+          : null) ?? riskForSave;
       const finalConfidence =
         typeof aiDraft?.confidence === "number" ? aiDraft.confidence : 0;
 
       const aiSummary = aiDraft
         ? [
-            `${t("manualReport.aiResult")}: ${aiDraft.aiResult}`,
+            `${t("manualReport.aiResult")}: ${formatDrLabelForDisplay(aiDraft.aiResult, locale)}`,
             `${t("manualReport.aiConfidence")}: %${Math.round((aiDraft.confidence || 0) * 100)}`,
-            `${t("manualReport.aiCorrection")}: ${aiDraft.correctionLabel || t("manualReport.none")}`,
+            `${t("manualReport.aiCorrection")}: ${aiDraft.correctionLabel ? formatDrLabelForDisplay(aiDraft.correctionLabel, locale) : t("manualReport.none")}`,
           ].join(" | ")
         : t("manualReport.aiNotIncluded");
 

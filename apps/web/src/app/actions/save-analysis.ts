@@ -10,6 +10,8 @@ import {
   logStructuredError,
   summarizeSaveAnalysisPayload,
 } from "@/lib/structured-error-log";
+import { getRequestLocale } from "@/lib/i18n/server";
+import { resolveDrLabelToStoredForm } from "@/lib/dr-stage-labels";
 
 export async function saveAnalysisAction({
   patientId,
@@ -87,19 +89,27 @@ export async function saveAnalysisAction({
   };
 
   try {
-    const normalize = (value: string) =>
-      value.trim().toLowerCase().replace(/\s+/g, "_");
-    const validDrLabels = new Set([
-      "no_dr",
-      "mild",
-      "moderate",
-      "severe",
-      "proliferative_dr",
-    ]);
-    const sanitizedFeedback =
-      drFeedback && validDrLabels.has(normalize(drFeedback))
-        ? drFeedback
-        : undefined;
+    const locale = await getRequestLocale();
+    const resolvedAi = resolveDrLabelToStoredForm(aiResult, locale);
+    if (!resolvedAi) {
+      return {
+        ok: false as const,
+        error:
+          "Geçersiz DR evresi. Lütfen analizi tekrarlayın veya evre seçimini kontrol edin.",
+      };
+    }
+
+    const rawFeedback = drFeedback?.trim() || "";
+    const resolvedFeedback = rawFeedback
+      ? resolveDrLabelToStoredForm(rawFeedback, locale)
+      : null;
+    if (rawFeedback && !resolvedFeedback) {
+      return {
+        ok: false as const,
+        error: "Geçersiz doktor geri bildirimi (DR evresi tanınmadı).",
+      };
+    }
+    const sanitizedFeedback = resolvedFeedback ?? undefined;
     const rawIlaclar = String(ilaclar || "");
     const sanitizedIlaclar = rawIlaclar.trim();
     if (rawIlaclar.length > MAX_FIELD_LENGTH) {
@@ -154,7 +164,7 @@ export async function saveAnalysisAction({
     const savedAnalysis = await prisma.analysis.create({
       data: {
         patientId,
-        aiResult, // AI'nın bulduğu ham sonuç
+        aiResult: resolvedAi,
         confidence,
         heatmapUrl: storedHeatmapImage?.url,
         originalImage: storedOriginalImage?.url,
@@ -175,7 +185,9 @@ export async function saveAnalysisAction({
     // 🔹 2. Hasta Risk Durumunu Belirle (MANTIK BURADA DÜZELTİLDİ)
     // Eğer drFeedback doluysa (Doktor "Yanlış" deyip düzeltmişse) -> Doktorun dediğini al.
     // Eğer drFeedback boşsa (Doktor "Evet Doğru" dediyse) -> AI sonucunu (aiResult) al.
-    const finalRiskStatus = sanitizedFeedback ? sanitizedFeedback : aiResult;
+    const finalRiskStatus = sanitizedFeedback
+      ? sanitizedFeedback
+      : resolvedAi;
 
     // 🔹 3. Patient Tablosunu Güncelle
     await prisma.patient.update({
@@ -197,7 +209,7 @@ export async function saveAnalysisAction({
       metadata: {
         patientId,
         finalRiskStatus,
-        aiResult,
+        aiResult: resolvedAi,
         confidence,
         objectStorage: {
           original: storedOriginalImage?.url ?? null,
