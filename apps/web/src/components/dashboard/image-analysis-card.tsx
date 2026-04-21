@@ -10,11 +10,6 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
 import {
   Upload,
@@ -23,7 +18,6 @@ import {
   Zap,
   CheckCircle2,
   RefreshCw,
-  ChevronDown,
 } from "lucide-react";
 import { drLabelTr } from "@/lib/dr-label-tr";
 import {
@@ -34,8 +28,6 @@ import {
 } from "@/lib/dr-stage-labels";
 import { useTranslation } from "@/components/providers/i18n-provider";
 import { logStructuredError } from "@/lib/structured-error-log";
-
-type ReliabilityTier = "high" | "medium" | "low";
 
 /** Backend ODIR etiketleri (app.py ODIR_LABELS + Kararsiz) → analysisCard çeviri soneki */
 const ODIR_LABEL_I18N_SUFFIX: Record<string, string> = {
@@ -49,17 +41,6 @@ const ODIR_LABEL_I18N_SUFFIX: Record<string, string> = {
   Kararsiz: "odirDisplay_undecided",
   Kararsız: "odirDisplay_undecided",
 };
-
-function getReliabilityTier(
-  ood: { isOutOfDistribution?: boolean; score?: number } | null | undefined,
-): ReliabilityTier {
-  if (!ood) return "medium";
-  if (ood.isOutOfDistribution) return "low";
-  const score = Number(ood.score ?? 0);
-  if (score < 0.33) return "high";
-  if (score < 0.5) return "medium";
-  return "low";
-}
 
 function displayOdirLabel(
   raw: string,
@@ -108,11 +89,6 @@ export function ImageAnalysisCard({
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
   const [actualResult, setActualResult] = useState("");
   const [isAddedToForm, setIsAddedToForm] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [showReliabilityTechnical, setShowReliabilityTechnical] =
-    useState(false);
-  const [showLocalizationTechnical, setShowLocalizationTechnical] =
-    useState(false);
 
   const { toast } = useToast();
 
@@ -125,9 +101,6 @@ export function ImageAnalysisCard({
     setIsCorrect(null);
     setActualResult("");
     setIsAddedToForm(false);
-    setShowAdvanced(false);
-    setShowReliabilityTechnical(false);
-    setShowLocalizationTechnical(false);
     onDraftChange?.(null);
 
     const reader = new FileReader();
@@ -155,9 +128,6 @@ export function ImageAnalysisCard({
       if (res.ok && data.success) {
         setResult(data);
         setIsAddedToForm(false);
-        setShowAdvanced(false);
-        setShowReliabilityTechnical(false);
-        setShowLocalizationTechnical(false);
       } else if (data.queued) {
         toast({
           title: t("analysisCard.queueTitle"),
@@ -206,9 +176,6 @@ export function ImageAnalysisCard({
     setIsCorrect(null);
     setActualResult("");
     setIsAddedToForm(false);
-    setShowAdvanced(false);
-    setShowReliabilityTechnical(false);
-    setShowLocalizationTechnical(false);
     onDraftChange?.(null);
   };
 
@@ -360,200 +327,6 @@ export function ImageAnalysisCard({
                 </div>
               ) : null}
             </div>
-
-            <Collapsible
-              open={showAdvanced}
-              onOpenChange={setShowAdvanced}
-              className="rounded-xl border border-slate-200 bg-white"
-            >
-              <CollapsibleTrigger asChild>
-                <button
-                  type="button"
-                  className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-semibold text-slate-700"
-                >
-                  <span>{t("analysisCard.advancedTitle")}</span>
-                  <ChevronDown
-                    className={`h-4 w-4 transition-transform ${showAdvanced ? "rotate-180" : ""}`}
-                  />
-                </button>
-              </CollapsibleTrigger>
-
-              <CollapsibleContent className="space-y-4 border-t border-slate-100 p-4">
-                {Array.isArray(result.odir?.results) &&
-                result.odir.results.length > 0 ? (
-                  <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 p-4 shadow-sm">
-                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-800">
-                      {t("analysisCard.odirTitle")}
-                    </p>
-                    <p className="mt-1 text-xs leading-relaxed text-emerald-900/80">
-                      {t("analysisCard.odirSubtitle")}
-                    </p>
-                    <div className="mt-3 space-y-2">
-                      {result.odir.results.map((r: any, i: number) => (
-                        <div
-                          key={i}
-                          className="flex items-center justify-between rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm"
-                        >
-                          <span className="font-medium text-slate-800">
-                            {displayOdirLabel(String(r.label || ""), t)}
-                          </span>
-                          <span className="font-semibold text-emerald-700">
-                            {(Number(r.confidence || 0) * 100).toFixed(1)}%
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-
-                {result.uncertainty || result.ood ? (
-                  <div className="rounded-xl border border-amber-100 bg-amber-50/70 p-4 shadow-sm">
-                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-800">
-                      {t("analysisCard.reliabilityHeading")}
-                    </p>
-                    {(() => {
-                      const tier = getReliabilityTier(result.ood);
-                      const badgeClass =
-                        tier === "high"
-                          ? "border-emerald-200 bg-emerald-100 text-emerald-900"
-                          : tier === "medium"
-                            ? "border-amber-200 bg-amber-100 text-amber-900"
-                            : "border-rose-200 bg-rose-100 text-rose-900";
-                      const badgeLabel =
-                        tier === "high"
-                          ? t("analysisCard.reliabilityBadgeHigh")
-                          : tier === "medium"
-                            ? t("analysisCard.reliabilityBadgeMedium")
-                            : t("analysisCard.reliabilityBadgeLow");
-                      const summary =
-                        tier === "high"
-                          ? t("analysisCard.reliabilitySummaryHigh")
-                          : tier === "medium"
-                            ? t("analysisCard.reliabilitySummaryMedium")
-                            : t("analysisCard.reliabilitySummaryLow");
-                      return (
-                        <>
-                          <div className="mt-2 flex flex-wrap items-center gap-2">
-                            <span
-                              className={`inline-flex rounded-full border px-3 py-1 text-sm font-semibold ${badgeClass}`}
-                            >
-                              {badgeLabel}
-                            </span>
-                          </div>
-                          <p className="mt-2 text-sm leading-relaxed text-slate-700">
-                            {summary}
-                          </p>
-                        </>
-                      );
-                    })()}
-                    {typeof result.uncertainty?.mcSamples === "number" ? (
-                      <p className="mt-2 text-xs text-slate-600">
-                        {t("analysisCard.reliabilityMcSamples", {
-                          count: result.uncertainty.mcSamples,
-                        })}
-                      </p>
-                    ) : null}
-                    <Collapsible
-                      open={showReliabilityTechnical}
-                      onOpenChange={setShowReliabilityTechnical}
-                      className="mt-3 rounded-lg border border-amber-200/80 bg-white/70"
-                    >
-                      <CollapsibleTrigger asChild>
-                        <button
-                          type="button"
-                          className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-semibold text-amber-950"
-                        >
-                          {t("analysisCard.technicalDetailsToggle")}
-                          <ChevronDown
-                            className={`h-3.5 w-3.5 shrink-0 transition-transform ${showReliabilityTechnical ? "rotate-180" : ""}`}
-                          />
-                        </button>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="space-y-1 border-t border-amber-100 px-3 py-2 text-xs text-slate-600">
-                        {result.uncertainty ? (
-                          <>
-                            <p>
-                              {t("analysisCard.predictiveEntropy")}{" "}
-                              {Number(
-                                result.uncertainty.predictiveEntropy || 0,
-                              ).toFixed(4)}
-                            </p>
-                            <p>
-                              {t("analysisCard.mutualInformation")}{" "}
-                              {Number(
-                                result.uncertainty.mutualInformation || 0,
-                              ).toFixed(4)}
-                            </p>
-                            <p>
-                              {t("analysisCard.classVariance")}{" "}
-                              {Number(
-                                result.uncertainty.classVariance || 0,
-                              ).toFixed(6)}
-                            </p>
-                          </>
-                        ) : null}
-                        {result.ood ? (
-                          <p>
-                            {t("analysisCard.oodScore")}
-                            {(Number(result.ood.score || 0) * 100).toFixed(1)}
-                          </p>
-                        ) : null}
-                      </CollapsibleContent>
-                    </Collapsible>
-                  </div>
-                ) : null}
-
-                {result.localization ? (
-                  <div className="rounded-xl border border-indigo-100 bg-indigo-50/70 p-4 shadow-sm">
-                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-indigo-800">
-                      {t("analysisCard.localizationTitle")}
-                    </p>
-                    <p className="mt-1 text-xs leading-relaxed text-indigo-900/85">
-                      {t("analysisCard.localizationExplainer")}
-                    </p>
-                    <p className="mt-3 text-sm font-medium text-slate-800">
-                      {t("analysisCard.localizationAttentionInRoi")}:{" "}
-                      {result.localization.pointingHit
-                        ? t("analysisCard.yes")
-                        : t("analysisCard.no")}
-                    </p>
-                    <Collapsible
-                      open={showLocalizationTechnical}
-                      onOpenChange={setShowLocalizationTechnical}
-                      className="mt-3 rounded-lg border border-indigo-200/80 bg-white/70"
-                    >
-                      <CollapsibleTrigger asChild>
-                        <button
-                          type="button"
-                          className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-semibold text-indigo-950"
-                        >
-                          {t("analysisCard.localizationTechnicalToggle")}
-                          <ChevronDown
-                            className={`h-3.5 w-3.5 shrink-0 transition-transform ${showLocalizationTechnical ? "rotate-180" : ""}`}
-                          />
-                        </button>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="space-y-1 border-t border-indigo-100 px-3 py-2 text-xs text-slate-600">
-                        <p>
-                          IoU:{" "}
-                          {Number(result.localization.iou || 0).toFixed(4)}
-                        </p>
-                        <p>
-                          Dice:{" "}
-                          {Number(result.localization.dice || 0).toFixed(4)}
-                        </p>
-                        <p>
-                          {t("analysisCard.pointingHit")}{" "}
-                          {result.localization.pointingHit
-                            ? t("analysisCard.yes")
-                            : t("analysisCard.no")}
-                        </p>
-                      </CollapsibleContent>
-                    </Collapsible>
-                  </div>
-                ) : null}
-              </CollapsibleContent>
-            </Collapsible>
           </div>
         )}
 
