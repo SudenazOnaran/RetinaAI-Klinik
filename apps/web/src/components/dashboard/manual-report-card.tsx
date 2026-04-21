@@ -91,11 +91,16 @@ export function ManualReportCard({
         locale === "tr" ? DR_STAGE_LABELS_TR[0] : DR_STAGE_LABELS_EN[0];
       const riskForSave =
         resolveDrLabelToStoredForm(patientInfo.risk, locale) ?? defaultEvre0;
-      const finalAiLabel = aiDraft?.correctionLabel || aiDraft?.aiResult;
-      const finalRiskForSave =
-        (finalAiLabel
-          ? resolveDrLabelToStoredForm(finalAiLabel, locale)
-          : null) ?? riskForSave;
+      const resolvedAiOnly =
+        aiDraft?.aiResult != null && String(aiDraft.aiResult).trim() !== ""
+          ? resolveDrLabelToStoredForm(aiDraft.aiResult, locale)
+          : null;
+      const aiResultForDb = resolvedAiOnly ?? riskForSave;
+      const resolvedCorrection =
+        aiDraft?.correctionLabel != null &&
+        String(aiDraft.correctionLabel).trim() !== ""
+          ? resolveDrLabelToStoredForm(aiDraft.correctionLabel, locale)
+          : null;
       const finalConfidence =
         typeof aiDraft?.confidence === "number" ? aiDraft.confidence : 0;
 
@@ -132,7 +137,7 @@ export function ManualReportCard({
 
       const saveResult = await saveAnalysisAction({
         patientId,
-        aiResult: finalRiskForSave,
+        aiResult: aiResultForDb,
         confidence: finalConfidence,
         heatmapUrl: aiDraft?.heatmapUrl,
         originalImage: aiDraft?.originalImage,
@@ -140,7 +145,7 @@ export function ManualReportCard({
         aiOdriConfidences: aiDraft?.aiOdriConfidences,
         doctorNote: reportBody,
         ilaclar: treatmentRecommendations.trim(),
-        drFeedback: aiDraft?.correctionLabel,
+        drFeedback: resolvedCorrection ?? undefined,
       });
 
       if (!saveResult?.ok) {

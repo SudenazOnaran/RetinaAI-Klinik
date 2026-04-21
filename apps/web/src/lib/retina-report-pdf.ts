@@ -1,6 +1,7 @@
 import jsPDF from "jspdf";
 import { loadRetinaSettingsFromStorage } from "@/lib/retina-settings";
 import { drLabelTr } from "@/lib/dr-label-tr";
+import { isDoctorApprovalToken } from "@/lib/doctor-feedback";
 
 type PatientReportInfo = {
   fullName?: string;
@@ -22,6 +23,8 @@ type RetinaReportPdfInput = {
   confidence: number;
   odirResults?: OdirResult[];
   clinicalFinalResult?: string;
+  /** Doktorun seçtiği DR düzeltmesi (onay ifadeleri hariç); AI satırından ayrı gösterilir. */
+  doctorFeedback?: string | null;
   doctorNote?: string;
   medications?: string;
   specialComments?: string;
@@ -588,6 +591,19 @@ async function buildRetinaReportPdf(input: RetinaReportPdfInput) {
     bodyLineHeight,
   );
   y += 8;
+
+  const rawDoctorFeedback = String(input.doctorFeedback || "").trim();
+  if (rawDoctorFeedback && !isDoctorApprovalToken(rawDoctorFeedback)) {
+    y = wrapCanvasText(
+      ctx,
+      `Doktor geri bildirimi: ${formatLabel(rawDoctorFeedback)}`,
+      left,
+      y,
+      contentWidth,
+      bodyLineHeight,
+    );
+    y += 8;
+  }
 
   y = wrapCanvasText(
     ctx,

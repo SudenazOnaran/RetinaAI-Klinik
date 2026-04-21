@@ -43,6 +43,7 @@ import {
   getDrStageIndexFromLabel,
   getStorageDrLabel,
 } from "@/lib/dr-stage-labels";
+import { isDoctorApprovalToken } from "@/lib/doctor-feedback";
 import { useTranslation } from "@/components/providers/i18n-provider";
 
 export default function PatientDetailClient({ patient }: { patient: any }) {
@@ -175,21 +176,6 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
     return Boolean(report?.originalImage || report?.heatmapUrl);
   };
 
-  const normalizeDiagnosisKey = (value: unknown) => {
-    return String(value || "")
-      .trim()
-      .toLocaleLowerCase("tr-TR")
-      .normalize("NFKD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/ı/g, "i")
-      .replace(/ç/g, "c")
-      .replace(/ğ/g, "g")
-      .replace(/ö/g, "o")
-      .replace(/ş/g, "s")
-      .replace(/ü/g, "u")
-      .replace(/\s+/g, "_");
-  };
-
   const getDoctorFeedback = (report: any) => {
     const feedback = report?.drFeedback;
 
@@ -208,26 +194,16 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
   const formatDiagnosisLabel = (label: string) =>
     formatDrLabelForDisplay(label, locale);
 
-  const isApprovalFeedback = (value: unknown) => {
-    const normalized = normalizeDiagnosisKey(value);
-    return [
-      "ai_sonucu_doğru",
-      "ai_sonucu_dogru",
-      "ai_doğru",
-      "ai_dogru",
-      "dogru",
-      "doğru",
-      "evet",
-      "yes",
-      "correct",
-    ].includes(normalized);
-  };
-
   const resolveEffectiveDiagnosis = (report: any) => {
     const doctorFeedback = getDoctorFeedback(report);
-    if (doctorFeedback && !isApprovalFeedback(doctorFeedback)) {
+    if (doctorFeedback && !isDoctorApprovalToken(doctorFeedback)) {
       return doctorFeedback;
     }
+    if (report?.aiResult) return report.aiResult;
+    return getStorageDrLabel(0, locale);
+  };
+
+  const resolveAiOnlyDiagnosis = (report: any) => {
     if (report?.aiResult) return report.aiResult;
     return getStorageDrLabel(0, locale);
   };
@@ -306,6 +282,7 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
     }));
 
     const structured = parseStructuredReport(report.doctorNote);
+    const drFb = getDoctorFeedback(report);
     const payload = {
       patientId: patient.id,
       patientInfo: {
@@ -319,6 +296,8 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
       confidence: Number(report.confidence ?? 0),
       odirResults,
       clinicalFinalResult: resolveEffectiveDiagnosis(report),
+      doctorFeedback:
+        drFb && !isDoctorApprovalToken(drFb) ? drFb : undefined,
       doctorNote: report.doctorNote,
       medications: getTreatmentText(report),
       originalImage: report.originalImage,
@@ -450,12 +429,18 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
                 const odirConfs = parseJsonArray(r.aiOdriConfidences);
                 const hasAiAnalysis = isAiIncludedInReport(r);
                 const aiRiskLabel = hasAiAnalysis
-                  ? formatDiagnosisLabel(resolveEffectiveDiagnosis(r) || "-")
+                  ? formatDiagnosisLabel(resolveAiOnlyDiagnosis(r))
                   : "-";
                 const aiConfidenceLabel =
                   hasAiAnalysis && Number.isFinite(Number(r.confidence))
                     ? `%${Math.round(Number(r.confidence) * 100)}`
                     : "-";
+                const doctorFeedbackRaw = getDoctorFeedback(r);
+                const doctorFeedbackLabel =
+                  doctorFeedbackRaw &&
+                  !isDoctorApprovalToken(doctorFeedbackRaw)
+                    ? formatDiagnosisLabel(doctorFeedbackRaw)
+                    : null;
 
                 return (
                   <div
@@ -574,6 +559,22 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
                           </Badge>
                         </div>
                       </div>
+
+                      {doctorFeedbackLabel ? (
+                        <div className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white p-3">
+                          <p className="text-xs font-semibold text-slate-500">
+                            {t("patientDetailReports.doctorFeedback")}
+                          </p>
+                          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
+                            <Badge
+                              variant="outline"
+                              className="max-w-full break-words border-amber-200 bg-amber-50 text-amber-900 [overflow-wrap:anywhere]"
+                            >
+                              {doctorFeedbackLabel}
+                            </Badge>
+                          </div>
+                        </div>
+                      ) : null}
 
                       <div className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white p-3 md:col-span-2 xl:col-span-1">
                         <p className="text-xs font-semibold text-slate-500">

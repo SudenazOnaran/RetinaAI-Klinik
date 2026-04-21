@@ -424,6 +424,7 @@
     "clinicalAssessment": "Teşhis / Klinik Değerlendirme",
     "treatment": "Tedavi ve Öneriler",
     "aiDrRiskConfidence": "AI/DR Risk Tahmini - Güven",
+    "doctorFeedback": "Doktor geri bildirimi",
     "aiOtherRiskConfidence": "AI Diğer Hastalık Risk Tahmini - Güven",
     "fundusImage": "Fundus Görseli",
     "heatmap": "Isı Haritası"

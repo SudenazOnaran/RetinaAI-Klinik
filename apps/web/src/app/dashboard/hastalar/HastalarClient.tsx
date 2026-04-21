@@ -25,6 +25,7 @@ import {
   DR_STAGE_LABELS_TR,
   getDrStageIndexFromLabel,
 } from "@/lib/dr-stage-labels";
+import { isDoctorApprovalToken } from "@/lib/doctor-feedback";
 
 type Patient = {
   id: string;
@@ -95,7 +96,10 @@ function getEffectiveRisk(patient: Patient): string {
   const fromRisk =
     typeof patient.risk === "string" ? patient.risk.trim() : "";
 
-  if (fromFeedback) return fromFeedback;
+  /* Doktor geri bildirimi (gerçek evre düzeltmesi) her zaman AI ve hasta.risk üstünde. */
+  if (fromFeedback && !isDoctorApprovalToken(fromFeedback)) {
+    return fromFeedback;
+  }
   if (fromAi) return fromAi;
   if (fromRisk) return fromRisk;
 

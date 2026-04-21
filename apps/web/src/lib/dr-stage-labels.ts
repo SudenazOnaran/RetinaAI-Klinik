@@ -93,10 +93,34 @@ export function getDrStageIndexFromLabel(
   }
 
   if (key.includes("evre_4") || key.includes("stage_4")) return 4;
+
+  /* Evre/Stage öneki olmadan gelen PDR veya İngilizce proliferative (SQL'de sadece proliferatif aranıyordu). */
+  const isNonProliferative =
+    /nonproliferatif|nonproliferative|non_proliferatif|non_proliferative/.test(
+      key,
+    );
+  if (
+    !isNonProliferative &&
+    (key.includes("proliferatif") || key.includes("proliferative"))
+  ) {
+    return 4;
+  }
+
   if (key.includes("evre_3") || key.includes("stage_3")) return 3;
   if (key.includes("evre_2") || key.includes("stage_2")) return 2;
-  if (key.includes("evre_1") || key.includes("stage_1")) return 1;
-  if (key.includes("evre_0") || key.includes("stage_0")) return 0;
+  /* evre_10 / stage_10 yanlışlıkla evre_1 / stage_1 sayılmasın */
+  if (
+    /(^|_)evre_1([^0-9]|$)/.test(key) ||
+    /(^|_)stage_1([^0-9]|$)/.test(key)
+  ) {
+    return 1;
+  }
+  if (
+    /(^|_)evre_0([^0-9]|$)/.test(key) ||
+    /(^|_)stage_0([^0-9]|$)/.test(key)
+  ) {
+    return 0;
+  }
 
   return null;
 }

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { drLabelTr } from "@/lib/dr-label-tr";
+import { isDoctorApprovalToken } from "@/lib/doctor-feedback";
 import { useTranslation } from "@/components/providers/i18n-provider";
 
 type HistoryRow = {
@@ -45,7 +46,9 @@ function normalizeLabel(value?: string | null) {
 }
 
 function finalDiagnosis(row: HistoryRow) {
-  return row.drFeedback || row.aiResult || "Belirtilmedi";
+  const fb = row.drFeedback?.trim();
+  if (fb && !isDoctorApprovalToken(fb)) return fb;
+  return row.aiResult || "Belirtilmedi";
 }
 
 function riskBucket(row: HistoryRow): RiskFilter {

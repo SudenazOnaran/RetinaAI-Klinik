@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { randomUUID } from "node:crypto";
+import { isDoctorApprovalToken } from "@/lib/doctor-feedback";
 
 export type IntegrationTarget = "FHIR" | "HBYS";
 export type IntegrationStatus = "SUCCESS" | "FAILED";
@@ -110,12 +111,7 @@ function resolveClinicalResult(patient: PatientWithLatestAnalysis) {
   if (!analysis) return null;
 
   const doctorFeedback = String(analysis.drFeedback || "").trim();
-  if (
-    doctorFeedback &&
-    !["ai sonucu doğru", "dogru", "doğru", "correct", "yes"].includes(
-      doctorFeedback.toLocaleLowerCase("tr-TR"),
-    )
-  ) {
+  if (doctorFeedback && !isDoctorApprovalToken(doctorFeedback)) {
     return doctorFeedback;
   }
 

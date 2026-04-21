@@ -22,6 +22,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { DashboardAlertCenter } from "@/components/dashboard/dashboard-alert-center";
 import { getRequestMessages } from "@/lib/i18n/server";
+import { isDoctorApprovalToken } from "@/lib/doctor-feedback";
 
 export default async function DashboardPage() {
   const messages = await getRequestMessages();
@@ -113,7 +114,11 @@ export default async function DashboardPage() {
 
   const dashboardAlertPatients = alertPatients.map((patient) => {
     const latest = patient.analyses[0];
-    const finalRisk = latest?.drFeedback || latest?.aiResult || patient.risk;
+    const fb = latest?.drFeedback?.trim();
+    const finalRisk =
+      fb && !isDoctorApprovalToken(fb)
+        ? fb
+        : latest?.aiResult?.trim() || patient.risk;
 
     return {
       id: patient.id,

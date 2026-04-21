@@ -424,6 +424,7 @@
     "clinicalAssessment": "Diagnosis / Clinical Assessment",
     "treatment": "Treatment and Recommendations",
     "aiDrRiskConfidence": "AI/DR Risk Prediction - Confidence",
+    "doctorFeedback": "Doctor feedback",
     "aiOtherRiskConfidence": "AI Other Disease Risk Prediction - Confidence",
     "fundusImage": "Fundus Image",
     "heatmap": "Heatmap"

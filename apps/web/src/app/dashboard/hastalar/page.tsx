@@ -163,29 +163,27 @@ export default async function HastalarPage({
         p."tcNo",
         p."createdAt",
         p."risk",
-        COUNT(a."id")::int AS "analysisCount",
-        MAX(a."createdAt") AS "latestAnalysisAt",
         (
-          ARRAY_REMOVE(
-            ARRAY_AGG(a."drFeedback" ORDER BY a."createdAt" DESC),
-            NULL
-          )
-        )[1] AS "latestDrFeedback",
-        (
-          ARRAY_REMOVE(
-            ARRAY_AGG(a."aiResult" ORDER BY a."createdAt" DESC),
-            NULL
-          )
-        )[1] AS "latestAiResult",
-        (
-          ARRAY_REMOVE(
-            ARRAY_AGG(a."confidence" ORDER BY a."createdAt" DESC),
-            NULL
-          )
-        )[1] AS "latestConfidence"
+          SELECT COUNT(*)::int
+          FROM "Analysis" ax
+          WHERE ax."patientId" = p."id"
+        ) AS "analysisCount",
+        la."createdAt" AS "latestAnalysisAt",
+        la."drFeedback" AS "latestDrFeedback",
+        la."aiResult" AS "latestAiResult",
+        la."confidence" AS "latestConfidence"
       FROM "Patient" p
-      LEFT JOIN "Analysis" a ON a."patientId" = p."id"
-      GROUP BY p."id"
+      LEFT JOIN LATERAL (
+        SELECT
+          a."drFeedback",
+          a."aiResult",
+          a."confidence",
+          a."createdAt"
+        FROM "Analysis" a
+        WHERE a."patientId" = p."id"
+        ORDER BY a."createdAt" DESC
+        LIMIT 1
+      ) la ON true
     ),
     patient_norm AS (
       SELECT
@@ -242,13 +240,20 @@ export default async function HastalarPage({
               'high',
               'kritik_risk'
             )
-            OR pn."nr" LIKE '%proliferatif%' THEN 'high'
+            OR (
+              pn."nr" LIKE '%proliferatif%'
+              AND pn."nr" NOT ILIKE '%nonproliferatif%'
+            )
+            OR (
+              pn."nr" LIKE '%proliferative%'
+              AND pn."nr" NOT ILIKE '%nonproliferative%'
+            ) THEN 'high'
           WHEN pn."nr" LIKE '%evre_3%' OR pn."nr" LIKE '%stage_3%'
             OR pn."nr" LIKE '%siddetli%' THEN 'high'
           WHEN pn."nr" LIKE '%evre_2%' OR pn."nr" LIKE '%stage_2%'
             OR pn."nr" IN ('moderate', 'orta_evre', 'orta', 'orta_risk') THEN 'medium'
-          WHEN pn."nr" LIKE '%evre_1%' OR pn."nr" LIKE '%stage_1%'
-            OR pn."nr" LIKE '%evre_0%' OR pn."nr" LIKE '%stage_0%'
+          WHEN (pn."nr" ~ '(^|_)evre_1([^0-9]|$)' OR pn."nr" ~ '(^|_)stage_1([^0-9]|$)')
+            OR (pn."nr" ~ '(^|_)evre_0([^0-9]|$)' OR pn."nr" ~ '(^|_)stage_0([^0-9]|$)')
             OR pn."nr" IN (
               'mild',
               'hafif_evre',
