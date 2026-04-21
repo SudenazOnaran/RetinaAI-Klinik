@@ -552,12 +552,6 @@ export function ImageAnalysisCard({
                     </Collapsible>
                   </div>
                 ) : null}
-
-                {result.heatmapPlus ? (
-                  <p className="text-center text-xs text-slate-500">
-                    {t("analysisCard.heatmapNoteAdvanced")}
-                  </p>
-                ) : null}
               </CollapsibleContent>
             </Collapsible>
           </div>

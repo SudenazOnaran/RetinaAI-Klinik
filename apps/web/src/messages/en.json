@@ -755,7 +755,6 @@
     "localizationAttentionInRoi": "Strongest attention point lies inside defined retina region",
     "localizationExplainer": "The model’s focus is compared to the uploaded retina (ROI) mask. This is technical consistency only—not a substitute for diagnostic accuracy.",
     "localizationTechnicalToggle": "Overlap metrics (IoU / Dice)",
-    "heatmapNoteAdvanced": "The heatmap (Grad-CAM++) is shown in the summary section above.",
     "reliabilityTitle": "Reliability Metrics",
     "pointingHit": "Focus inside ROI:",
     "yes": "Yes",

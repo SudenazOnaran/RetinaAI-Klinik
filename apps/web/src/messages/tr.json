@@ -755,7 +755,6 @@
     "localizationAttentionInRoi": "En güçlü dikkat noktası tanımlı retina alanı içinde",
     "localizationExplainer": "Modelin odaklandığı piksel bölgesi, yüklenen retina (ROI) maskesi ile karşılaştırıldı. Bu, yalnızca teknik tutarlılık içindir; teşhis doğruluğunun yerine geçmez.",
     "localizationTechnicalToggle": "Çakışma metrikleri (IoU / Dice)",
-    "heatmapNoteAdvanced": "Isı haritası (Grad-CAM++) yukarıdaki özet bölümünde gösterilmektedir.",
     "reliabilityTitle": "Güvenilirlik Metrikleri",
     "pointingHit": "ROI içinde odak:",
     "yes": "Evet",
