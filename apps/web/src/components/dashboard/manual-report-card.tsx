@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
 import { saveAnalysisAction } from "@/app/actions/save-analysis";
+import { isStaleServerActionError } from "@/lib/server-action-client";
 import {
   type AiAnalysisDraft,
   ImageAnalysisCard,
@@ -175,10 +176,16 @@ export function ManualReportCard({
         error instanceof Error
           ? error.message
           : t("manualReport.toastSaveFail");
+      const stale = isStaleServerActionError(errorMessage);
       toast({
         variant: "destructive",
-        title: t("errorPage.title"),
-        description: errorMessage,
+        title: stale
+          ? t("manualReport.staleServerActionTitle")
+          : t("errorPage.title"),
+        description: stale
+          ? t("manualReport.staleServerActionHint")
+          : errorMessage,
+        duration: stale ? 12_000 : 5_000,
       });
     } finally {
       setBusy(false);

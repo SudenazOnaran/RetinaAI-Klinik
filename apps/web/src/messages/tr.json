@@ -801,6 +801,8 @@
     "toastSavedWithAi": "AI destekli klinik rapor başarıyla oluşturuldu.",
     "toastSavedNoAi": "Görüntü yüklemeden klinik rapor başarıyla oluşturuldu.",
     "toastSaveFail": "Manuel rapor kaydedilemedi.",
+    "staleServerActionTitle": "Sayfayı yenilemeniz gerekiyor",
+    "staleServerActionHint": "Uygulama sunucuda güncellendi; bu sekme eski sürümü kullanıyor. Lütfen tam yenileme yapın (Ctrl+Shift+R veya Ctrl+F5), gerekirse tekrar giriş yapın ve kaydı yeniden deneyin.",
     "title": "Rapor Oluştur",
     "description": "Görsel yükleme zorunlu değildir. Standart göz kliniği rapor alanlarını doldurarak doğrudan rapor oluşturabilirsiniz.",
     "aiWillInclude": "AI analizi rapora eklenecek",

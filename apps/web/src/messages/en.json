@@ -801,6 +801,8 @@
     "toastSavedWithAi": "AI-supported clinical report created successfully.",
     "toastSavedNoAi": "Clinical report created successfully without image upload.",
     "toastSaveFail": "Manual report could not be saved.",
+    "staleServerActionTitle": "Please refresh this page",
+    "staleServerActionHint": "The app was updated on the server while this tab was open. Do a hard refresh (Ctrl+Shift+R or Ctrl+F5), sign in again if needed, then try saving.",
     "title": "Create Report",
     "description": "Image upload is not required. You can directly create a report by filling standard ophthalmology report fields.",
     "aiWillInclude": "AI analysis will be included in report",
