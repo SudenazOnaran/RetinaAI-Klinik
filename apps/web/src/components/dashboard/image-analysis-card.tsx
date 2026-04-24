@@ -156,12 +156,15 @@ type ImageAnalysisCardProps = {
   doctorName?: string;
   compact?: boolean;
   onDraftChange?: (draft: AiAnalysisDraft | null) => void;
+  /** Analiz başarılı olunca (ör. üst Collapsible’ı açık tutmak için) */
+  onAnalysisSuccess?: () => void;
 };
 
 export function ImageAnalysisCard({
   patientId,
   compact = false,
   onDraftChange,
+  onAnalysisSuccess,
 }: ImageAnalysisCardProps) {
   const { t, locale } = useTranslation();
   const [file, setFile] = useState<File | null>(null);
@@ -211,6 +214,7 @@ export function ImageAnalysisCard({
       if (res.ok && data.success) {
         setResult(data);
         setIsAddedToForm(false);
+        onAnalysisSuccess?.();
       } else if (data.queued) {
         toast({
           title: t("analysisCard.queueTitle"),
@@ -366,6 +370,40 @@ export function ImageAnalysisCard({
 
         {result && (
           <div className="space-y-4">
+            {result.inference &&
+            typeof result.inference === "object" &&
+            String((result.inference as { backend?: string }).backend || "") ? (
+              <div className="rounded-xl border border-violet-200 bg-violet-50/90 px-3 py-2 text-xs leading-relaxed text-violet-950">
+                <p className="font-semibold text-violet-900">
+                  {(result.inference as { backend?: string }).backend ===
+                  "gemini"
+                    ? t("analysisCard.inferenceGeminiTitle")
+                    : t("analysisCard.inferenceLocalTitle")}
+                </p>
+                <p className="mt-1 text-violet-900/85">
+                  {(result.inference as { backend?: string }).backend ===
+                  "gemini"
+                    ? t("analysisCard.inferenceGeminiBody", {
+                        model: String(
+                          (result.inference as { model?: string }).model ||
+                            "Gemini",
+                        ),
+                      })
+                    : t("analysisCard.inferenceLocalBody")}
+                </p>
+                {(result.inference as { heatmapMethod?: string }).heatmapMethod ? (
+                  <p className="mt-1 text-violet-800/90">
+                    {t("analysisCard.inferenceHeatmapNote", {
+                      method: String(
+                        (result.inference as { heatmapMethod?: string })
+                          .heatmapMethod,
+                      ),
+                    })}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
             <div className="grid gap-4 md:grid-cols-2">
               <div className="rounded-2xl border border-cyan-100 bg-gradient-to-br from-cyan-700 to-blue-700 p-5 text-white shadow-lg">
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-100">

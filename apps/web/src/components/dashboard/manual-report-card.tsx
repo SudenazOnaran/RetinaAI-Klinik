@@ -337,10 +337,14 @@ export function ManualReportCard({
             </Button>
           </CollapsibleTrigger>
 
-          <CollapsibleContent className="space-y-2 border-t border-slate-200 p-3">
+          <CollapsibleContent
+            forceMount
+            className="space-y-2 border-t border-slate-200 p-3 data-[state=closed]:hidden"
+          >
             <ImageAnalysisCard
               compact
               patientId={patientId}
+              onAnalysisSuccess={() => setIsAiOpen(true)}
               onDraftChange={setAiDraft}
               patientInfo={{
                 fullName: patientInfo.fullName,

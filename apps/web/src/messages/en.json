@@ -769,7 +769,12 @@
     "dmeSuspectedYes": "DME suspected: yes (confirm with OCT)",
     "dmeSuspectedNo": "No clear DME suspicion on this fundus alone",
     "dmeConfidenceLabel": "Model confidence:",
-    "uncertaintyNoteTitle": "Uncertainty / image quality"
+    "uncertaintyNoteTitle": "Uncertainty / image quality",
+    "inferenceGeminiTitle": "Text analysis: Google Gemini",
+    "inferenceGeminiBody": "Clinical reasoning and structured summary for this request were produced with \"{{model}}\".",
+    "inferenceLocalTitle": "Text analysis: local DR model",
+    "inferenceLocalBody": "Gemini was unavailable for this request; text output was produced by the DenseNet fallback.",
+    "inferenceHeatmapNote": "Heatmap: {{method}} (local model)."
   },
   "reportsQuick": {
     "searchPlaceholder": "Search patient or diagnosis",

@@ -769,7 +769,12 @@
     "dmeSuspectedYes": "DME şüphesi: evet (OCT ile doğrulama önerilir)",
     "dmeSuspectedNo": "Bu fundus görüntüsü üzerinden belirgin DME şüphesi raporlanmadı",
     "dmeConfidenceLabel": "Model güveni:",
-    "uncertaintyNoteTitle": "Belirsizlik / görüntü kalitesi"
+    "uncertaintyNoteTitle": "Belirsizlik / görüntü kalitesi",
+    "inferenceGeminiTitle": "Metin analizi: Google Gemini",
+    "inferenceGeminiBody": "Klinik gerekçe ve yapılandırılmış özet bu istekte «{{model}}» ile üretildi.",
+    "inferenceLocalTitle": "Metin analizi: yerel DR modeli",
+    "inferenceLocalBody": "Bu istekte Gemini kullanılamadı; metin çıktısı DenseNet yedeğiyle üretildi.",
+    "inferenceHeatmapNote": "Isı haritası: {{method}} (yerel model)."
   },
   "reportsQuick": {
     "searchPlaceholder": "Hasta veya tanı ara",
