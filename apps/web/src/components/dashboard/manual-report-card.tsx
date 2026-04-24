@@ -45,7 +45,6 @@ type ManualReportCardProps = {
   doctorName?: string;
 };
 
-const REPORT_FORMAT_VERSION = "manual_report_v2";
 const MAX_FIELD_LENGTH = 1500;
 
 export function ManualReportCard({
@@ -113,29 +112,6 @@ export function ManualReportCard({
           ].join(" | ")
         : t("manualReport.aiNotIncluded");
 
-      const reportBody = JSON.stringify({
-        version: REPORT_FORMAT_VERSION,
-        reportTitle: reportTitle.trim() || t("manualReport.defaultTitle"),
-        reportDate: reportDate || "-",
-        aiIncluded: Boolean(aiDraft),
-        patientInfo: {
-          fullName: patientInfo.fullName,
-          tcNo: patientInfo.tcNo,
-          age: patientInfo.age ?? null,
-          gender: patientInfo.gender ?? null,
-        },
-        doctorName: doctorName || t("manualReport.notSpecified"),
-        sections: {
-          anamnesis: anamnesis.trim() || "-",
-          examFindings: examFindings.trim() || "-",
-          labResults: labResults.trim() || "-",
-          clinicalAssessment: clinicalAssessment.trim() || "-",
-          treatmentRecommendations: treatmentRecommendations.trim() || "-",
-        },
-        doctorNotes: doctorNotes.trim() || "-",
-        aiSummary,
-      });
-
       const saveResult = await saveAnalysisAction({
         patientId,
         aiResult: aiResultForDb,
@@ -144,9 +120,30 @@ export function ManualReportCard({
         originalImage: aiDraft?.originalImage,
         aiOdriLabels: aiDraft?.aiOdriLabels,
         aiOdriConfidences: aiDraft?.aiOdriConfidences,
-        doctorNote: reportBody,
+        reportSections: {
+          reportTitle: reportTitle.trim() || t("manualReport.defaultTitle"),
+          reportDate: reportDate || "-",
+          doctorDisplayName: doctorName || t("manualReport.notSpecified"),
+          anamnesis: anamnesis.trim() || "-",
+          examFindings: examFindings.trim() || "-",
+          labResults: labResults.trim() || "-",
+          clinicalAssessment: clinicalAssessment.trim() || "-",
+          treatmentRecommendations: treatmentRecommendations.trim() || "-",
+          doctorNotes: doctorNotes.trim() || "-",
+        },
+        reportMeta: {
+          aiIncluded: Boolean(aiDraft),
+          patientInfo: {
+            fullName: patientInfo.fullName,
+            tcNo: patientInfo.tcNo,
+            age: patientInfo.age ?? null,
+            gender: patientInfo.gender ?? null,
+          },
+          aiSummary,
+        },
         ilaclar: treatmentRecommendations.trim(),
         drFeedback: resolvedCorrection ?? undefined,
+        aiInferenceSnapshot: aiDraft?.aiInferenceSnapshot ?? undefined,
       });
 
       if (!saveResult?.ok) {
@@ -181,11 +178,11 @@ export function ManualReportCard({
         variant: "destructive",
         title: stale
           ? t("manualReport.staleServerActionTitle")
-          : t("errorPage.title"),
+          : t("manualReport.saveErrorTitle"),
         description: stale
           ? t("manualReport.staleServerActionHint")
           : errorMessage,
-        duration: stale ? 12_000 : 5_000,
+        duration: stale ? 12_000 : 8_000,
       });
     } finally {
       setBusy(false);

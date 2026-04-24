@@ -55,21 +55,82 @@ model Patient {
 }
 
 model Analysis {
-  id                String   @id @default(cuid())
-  patientId         String
-  aiResult          String
-  confidence        Float
-  heatmapUrl        String?
-  originalImage     String?
-  doctorNote        String?
-  isCorrect         Boolean?
-  actualResult      String?
-  createdAt         DateTime @default(now())
-  aiOdriLabels      String?
-  aiOdriConfidences String?
-  ilaclar           String?  @db.VarChar(1500)
-  drFeedback        String?
-  patient           Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  id                   String   @id @default(cuid())
+  patientId            String
+  aiResult             String
+  confidence           Float
+  heatmapUrl           String?
+  originalImage        String?
+  /// Geriye dönük: manual_report_v2 JSON; yeni kayıtlarda structured alanlar + bu alan birlikte dolar
+  doctorNote           String?
+  /// Rapor başlığı (örn. Göz Muayene Raporu)
+  reportTitle          String?  @db.VarChar(500)
+  /// Rapor tarihi metni (örn. 24.04.2026 veya ISO)
+  reportDateKey        String?  @db.VarChar(32)
+  /// Raporda gösterilen hekim adı
+  reportDoctorDisplayName String? @db.VarChar(200)
+  sectionAnamnesis         String? @db.Text
+  sectionExamFindings      String? @db.Text
+  sectionLabResults        String? @db.Text
+  sectionClinicalAssessment String? @db.Text
+  sectionTreatmentRecommendations String? @db.Text
+  sectionDoctorNotes       String? @db.Text
+  /// HT, dislipidemi vb. yapılandırılmış komorbidite
+  comorbidityJson      Json?
+  /// Model belirsizliği 0–1 (yüksek = daha belirsiz); snapshot veya 1−DR güveni
+  uncertaintyScore     Float?
+  isCorrect            Boolean?
+  actualResult         String?
+  createdAt            DateTime @default(now())
+  aiOdriLabels         String?
+  aiOdriConfidences    String?
+  ilaclar              String?  @db.VarChar(1500)
+  drFeedback           String?
+  /// Doktorun yapısal düzeltmeleri (fundus, DME, clinicalDecision vb.); eğitimde altın/ince ayar
+  doctorStructuredReview Json?
+  /// Doktorun serbest klinik gerekçe metni (LLM teacher’a ek veya yerine geçen hedef)
+  physicianClinicalReasoning String? @db.Text
+  /// LLM /predict yapısal çıktısı (heatmap base64 hariç); veri seti export için
+  aiInferenceJson      Json?
+  /// DR 0–4: tercihen klinik özeti (doktor geri bildirimi > AI snapshot > yok)
+  drGradeInt           Int?
+  /// `src/lib/dataset/manifest-v1.schema.json` ile uyumlu export şema sürümü
+  datasetSchemaVersion String   @default("1")
+  patient              Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  trainingDatasetEntry TrainingDatasetEntry?
+}
+
+/// Egitim satiri: goruntu URL, efektif DR, doktor notlari ozeti, `training_snapshot_v2` JSON, ML sutunlari.
+/// Ayrintili yapı: `src/lib/dataset/training-snapshot-v2.ts`. Diger klinik alanlar: Analysis.
+model TrainingDatasetEntry {
+  id                    String   @id @default(cuid())
+  analysisId            String   @unique
+  originalImageUrl      String
+  /// Etkin DR etiketi (TR depo formu): doktor duzeltmesi veya AI onayi ile ayni metin; egitimde null olmamali
+  drFeedback            String?
+  /// Rapor: doktor notlari + klinik/muayene/tedavi metinleri birlesik (parse + egitim metni)
+  doctorNotesText       String?  @db.Text
+  /// Analysis.doctorNote ile ayni: manual_report_v2 JSON (rapor meta + sections + aiSummary)
+  doctorNote            String?  @db.Text
+  /// `training_snapshot_v2`: from_image | from_teacher_text | provenance
+  inferenceSnapshotJson Json?
+  /// Doktor notları / klinik metin parse: sağlıklı→0, mild ile uyumlu→1, moderate→2, severe→3, PDR→4
+  doctorNotesDerivedDrGradeInt Int?
+  /// MA yükü: 0 yok, 1 az/sparse, 2 yaygın (fundus_assessment veya fundus_findings)
+  microaneurysmCountLevel Int?
+  /// Hemoraji kadran sayısı 0–4
+  hemorrhageQuadrants   Int?
+  /// Maküler sert eksüda / makula yakını eksüda 0/1
+  hardExudateMacula     Int?
+  cottonWoolSpots       Int?
+  venousBeading         Int?
+  irma                  Int?
+  neovascularization    Int?
+  /// DME şüphesi 0/1 (makula+eksüda kuralı, fundus_assessment, API DME)
+  trainingDmeSuspected  Int?
+  updatedAt             DateTime @updatedAt
+
+  analysis Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
 }
 
 model DoctorSettings {

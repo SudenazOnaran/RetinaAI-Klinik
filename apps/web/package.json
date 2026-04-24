@@ -22,6 +22,12 @@
     "ci": "npm run lint && npm run typecheck && npm run test",
     "release:check": "npm run clean:next-artifacts && npm run env:check:release && npm run ci && npm run test:e2e && npm run build",
     "fix:analysis-feedback": "node scripts/fix-analysis-feedback.js",
+    "export:training-dataset": "node scripts/export-training-dataset-entries.js",
+    "export:training-dataset:csv": "node scripts/export-training-dataset-entries.js --csv",
+    "export:training-dataset:slim": "node scripts/export-training-dataset-entries.js --ml-slim",
+    "backfill:training-snapshot-v2": "npx tsx scripts/backfill-training-snapshot-v2.ts",
+    "backfill:training-entry-features": "npx tsx scripts/backfill-training-entry-features.ts",
+    "smoke:training-pipeline": "node scripts/smoke-training-pipeline.js",
     "login:clear-attempts": "prisma db execute --file scripts/clear-login-attempts.sql --schema prisma/schema.prisma"
   },
   "dependencies": {

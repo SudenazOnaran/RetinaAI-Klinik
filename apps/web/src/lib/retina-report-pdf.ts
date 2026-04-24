@@ -30,6 +30,14 @@ type RetinaReportPdfInput = {
   specialComments?: string;
   originalImage?: string | null;
   heatmapUrl?: string | null;
+  reportTitle?: string | null;
+  reportDateLabel?: string | null;
+  sectionAnamnesis?: string | null;
+  sectionExamFindings?: string | null;
+  sectionLabResults?: string | null;
+  sectionClinicalAssessment?: string | null;
+  sectionTreatmentRecommendations?: string | null;
+  sectionDoctorNotes?: string | null;
 };
 
 type StructuredReport = {
@@ -242,22 +250,28 @@ async function buildRetinaReportPdf(input: RetinaReportPdfInput) {
   const structured = parseStructuredReport(input.doctorNote);
 
   const anamnesisText =
+    (input.sectionAnamnesis && input.sectionAnamnesis.trim()) ||
     structured?.sections?.anamnesis ||
     getLegacyFieldValue(input.doctorNote, "Klinik Öykü (Anamnez)") ||
     "Belirtilmedi";
   const examFindingsText =
+    (input.sectionExamFindings && input.sectionExamFindings.trim()) ||
     structured?.sections?.examFindings ||
     getLegacyFieldValue(input.doctorNote, "Muayene Bulguları") ||
     "Belirtilmedi";
   const labResultsText =
+    (input.sectionLabResults && input.sectionLabResults.trim()) ||
     structured?.sections?.labResults ||
     getLegacyFieldValue(input.doctorNote, "Laboratuvar Sonuçları") ||
     "Belirtilmedi";
   const clinicalAssessmentText =
+    (input.sectionClinicalAssessment && input.sectionClinicalAssessment.trim()) ||
     structured?.sections?.clinicalAssessment ||
     getLegacyFieldValue(input.doctorNote, "Teşhis / Klinik Değerlendirme") ||
     formatLabel(input.clinicalFinalResult ?? input.aiResult);
   const treatmentText =
+    (input.sectionTreatmentRecommendations &&
+      input.sectionTreatmentRecommendations.trim()) ||
     structured?.sections?.treatmentRecommendations ||
     getLegacyFieldValue(input.doctorNote, "Tedavi ve Öneriler") ||
     input.medications ||
@@ -267,6 +281,7 @@ async function buildRetinaReportPdf(input: RetinaReportPdfInput) {
     getLegacyFieldValue(input.doctorNote, "AI Özeti") ||
     "Belirtilmedi";
   const doctorNotesText =
+    (input.sectionDoctorNotes && input.sectionDoctorNotes.trim()) ||
     structured?.doctorNotes ||
     getLegacyFieldValue(input.doctorNote, "Doktor Notları") ||
     input.specialComments ||
@@ -281,6 +296,7 @@ async function buildRetinaReportPdf(input: RetinaReportPdfInput) {
     input.doctorName ||
     "Doktor Adı Belirtilmedi";
   const reportTitle =
+    (input.reportTitle && input.reportTitle.trim()) ||
     structured?.reportTitle ||
     settings.clinic.reportHeader ||
     "RETINA ANALİZ RAPORU";
@@ -288,9 +304,13 @@ async function buildRetinaReportPdf(input: RetinaReportPdfInput) {
   const bodyLineHeight = reportSettings.compactPdf ? 26 : 32;
 
   const reportDateSource =
-    structured?.reportDate && !Number.isNaN(Date.parse(structured.reportDate))
-      ? structured.reportDate
-      : input.reportDate;
+    input.reportDateLabel &&
+    !Number.isNaN(Date.parse(String(input.reportDateLabel)))
+      ? input.reportDateLabel
+      : structured?.reportDate &&
+          !Number.isNaN(Date.parse(structured.reportDate))
+        ? structured.reportDate
+        : input.reportDate;
   const reportDate = reportDateSource ? new Date(reportDateSource) : new Date();
   const reportNo = `RPT-${reportDate.toISOString().slice(0, 10).replace(/-/g, "")}-${input.patientId.slice(-6).toUpperCase()}`;
   const priority = getClinicalPriority(input.aiResult, input.confidence);

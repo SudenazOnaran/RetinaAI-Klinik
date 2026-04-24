@@ -28,6 +28,87 @@ import {
 } from "@/lib/dr-stage-labels";
 import { useTranslation } from "@/components/providers/i18n-provider";
 import { logStructuredError } from "@/lib/structured-error-log";
+import type { Locale } from "@/lib/i18n/config";
+import {
+  stripPredictResponseForStorage,
+  type AiInferenceSnapshot,
+} from "@/lib/dataset/snapshot";
+
+const FUNDUS_I18N: Record<Locale, Record<string, string>> = {
+  tr: {
+    microaneurysm: "Mikroanevrizma",
+    hemorrhage: "Retinal hemoraji",
+    hard_exudates: "Sert eksudalar",
+    cotton_wool_spots: "Yumuşak eksudalar (CWS)",
+    irma: "IRMA",
+    venous_beading: "Venöz beading",
+    neovascularization: "Neovaskülarizasyon",
+    macular_edema_suspected: "Maküler ödem şüphesi (fundus)",
+    cataract_effect: "Katarakt / görüntü kalitesi etkisi",
+  },
+  en: {
+    microaneurysm: "Microaneurysm",
+    hemorrhage: "Retinal hemorrhage",
+    hard_exudates: "Hard exudates",
+    cotton_wool_spots: "Cotton wool spots",
+    irma: "IRMA",
+    venous_beading: "Venous beading",
+    neovascularization: "Neovascularization",
+    macular_edema_suspected: "Macular edema suspected (fundus)",
+    cataract_effect: "Cataract / image quality effect",
+  },
+};
+
+function activeFundusLabels(findings: unknown, locale: Locale): string[] {
+  if (!findings || typeof findings !== "object") return [];
+  const map = FUNDUS_I18N[locale];
+  return Object.entries(findings as Record<string, unknown>)
+    .filter(([, v]) => v === true)
+    .map(([k]) => map[k] || k);
+}
+
+function isPlaceholderOdirLabel(label: string): boolean {
+  const l = label.trim();
+  return (
+    l.includes("Ek risk raporu yok") ||
+    l.toLowerCase().includes("no additional risk") ||
+    l === "Kararsiz" ||
+    l === "Kararsız"
+  );
+}
+
+/** Gecici: hipertansif retinopati ve AMD ODIR / ek risk ozetinde gosterilmez */
+function isHtAmdOdirLabel(label: string): boolean {
+  const s = label.trim().toLowerCase();
+  if (
+    s.includes("amd") ||
+    s.includes("makula dejenerasyon") ||
+    s.includes("macular degeneration")
+  )
+    return true;
+  if (s.includes("hipertans") || s.includes("hypertensive")) return true;
+  return false;
+}
+
+function visibleOdirResultRows(results: unknown): {
+  label?: string;
+  confidence?: number;
+}[] {
+  if (!Array.isArray(results)) return [];
+  return results.filter(
+    (r: { label?: string }) =>
+      r?.label &&
+      !isPlaceholderOdirLabel(String(r.label)) &&
+      !isHtAmdOdirLabel(String(r.label)),
+  );
+}
+
+function urgencyMessageKey(u: string | undefined): string {
+  const x = (u || "routine").toLowerCase();
+  if (x === "emergency") return "analysisCard.urgencyEmergency";
+  if (x === "urgent") return "analysisCard.urgencyUrgent";
+  return "analysisCard.urgencyRoutine";
+}
 
 /** Backend ODIR etiketleri (app.py ODIR_LABELS + Kararsiz) → analysisCard çeviri soneki */
 const ODIR_LABEL_I18N_SUFFIX: Record<string, string> = {
@@ -65,6 +146,8 @@ export type AiAnalysisDraft = {
   aiOdriLabels?: string[];
   aiOdriConfidences?: number[];
   correctionLabel?: string;
+  /** Veri seti: /predict yapısal çıktısı (heatmap base64 hariç) */
+  aiInferenceSnapshot?: AiInferenceSnapshot | null;
 };
 
 type ImageAnalysisCardProps = {
@@ -134,9 +217,14 @@ export function ImageAnalysisCard({
           description: t("analysisCard.queueDesc"),
         });
       } else {
-        throw new Error(
-          String(data.error || data.message || t("analysisCard.analysisFail")),
+        const detail = String(
+          data.error || data.message || t("analysisCard.analysisFail"),
         );
+        toast({
+          variant: "destructive",
+          title: t("errorPage.title"),
+          description: detail,
+        });
       }
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
@@ -161,7 +249,10 @@ export function ImageAnalysisCard({
       toast({
         variant: "destructive",
         title: t("errorPage.title"),
-        description: t("analysisCard.gatewayFail"),
+        description:
+          err.message && err.message !== t("analysisCard.analysisFail")
+            ? err.message
+            : t("analysisCard.gatewayFail"),
       });
     } finally {
       setIsLoading(false);
@@ -184,18 +275,17 @@ export function ImageAnalysisCard({
     const aiResultStored =
       resolveDrLabelToStoredForm(result.pytorch?.label, locale) ??
       getStorageDrLabel(0, locale);
+    const odirVisible = visibleOdirResultRows(result.odir?.results);
+    const aiInferenceSnapshot = stripPredictResponseForStorage(result);
     const draft: AiAnalysisDraft = {
       aiResult: aiResultStored,
       confidence: Number(result.pytorch?.confidence ?? 0),
       heatmapUrl: result.heatmapPlus,
       originalImage: base64Image || "",
-      aiOdriLabels: Array.isArray(result.odir?.results)
-        ? result.odir.results.map((r: any) => r.label)
-        : [],
-      aiOdriConfidences: Array.isArray(result.odir?.results)
-        ? result.odir.results.map((r: any) => Number(r.confidence ?? 0))
-        : [],
+      aiOdriLabels: odirVisible.map((r) => String(r.label ?? "")),
+      aiOdriConfidences: odirVisible.map((r) => Number(r.confidence ?? 0)),
       correctionLabel: correction?.trim() || undefined,
+      aiInferenceSnapshot: aiInferenceSnapshot ?? undefined,
     };
     onDraftChange?.(draft);
     setIsAddedToForm(true);
@@ -292,19 +382,21 @@ export function ImageAnalysisCard({
                   {(Number(result.pytorch?.confidence || 0) * 100).toFixed(1)}
                 </p>
 
-                {Array.isArray(result.odir?.results) &&
-                result.odir.results.length > 0 ? (
-                  <div className="mt-3 rounded-lg bg-white/10 px-3 py-2 text-xs text-cyan-100">
-                    {t("analysisCard.extraRisks")}{" "}
-                    {result.odir.results
-                      .slice(0, 3)
-                      .map(
-                        (r: any) =>
-                          `${displayOdirLabel(String(r.label || ""), t)} (%${(Number(r.confidence || 0) * 100).toFixed(0)})`,
-                      )
-                      .join(", ")}
-                  </div>
-                ) : null}
+                {(() => {
+                  const rows = visibleOdirResultRows(result.odir?.results);
+                  return rows.length > 0 ? (
+                    <div className="mt-3 rounded-lg bg-white/10 px-3 py-2 text-xs text-cyan-100">
+                      {t("analysisCard.extraRisks")}{" "}
+                      {rows
+                        .slice(0, 6)
+                        .map(
+                          (r: { label?: string; confidence?: number }) =>
+                            `${displayOdirLabel(String(r.label || ""), t)} (%${(Number(r.confidence || 0) * 100).toFixed(0)})`,
+                        )
+                        .join(", ")}
+                    </div>
+                  ) : null;
+                })()}
               </div>
 
               {result.heatmapPlus ? (
@@ -327,6 +419,163 @@ export function ImageAnalysisCard({
                 </div>
               ) : null}
             </div>
+
+            {(result.clinicalReasoning ||
+              result.drLabel ||
+              result.fundusFindings ||
+              result.clinicalDecision ||
+              result.dmeSuspected ||
+              result.uncertaintyNote) && (
+              <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
+                <p className="text-sm font-semibold text-slate-900">
+                  {t("analysisCard.detailTitle")}
+                </p>
+
+                {result.drLabel ? (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      {t("analysisCard.modelLabelEn")}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-800">
+                      {String(result.drLabel)}
+                    </p>
+                  </div>
+                ) : null}
+
+                {result.dmeSuspected === true || result.dmeSuspected === false ? (
+                  <div className="rounded-xl border border-amber-100 bg-amber-50/60 p-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-amber-900/80">
+                      {t("analysisCard.dmeBlockTitle")}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-800">
+                      {result.dmeSuspected
+                        ? t("analysisCard.dmeSuspectedYes")
+                        : t("analysisCard.dmeSuspectedNo")}
+                      {typeof result.dmeConfidence === "number"
+                        ? ` — ${t("analysisCard.dmeConfidenceLabel")} ${(Number(result.dmeConfidence) * 100).toFixed(0)}%`
+                        : null}
+                    </p>
+                  </div>
+                ) : null}
+
+                {result.uncertaintyNote ? (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      {t("analysisCard.uncertaintyNoteTitle")}
+                    </p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">
+                      {String(result.uncertaintyNote)}
+                    </p>
+                  </div>
+                ) : null}
+
+                {result.clinicalReasoning ? (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      {t("analysisCard.clinicalReasoningTitle")}
+                    </p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-slate-800">
+                      {String(result.clinicalReasoning)}
+                    </p>
+                  </div>
+                ) : null}
+
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    {t("analysisCard.fundusTitle")}
+                  </p>
+                  {activeFundusLabels(result.fundusFindings, locale).length >
+                  0 ? (
+                    <ul className="mt-2 list-inside list-disc text-sm text-slate-800">
+                      {activeFundusLabels(result.fundusFindings, locale).map(
+                        (label) => (
+                          <li key={label}>{label}</li>
+                        ),
+                      )}
+                    </ul>
+                  ) : (
+                    <p className="mt-1 text-sm text-slate-600">
+                      {t("analysisCard.fundusNone")}
+                    </p>
+                  )}
+                </div>
+
+                {result.clinicalDecision &&
+                typeof result.clinicalDecision === "object" ? (
+                  <div className="rounded-xl border border-slate-100 bg-slate-50/80 p-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      {t("analysisCard.clinicalDecisionTitle")}
+                    </p>
+                    <dl className="mt-2 space-y-2 text-sm text-slate-800">
+                      <div>
+                        <dt className="text-slate-600">
+                          {t("analysisCard.referableLabel")}
+                        </dt>
+                        <dd className="font-medium">
+                          {(result.clinicalDecision as { referableDr?: boolean })
+                            .referableDr
+                            ? t("analysisCard.referableYes")
+                            : t("analysisCard.referableNo")}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-slate-600">
+                          {t("analysisCard.urgencyLabel")}
+                        </dt>
+                        <dd className="font-medium">
+                          {t(
+                            urgencyMessageKey(
+                              (result.clinicalDecision as { urgency?: string })
+                                .urgency,
+                            ),
+                          )}
+                        </dd>
+                      </div>
+                      {Array.isArray(
+                        (result.clinicalDecision as { recommendedActions?: string[] })
+                          .recommendedActions,
+                      ) &&
+                      (
+                        result.clinicalDecision as {
+                          recommendedActions?: string[];
+                        }
+                      ).recommendedActions!.length > 0 ? (
+                        <div>
+                          <dt className="text-slate-600">
+                            {t("analysisCard.actionsTitle")}
+                          </dt>
+                          <dd>
+                            <ul className="mt-1 list-inside list-disc">
+                              {(
+                                result.clinicalDecision as {
+                                  recommendedActions?: string[];
+                                }
+                              ).recommendedActions!.map((a) => (
+                                <li key={a}>{a}</li>
+                              ))}
+                            </ul>
+                          </dd>
+                        </div>
+                      ) : null}
+                      {(result.clinicalDecision as { followUpTr?: string })
+                        .followUpTr ? (
+                        <div>
+                          <dt className="text-slate-600">
+                            {t("analysisCard.followUpTitle")}
+                          </dt>
+                          <dd className="mt-1 whitespace-pre-wrap">
+                            {String(
+                              (result.clinicalDecision as { followUpTr?: string })
+                                .followUpTr,
+                            )}
+                          </dd>
+                        </div>
+                      ) : null}
+                    </dl>
+                  </div>
+                ) : null}
+              </div>
+            )}
           </div>
         )}
 

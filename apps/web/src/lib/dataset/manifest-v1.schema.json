@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://retinai.local/schemas/dataset-manifest-sample-v1.json",
+  "title": "RetinaAI dataset export sample (v1)",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "sample_id",
+    "created_at",
+    "image_relative_path"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1"
+    },
+    "sample_id": { "type": "string", "minLength": 8 },
+    "created_at": { "type": "string", "format": "date-time" },
+    "analysis_id": { "type": "string" },
+    "patient_id": { "type": "string" },
+    "patient_id_anonymized": { "type": "string" },
+    "image_relative_path": { "type": "string" },
+    "heatmap_relative_path": { "type": "string" },
+    "task": {
+      "type": "string",
+      "description": "Ornek turu; full_analysis_snapshot_v1 = DR + fundus + DME + klinik snapshot"
+    },
+    "ai_inference_snapshot": {
+      "type": ["object", "null"],
+      "description": "Kayit anindaki Analysis.aiInferenceJson (heatmap haric yapilandirilmis predict)"
+    },
+    "inference_snapshot_present": { "type": "boolean" },
+    "analysis_dr_grade_int_db": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "maximum": 4
+    },
+    "analysis_confidence_db": { "type": "number" },
+    "clinical_reasoning_tr": { "type": "string" },
+    "dr_label_en": { "type": "string" },
+    "pytorch_meta": { "type": "object", "additionalProperties": true },
+    "dr_grade_int": { "type": "integer", "minimum": 0, "maximum": 4 },
+    "pseudo_dr_grade_int": { "type": ["integer", "null"], "minimum": 0, "maximum": 4 },
+    "recommended_training_grade": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "maximum": 4
+    },
+    "gold_dr_grade_int": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "maximum": 4,
+      "description": "Çözülmüş DR hedefi (TrainingDatasetEntry.goldDrGradeInt; yoksa export çözümlemesi)"
+    },
+    "label_quality": {
+      "type": "string",
+      "enum": ["weak", "verified", "synthetic"]
+    },
+    "physician_clinical_reasoning_tr": { "type": "string" },
+    "doctor_structured_review": { "type": "object", "additionalProperties": true },
+    "fundus_findings": { "type": "object", "additionalProperties": true },
+    "dme_suspected": { "type": "boolean" },
+    "dme_confidence": { "type": "number" },
+    "clinical_decision": { "type": "object", "additionalProperties": true },
+    "uncertainty_note": { "type": "string" },
+    "llm_meta": {
+      "type": "object",
+      "properties": {
+        "backend": { "type": "string" },
+        "model": { "type": "string" },
+        "prompt_version": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "pseudo_label": {
+      "type": "object",
+      "description": "LLM / servis çıktısı (zayıf etiket)",
+      "additionalProperties": true
+    },
+    "human_label": {
+      "type": "object",
+      "properties": {
+        "ai_result_stored": { "type": "string" },
+        "dr_feedback_stored": { "type": ["string", "null"] },
+        "gold_dr_grade_int": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "maximum": 4
+        },
+        "verified_by_feedback": {
+          "type": "boolean",
+          "description": "true ise dr_feedback_stored hedef sınıf kabul edilir"
+        },
+        "label_quality": {
+          "type": "string",
+          "enum": ["weak", "verified", "synthetic"]
+        }
+      },
+      "additionalProperties": true
+    },
+    "odir": { "type": "object", "additionalProperties": true }
+  },
+  "additionalProperties": true
+}

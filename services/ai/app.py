@@ -283,14 +283,20 @@ def handle_unhandled_exception(err):
 # =========================
 # PyTorch DR MODEL
 # =========================
+from dr_gradcam_heatmap import resolve_densenet_dr_weights_path  # noqa: E402
+
+_dr_weights = resolve_densenet_dr_weights_path()
+if _dr_weights is None:
+    raise RuntimeError(
+        "DR DenseNet agirliklari bulunamadi. services/ai/models/model.pth veya model.pt "
+        "ekleyin veya DR_DENSENET_WEIGHTS ile tam yol verin."
+    )
 pt_model = models.densenet121(weights=None)
 pt_model.classifier = nn.Sequential(
     nn.Dropout(0.3),
     nn.Linear(pt_model.classifier.in_features, 5)
 )
-pt_model.load_state_dict(
-    torch.load(os.path.join(MODELS_DIR, "model.pth"), map_location=DEVICE)
-)
+pt_model.load_state_dict(torch.load(_dr_weights, map_location=DEVICE))
 pt_model.eval()
 pt_model.to(DEVICE)
 
@@ -641,6 +647,7 @@ def predict():
 
         return jsonify({
             "success": True,
+            "drGrade": int(idx),
             "pytorch": {
                 "label": PT_CLASS_NAMES[idx],
                 "confidence": dr_conf,

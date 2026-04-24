@@ -16,11 +16,11 @@ Bu klasor Retina AI Flask servisinin calistigi alandir.
 ## Calistirma
 
 - Proje kokunden:
-  - `npm run ai:run`
-- Veya bu klasorden:
-  - `python app.py`
+  - `npm run ai:run` → `app.py` (DenseNet, varsayilan port `AI_PORT`)
+- Gemini + yedek DenseNet:
+  - Bu klasorden: `python app_gemini.py` (port `AI_GEMINI_PORT`, varsayilan 5001)
 
 ## Notlar
 
-- Model agirliklari `models/` altinda beklenir.
-- `models/` klasoru GitHub'a dahil edilmez; deploy ortamina ayri olarak kopyalanmalidir.
+- Model agirliklari `models/` altinda: `model.pth` veya `model.pt` (veya `DR_DENSENET_WEIGHTS` ile tam yol).
+- `models/` Git’e dahil degildir; canlida sunucuya ayri kopyalayin.

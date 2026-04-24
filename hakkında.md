@@ -21,8 +21,8 @@ Retina AI, sağlık ve yapay zeka odaklı bir projedir. Proje, çoklu uygulama v
 ### 2. services/
 
 - **ai/**: Python ile yazılmış yapay zeka servisleri ve modelleri.
-  - `app.py`, `finetune.py`, `model.py`: Model eğitimi, ince ayar ve servis kodları
-  - `models/`: Eğitilmiş model dosyaları (.pth)
+  - `app.py`: Klasik DenseNet `/predict` servisi; `app_gemini.py`: Gemini + çoklu anahtar + DenseNet yedek
+  - `training/`: Eğitim scriptleri (multitask, DR sınıflandırıcı); `models/`: Ağırlık dosyaları (depoda yok, deploy’da kopyalanır)
   - `requirements.txt`: Python bağımlılıkları
 
 ### 3. tanitim-sitesi/

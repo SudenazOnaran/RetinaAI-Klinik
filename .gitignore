@@ -56,9 +56,11 @@ firestore-debug.log
 # --- app specific ---
 apps/web/storage/objects/
 apps/web/src/generated/prisma/
+apps/web/exports/
 
 # --- ai service artifacts ---
 services/ai/models/
+services/ai/training_out/
 *.pth
 
 # --- legacy / duplicate tree ---

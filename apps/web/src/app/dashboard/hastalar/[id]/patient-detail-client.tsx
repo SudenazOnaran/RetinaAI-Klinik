@@ -136,6 +136,18 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
     legacyLabel: string,
     fallback = "-",
   ) => {
+    const dbColumn: Record<string, string> = {
+      anamnesis: "sectionAnamnesis",
+      examFindings: "sectionExamFindings",
+      labResults: "sectionLabResults",
+      clinicalAssessment: "sectionClinicalAssessment",
+      treatmentRecommendations: "sectionTreatmentRecommendations",
+    };
+    const fromDb = report?.[dbColumn[sectionKey]];
+    if (typeof fromDb === "string" && fromDb.trim()) {
+      return fromDb;
+    }
+
     const structured = parseStructuredReport(report?.doctorNote);
     const structuredValue = structured?.sections?.[sectionKey];
     if (typeof structuredValue === "string" && structuredValue.trim()) {
@@ -302,8 +314,14 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
       medications: getTreatmentText(report),
       originalImage: report.originalImage,
       heatmapUrl: report.heatmapUrl,
-      reportTitle: structured?.reportTitle,
-      reportDateLabel: structured?.reportDate,
+      reportTitle: report.reportTitle ?? structured?.reportTitle,
+      reportDateLabel: report.reportDateKey ?? structured?.reportDate,
+      sectionAnamnesis: report.sectionAnamnesis,
+      sectionExamFindings: report.sectionExamFindings,
+      sectionLabResults: report.sectionLabResults,
+      sectionClinicalAssessment: report.sectionClinicalAssessment,
+      sectionTreatmentRecommendations: report.sectionTreatmentRecommendations,
+      sectionDoctorNotes: report.sectionDoctorNotes,
     };
 
     const settings = loadRetinaSettingsFromStorage();

@@ -11,8 +11,47 @@ import {
 
 export const runtime = "nodejs";
 
+/** AI servisi dondugunde kuyruk "sonra duzelir" degildir; kullaniciya dogrudan mesaj gosterilir. */
+function aiFailureShouldBypassQueue(message: string): boolean {
+  const m = message.toLowerCase();
+  return (
+    /\((429|401|400|403|502|503)\)\s*:/.test(message) ||
+    m.includes("quota") ||
+    m.includes("ucretsiz kota") ||
+    m.includes("resource_exhausted") ||
+    m.includes("geminiquotaexceeded")
+  );
+}
+
+function statusFromAiGatewayError(message: string): number {
+  const hit = message.match(/\((\d{3})\)\s*:/);
+  if (hit) {
+    const code = Number.parseInt(hit[1], 10);
+    if (Number.isFinite(code) && code >= 400 && code < 600) return code;
+  }
+  return 503;
+}
+
+/** Gateway: `AI servisi hatasi (429): {"error":"..."}` -> kullanici metni */
+function userVisibleMessageFromGatewayError(message: string): string {
+  const colonIdx = message.indexOf(": ");
+  if (colonIdx === -1) return message;
+  const rest = message.slice(colonIdx + 2).trim();
+  if (rest.startsWith("{")) {
+    try {
+      const j = JSON.parse(rest) as { error?: string };
+      if (typeof j.error === "string" && j.error.trim()) return j.error.trim();
+    } catch {
+      /* tam JSON degil (kisaltilmis olabilir) */
+    }
+  }
+  if (rest.length > 600) return `${rest.slice(0, 600)}…`;
+  return rest || message;
+}
+
 type PredictSuccess = {
   success: true;
+  drGrade?: number;
   pytorch: {
     label: string;
     confidence: number;
@@ -69,6 +108,18 @@ export async function POST(req: Request) {
     return NextResponse.json(aiData, { status: 200 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "AI servis hatasi";
+
+    if (aiFailureShouldBypassQueue(message)) {
+      const visible = userVisibleMessageFromGatewayError(message);
+      return NextResponse.json(
+        {
+          success: false,
+          queued: false,
+          error: visible,
+        },
+        { status: statusFromAiGatewayError(message) },
+      );
+    }
 
     try {
       const arrayBuffer = await file.arrayBuffer();
