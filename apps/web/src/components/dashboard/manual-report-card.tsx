@@ -57,7 +57,8 @@ export function ManualReportCard({
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
   const [aiDraft, setAiDraft] = useState<AiAnalysisDraft | null>(null);
-  const [isAiOpen, setIsAiOpen] = useState(false);
+  /** Varsayılan açık: rapor oluştur akışında AI kartı görünür kalsın (Collapsible + forceMount bazı ortamlarda sorun çıkarabiliyor). */
+  const [isAiOpen, setIsAiOpen] = useState(true);
   const [reportTitle, setReportTitle] = useState("");
   const [anamnesis, setAnamnesis] = useState("");
   const [examFindings, setExamFindings] = useState("");
@@ -337,10 +338,7 @@ export function ManualReportCard({
             </Button>
           </CollapsibleTrigger>
 
-          <CollapsibleContent
-            forceMount
-            className="space-y-2 border-t border-slate-200 p-3 data-[state=closed]:hidden"
-          >
+          <CollapsibleContent className="space-y-2 border-t border-slate-200 p-3">
             <ImageAnalysisCard
               compact
               patientId={patientId}
