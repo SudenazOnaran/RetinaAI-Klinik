@@ -20,6 +20,14 @@ _AI_SERVICE_DIR = os.path.dirname(os.path.abspath(__file__))
 _MODEL_DIR = os.path.join(_AI_SERVICE_DIR, "models")
 _DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+# CPU'da oneDNN/MKLDNN bazi Linux kurulumlarinda conv2d sirasinda
+# "RuntimeError: could not create a primitive" verebilir. Varsayilan: kapali.
+# Performans icin sorun yoksa TORCH_MKLDNN=1 ile acilabilir.
+if not torch.cuda.is_available():
+    _mk = (os.environ.get("TORCH_MKLDNN") or "").strip().lower()
+    if _mk not in ("1", "true", "yes", "on"):
+        torch.backends.mkldnn.enabled = False
+
 
 def resolve_densenet_dr_weights_path() -> str | None:
     """
