@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import {
+  Suspense,
+  useEffect,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -46,15 +52,36 @@ import {
 import { isDoctorApprovalToken } from "@/lib/doctor-feedback";
 import { useTranslation } from "@/components/providers/i18n-provider";
 
+type PatientDetailTab = "report-create" | "reports" | "progress";
+
+/** Next.js 15: `useSearchParams` alt ağaçta kendi Suspense sınırında olmalı; aksi halde hasta sayfası istemcide çökebiliyor. */
+function PatientDetailSearchParamsSync({
+  setActiveTab,
+}: {
+  setActiveTab: Dispatch<SetStateAction<PatientDetailTab>>;
+}) {
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab === "reports") {
+      setActiveTab("reports");
+      return;
+    }
+    if (tab === "progression") {
+      setActiveTab("progress");
+      return;
+    }
+    setActiveTab("report-create");
+  }, [searchParams, setActiveTab]);
+  return null;
+}
+
 export default function PatientDetailClient({ patient }: { patient: any }) {
   const { t, locale } = useTranslation();
-  const searchParams = useSearchParams();
-  const [activeTab, setActiveTab] = useState<
-    "report-create" | "reports" | "progress"
-  >("report-create");
+  const [activeTab, setActiveTab] = useState<PatientDetailTab>("report-create");
   const [editOpen, setEditOpen] = useState(false);
 
-  const tabButtonClass = (tab: "report-create" | "reports" | "progress") =>
+  const tabButtonClass = (tab: PatientDetailTab) =>
     [
       "rounded-lg border px-4 py-2 text-sm font-medium transition-all duration-200",
       "focus-visible:ring-2 focus-visible:ring-[var(--retina-primary)] focus-visible:ring-offset-2",
@@ -72,19 +99,6 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
 
     return variants[index % variants.length];
   };
-
-  useEffect(() => {
-    const tab = searchParams.get("tab");
-    if (tab === "reports") {
-      setActiveTab("reports");
-      return;
-    }
-    if (tab === "progression") {
-      setActiveTab("progress");
-      return;
-    }
-    setActiveTab("report-create");
-  }, [searchParams]);
 
   const reports = patient.analyses ?? [];
 
@@ -353,7 +367,11 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
   };
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
+    <>
+      <Suspense fallback={null}>
+        <PatientDetailSearchParamsSync setActiveTab={setActiveTab} />
+      </Suspense>
+      <div className="space-y-6 p-4 md:p-6">
       <Card className="border border-[#d8e0df] bg-white shadow-sm">
         <CardContent className="flex flex-col justify-between gap-4 p-6 md:flex-row md:items-center">
           <div>
@@ -777,5 +795,6 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
         </div>
       )}
     </div>
+    </>
   );
 }

@@ -57,8 +57,7 @@ export function ManualReportCard({
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
   const [aiDraft, setAiDraft] = useState<AiAnalysisDraft | null>(null);
-  /** Varsayılan açık: rapor oluştur akışında AI kartı görünür kalsın (Collapsible + forceMount bazı ortamlarda sorun çıkarabiliyor). */
-  const [isAiOpen, setIsAiOpen] = useState(true);
+  const [isAiOpen, setIsAiOpen] = useState(false);
   const [reportTitle, setReportTitle] = useState("");
   const [anamnesis, setAnamnesis] = useState("");
   const [examFindings, setExamFindings] = useState("");
