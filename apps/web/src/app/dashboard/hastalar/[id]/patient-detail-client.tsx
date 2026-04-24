@@ -61,18 +61,19 @@ function PatientDetailSearchParamsSync({
   setActiveTab: Dispatch<SetStateAction<PatientDetailTab>>;
 }) {
   const searchParams = useSearchParams();
+  /** ReadonlySearchParams her render'da yeni referans verebilir; dependency'de kullanma (sonsuz setState döngüsü → error boundary). */
+  const tabParam = searchParams.get("tab");
   useEffect(() => {
-    const tab = searchParams.get("tab");
-    if (tab === "reports") {
+    if (tabParam === "reports") {
       setActiveTab("reports");
       return;
     }
-    if (tab === "progression") {
+    if (tabParam === "progression") {
       setActiveTab("progress");
       return;
     }
     setActiveTab("report-create");
-  }, [searchParams, setActiveTab]);
+  }, [tabParam, setActiveTab]);
   return null;
 }
 
