@@ -5,6 +5,7 @@
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import { parseClientInferenceSnapshot } from "../src/lib/dataset/snapshot";
+import type { AnalysisReportSectionsInput } from "../src/lib/dataset/analysis-report-sections";
 import {
   buildCombinedDoctorNotesText,
   computeTrainingDatasetEntryFeatureColumns,
@@ -30,9 +31,14 @@ async function main() {
         aiResult: true,
         drFeedback: true,
         doctorNote: true,
+        reportTitle: true,
+        reportDateKey: true,
+        reportDoctorDisplayName: true,
+        sectionAnamnesis: true,
         sectionDoctorNotes: true,
         sectionClinicalAssessment: true,
         sectionExamFindings: true,
+        sectionLabResults: true,
         sectionTreatmentRecommendations: true,
         aiInferenceJson: true,
         doctorStructuredReview: true,
@@ -40,11 +46,16 @@ async function main() {
     });
     if (!a) continue;
 
-    const sections = {
-      doctorNotes: a.sectionDoctorNotes ?? "",
-      clinicalAssessment: a.sectionClinicalAssessment ?? "",
+    const sections: AnalysisReportSectionsInput = {
+      reportTitle: a.reportTitle ?? "",
+      reportDate: a.reportDateKey ?? "",
+      doctorDisplayName: a.reportDoctorDisplayName ?? "",
+      anamnesis: a.sectionAnamnesis ?? "",
       examFindings: a.sectionExamFindings ?? "",
+      labResults: a.sectionLabResults ?? "",
+      clinicalAssessment: a.sectionClinicalAssessment ?? "",
       treatmentRecommendations: a.sectionTreatmentRecommendations ?? "",
+      doctorNotes: a.sectionDoctorNotes ?? "",
     };
     const hasAny = Object.values(sections).some((s) => String(s).trim());
     const combined = buildCombinedDoctorNotesText(
