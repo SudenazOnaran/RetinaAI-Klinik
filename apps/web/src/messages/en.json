@@ -770,11 +770,7 @@
     "dmeSuspectedNo": "No clear DME suspicion on this fundus alone",
     "dmeConfidenceLabel": "Model confidence:",
     "uncertaintyNoteTitle": "Uncertainty / image quality",
-    "inferenceGeminiTitle": "Text analysis: Google Gemini",
-    "inferenceGeminiBody": "Clinical reasoning and structured summary for this request were produced with \"{{model}}\".",
-    "inferenceLocalTitle": "Text analysis: local DR model",
-    "inferenceLocalBody": "Gemini was unavailable for this request; text output was produced by the DenseNet fallback.",
-    "inferenceHeatmapNote": "Heatmap: {{method}} (local model)."
+    "clinicalAssistiveDisclaimer": "These results are not for definitive diagnosis; they are intended solely as decision support for the clinician. Final assessment and responsibility remain with the physician."
   },
   "reportsQuick": {
     "searchPlaceholder": "Search patient or diagnosis",
