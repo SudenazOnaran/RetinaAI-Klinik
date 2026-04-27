@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Card,
@@ -12,19 +12,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
 import { saveAnalysisAction } from "@/app/actions/save-analysis";
 import { isStaleServerActionError } from "@/lib/server-action-client";
-import {
-  type AiAnalysisDraft,
-  ImageAnalysisCard,
-} from "@/components/dashboard/image-analysis-card";
-import { ChevronDown, ClipboardPlus, Sparkles, X } from "lucide-react";
+import { type AiAnalysisDraft } from "@/components/dashboard/image-analysis-card";
+import { AiAnalysisPanel } from "@/components/dashboard/ai-analysis-panel";
+import { ClipboardPlus, Sparkles, X } from "lucide-react";
 import { useTranslation } from "@/components/providers/i18n-provider";
 import {
   DR_STAGE_LABELS_EN,
@@ -32,6 +25,7 @@ import {
   formatDrLabelForDisplay,
   resolveDrLabelToStoredForm,
 } from "@/lib/dr-stage-labels";
+import { REPORT_SECTION_MAX_LEN } from "@/lib/dataset/analysis-report-sections";
 
 type ManualReportCardProps = {
   patientId: string;
@@ -45,7 +39,7 @@ type ManualReportCardProps = {
   doctorName?: string;
 };
 
-const MAX_FIELD_LENGTH = 1500;
+const MAX_FIELD_LENGTH = REPORT_SECTION_MAX_LEN;
 
 export function ManualReportCard({
   patientId,
@@ -57,7 +51,6 @@ export function ManualReportCard({
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
   const [aiDraft, setAiDraft] = useState<AiAnalysisDraft | null>(null);
-  const [isAiOpen, setIsAiOpen] = useState(false);
   const [reportTitle, setReportTitle] = useState("");
   const [anamnesis, setAnamnesis] = useState("");
   const [examFindings, setExamFindings] = useState("");
@@ -67,6 +60,28 @@ export function ManualReportCard({
   const [doctorNotes, setDoctorNotes] = useState("");
   const [reportDate, setReportDate] = useState(
     new Date().toISOString().slice(0, 10),
+  );
+
+  const appendToExamFindings = useCallback(
+    (block: string) => {
+      setExamFindings((prev) => {
+        const trimmed = prev.trim();
+        const next = trimmed ? `${trimmed}\n\n${block}` : block;
+        if (next.length > MAX_FIELD_LENGTH) {
+          toast({
+            variant: "destructive",
+            title: t("aiAnalysisPanel.appendLimitTitle"),
+            description: t("aiAnalysisPanel.appendLimitDesc", {
+              max: MAX_FIELD_LENGTH,
+            }),
+            duration: 6000,
+          });
+          return prev;
+        }
+        return next;
+      });
+    },
+    [t, toast],
   );
 
   const handleSave = async () => {
@@ -190,194 +205,172 @@ export function ManualReportCard({
   };
 
   return (
-    <Card className="border border-[#d8e0df] bg-white shadow-sm">
-      <CardHeader className="border-b border-slate-100">
-        <CardTitle className="flex items-center gap-2 text-slate-900">
-          <ClipboardPlus className="h-5 w-5 text-[var(--retina-primary)]" />
-          {t("manualReport.title")}
-        </CardTitle>
-        <CardDescription>{t("manualReport.description")}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4 pt-4">
-        {aiDraft ? (
-          <div className="flex items-start justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
-            <div>
-              <p className="flex items-center gap-2 font-medium">
-                <Sparkles className="h-4 w-4" />{" "}
-                {t("manualReport.aiWillInclude")}
-              </p>
-              <p className="mt-1 text-xs text-emerald-800">
-                {t("manualReport.resultPrefix")}{" "}
-                {aiDraft.correctionLabel || aiDraft.aiResult} |{" "}
-                {t("manualReport.confidencePrefix")} %
-                {Math.round((aiDraft.confidence || 0) * 100)}
-              </p>
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start">
+      <Card className="min-w-0 w-full border border-[#d8e0df] bg-white shadow-sm">
+        <CardHeader className="border-b border-slate-100">
+          <CardTitle className="flex items-center gap-2 text-slate-900">
+            <ClipboardPlus className="h-5 w-5 text-[var(--retina-primary)]" />
+            {t("manualReport.editorTitle")}
+          </CardTitle>
+          <CardDescription>{t("manualReport.editorDescription")}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4 pt-4">
+          {aiDraft ? (
+            <div className="flex items-start justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+              <div>
+                <p className="flex items-center gap-2 font-medium">
+                  <Sparkles className="h-4 w-4" />{" "}
+                  {t("manualReport.aiWillInclude")}
+                </p>
+                <p className="mt-1 text-xs text-emerald-800">
+                  {t("manualReport.resultPrefix")}{" "}
+                  {aiDraft.correctionLabel || aiDraft.aiResult} |{" "}
+                  {t("manualReport.confidencePrefix")} %
+                  {Math.round((aiDraft.confidence || 0) * 100)}
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2 text-emerald-900 hover:bg-emerald-100"
+                onClick={() => setAiDraft(null)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 px-2 text-emerald-900 hover:bg-emerald-100"
-              onClick={() => setAiDraft(null)}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        ) : (
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-            {t("manualReport.aiOptionalHint")}
-          </div>
-        )}
+          ) : (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+              {t("manualReport.aiOptionalHintEditor")}
+            </div>
+          )}
 
-        <div className="grid gap-3 md:grid-cols-2">
-          <label className="space-y-1 text-sm text-slate-700 md:col-span-2">
-            <span>{t("manualReport.reportTitle")}</span>
-            <Input
-              value={reportTitle}
-              onChange={(e) => setReportTitle(e.target.value)}
-              placeholder={t("manualReport.reportTitlePlaceholder")}
-            />
-          </label>
-
-          <label className="space-y-1 text-sm text-slate-700">
-            <span>{t("manualReport.patientIdentity")}</span>
-            <Input
-              value={`${patientInfo.fullName} | T.C: ${patientInfo.tcNo}`}
-              disabled
-            />
-          </label>
-
-          <label className="space-y-1 text-sm text-slate-700">
-            <span>{t("manualReport.reportDate")}</span>
-            <Input
-              type="date"
-              value={reportDate}
-              onChange={(e) => setReportDate(e.target.value)}
-            />
-          </label>
-
-          <label className="space-y-1 text-sm text-slate-700">
-            <span>{t("manualReport.doctorInfo")}</span>
-            <Input
-              value={doctorName || t("manualReport.notSpecified")}
-              disabled
-            />
-          </label>
-        </div>
-
-        <label className="space-y-1 text-sm text-slate-700 block">
-          <span>{t("manualReport.anamnesis")}</span>
-          <Textarea
-            value={anamnesis}
-            onChange={(e) => setAnamnesis(e.target.value)}
-            placeholder={t("manualReport.anamnesisPlaceholder")}
-            rows={3}
-            maxLength={MAX_FIELD_LENGTH}
-          />
-        </label>
-
-        <label className="space-y-1 text-sm text-slate-700 block">
-          <span>{t("manualReport.examFindings")}</span>
-          <Textarea
-            value={examFindings}
-            onChange={(e) => setExamFindings(e.target.value)}
-            placeholder={t("manualReport.examFindingsPlaceholder")}
-            rows={3}
-            maxLength={MAX_FIELD_LENGTH}
-          />
-        </label>
-
-        <label className="space-y-1 text-sm text-slate-700 block">
-          <span>{t("manualReport.labResults")}</span>
-          <Textarea
-            value={labResults}
-            onChange={(e) => setLabResults(e.target.value)}
-            placeholder={t("manualReport.labResultsPlaceholder")}
-            rows={3}
-            maxLength={MAX_FIELD_LENGTH}
-          />
-        </label>
-
-        <label className="space-y-1 text-sm text-slate-700 block">
-          <span>{t("manualReport.clinicalAssessment")}</span>
-          <Textarea
-            value={clinicalAssessment}
-            onChange={(e) => setClinicalAssessment(e.target.value)}
-            placeholder={t("manualReport.clinicalAssessmentPlaceholder")}
-            rows={4}
-            maxLength={MAX_FIELD_LENGTH}
-          />
-        </label>
-
-        <label className="space-y-1 text-sm text-slate-700 block">
-          <span>{t("manualReport.treatment")}</span>
-          <Textarea
-            value={treatmentRecommendations}
-            onChange={(e) => setTreatmentRecommendations(e.target.value)}
-            placeholder={t("manualReport.treatmentPlaceholder")}
-            rows={4}
-            maxLength={MAX_FIELD_LENGTH}
-          />
-        </label>
-
-        <Collapsible
-          open={isAiOpen}
-          onOpenChange={setIsAiOpen}
-          className="rounded-xl border border-slate-200 bg-slate-50"
-        >
-          <CollapsibleTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              className="flex w-full items-center justify-between rounded-none px-4 py-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-100"
-            >
-              <span>{t("manualReport.aiOptional")}</span>
-              <ChevronDown
-                className={`h-4 w-4 transition-transform ${isAiOpen ? "rotate-180" : ""}`}
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="space-y-1 text-sm text-slate-700 md:col-span-2">
+              <span>{t("manualReport.reportTitle")}</span>
+              <Input
+                value={reportTitle}
+                onChange={(e) => setReportTitle(e.target.value)}
+                placeholder={t("manualReport.reportTitlePlaceholder")}
               />
-            </Button>
-          </CollapsibleTrigger>
+            </label>
 
-          <CollapsibleContent className="space-y-2 border-t border-slate-200 p-3">
-            <ImageAnalysisCard
-              compact
-              patientId={patientId}
-              onAnalysisSuccess={() => setIsAiOpen(true)}
-              onDraftChange={setAiDraft}
-              patientInfo={{
-                fullName: patientInfo.fullName,
-                tcNo: patientInfo.tcNo,
-                age: patientInfo.age ?? undefined,
-              }}
-              doctorName={doctorName}
+            <label className="space-y-1 text-sm text-slate-700">
+              <span>{t("manualReport.patientIdentity")}</span>
+              <Input
+                value={`${patientInfo.fullName} | T.C: ${patientInfo.tcNo}`}
+                disabled
+              />
+            </label>
+
+            <label className="space-y-1 text-sm text-slate-700">
+              <span>{t("manualReport.reportDate")}</span>
+              <Input
+                type="date"
+                value={reportDate}
+                onChange={(e) => setReportDate(e.target.value)}
+              />
+            </label>
+
+            <label className="space-y-1 text-sm text-slate-700">
+              <span>{t("manualReport.doctorInfo")}</span>
+              <Input
+                value={doctorName || t("manualReport.notSpecified")}
+                disabled
+              />
+            </label>
+          </div>
+
+          <label className="block space-y-1 text-sm text-slate-700">
+            <span>{t("manualReport.anamnesis")}</span>
+            <Textarea
+              value={anamnesis}
+              onChange={(e) => setAnamnesis(e.target.value)}
+              placeholder={t("manualReport.anamnesisPlaceholder")}
+              rows={3}
+              maxLength={MAX_FIELD_LENGTH}
             />
-          </CollapsibleContent>
-        </Collapsible>
+          </label>
 
-        <label className="space-y-1 text-sm text-slate-700 block">
-          <span>{t("manualReport.doctorNotes")}</span>
-          <Textarea
-            value={doctorNotes}
-            onChange={(e) => setDoctorNotes(e.target.value)}
-            placeholder={t("manualReport.doctorNotesPlaceholder")}
-            rows={4}
-            maxLength={MAX_FIELD_LENGTH}
-          />
-        </label>
+          <label className="block space-y-1 text-sm text-slate-700">
+            <span>{t("manualReport.examFindings")}</span>
+            <Textarea
+              value={examFindings}
+              onChange={(e) => setExamFindings(e.target.value)}
+              placeholder={t("manualReport.examFindingsPlaceholder")}
+              rows={4}
+              maxLength={MAX_FIELD_LENGTH}
+            />
+          </label>
 
-        <div className="flex justify-end">
-          <Button
-            onClick={handleSave}
-            disabled={busy}
-            className="min-w-[200px] rounded-lg bg-[var(--retina-primary)] px-5 text-white shadow-sm transition-all duration-200 hover:bg-[var(--retina-primary-deep)] hover:shadow-md"
-          >
-            {busy
-              ? t("manualReport.saving")
-              : aiDraft
-                ? t("manualReport.saveWithAi")
-                : t("manualReport.save")}
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+          <label className="block space-y-1 text-sm text-slate-700">
+            <span>{t("manualReport.labResults")}</span>
+            <Textarea
+              value={labResults}
+              onChange={(e) => setLabResults(e.target.value)}
+              placeholder={t("manualReport.labResultsPlaceholder")}
+              rows={3}
+              maxLength={MAX_FIELD_LENGTH}
+            />
+          </label>
+
+          <label className="block space-y-1 text-sm text-slate-700">
+            <span>{t("manualReport.clinicalAssessment")}</span>
+            <Textarea
+              value={clinicalAssessment}
+              onChange={(e) => setClinicalAssessment(e.target.value)}
+              placeholder={t("manualReport.clinicalAssessmentPlaceholder")}
+              rows={4}
+              maxLength={MAX_FIELD_LENGTH}
+            />
+          </label>
+
+          <label className="block space-y-1 text-sm text-slate-700">
+            <span>{t("manualReport.treatment")}</span>
+            <Textarea
+              value={treatmentRecommendations}
+              onChange={(e) => setTreatmentRecommendations(e.target.value)}
+              placeholder={t("manualReport.treatmentPlaceholder")}
+              rows={4}
+              maxLength={MAX_FIELD_LENGTH}
+            />
+          </label>
+
+          <label className="block space-y-1 text-sm text-slate-700">
+            <span>{t("manualReport.doctorNotes")}</span>
+            <Textarea
+              value={doctorNotes}
+              onChange={(e) => setDoctorNotes(e.target.value)}
+              placeholder={t("manualReport.doctorNotesPlaceholder")}
+              rows={4}
+              maxLength={MAX_FIELD_LENGTH}
+            />
+          </label>
+
+          <div className="flex justify-end">
+            <Button
+              onClick={handleSave}
+              disabled={busy}
+              className="min-w-[200px] rounded-lg bg-[var(--retina-primary)] px-5 text-white shadow-sm transition-all duration-200 hover:bg-[var(--retina-primary-deep)] hover:shadow-md"
+            >
+              {busy
+                ? t("manualReport.saving")
+                : aiDraft
+                  ? t("manualReport.saveWithAi")
+                  : t("manualReport.save")}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <aside className="min-w-0 w-full space-y-1 lg:sticky lg:top-4 lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto lg:overflow-x-hidden">
+        <AiAnalysisPanel
+          patientId={patientId}
+          patientInfo={patientInfo}
+          doctorName={doctorName}
+          onFundusDraftChange={setAiDraft}
+          onAppendExamFindings={appendToExamFindings}
+        />
+      </aside>
+    </div>
   );
 }

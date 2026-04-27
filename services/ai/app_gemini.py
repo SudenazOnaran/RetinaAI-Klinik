@@ -150,7 +150,27 @@ CORS(
                 "X-Request-Id",
                 "x-request-id",
             ],
-        }
+        },
+        r"/predict-oct": {
+            "origins": ALLOWED_CORS_ORIGINS,
+            "methods": ["POST", "OPTIONS"],
+            "allow_headers": [
+                "Content-Type",
+                "X-AI-Gateway-Key",
+                "X-Request-Id",
+                "x-request-id",
+            ],
+        },
+        r"/predict-ffa": {
+            "origins": ALLOWED_CORS_ORIGINS,
+            "methods": ["POST", "OPTIONS"],
+            "allow_headers": [
+                "Content-Type",
+                "X-AI-Gateway-Key",
+                "X-Request-Id",
+                "x-request-id",
+            ],
+        },
     },
 )
 
@@ -345,7 +365,7 @@ def handle_unhandled_exception(err):
         stack=traceback.format_exc(),
         patient_id=patient_id,
         payload_summary=_safe_predict_payload_summary()
-        if request.path == "/predict"
+        if request.path in ("/predict", "/predict-oct", "/predict-ffa")
         else json.dumps({"path": request.path}, ensure_ascii=False),
     )
     return jsonify({
@@ -765,6 +785,237 @@ def _predict_with_gemini(image: Image.Image) -> dict:
     )
 
 
+# --- Makula OCT (Gemini; fundus /predict akisindan bagimsiz) ---
+
+OCT_OUTPUT_LANG_INSTRUCTION_TR = (
+    "CIKTI DILI: Tum aciklayici metin alanlarini (image_quality, findings, supporting_findings, "
+    "contradicting_findings, clinical_summary, recommendations icerikleri) TURKCE yaz. "
+    "JSON anahtar adlari asagidaki gibi INGILIZCE kalsin. 'likelihood' alanlarinda sadece su "
+    "uc degerden birini kullan: Dusuk | Orta | Yuksek. "
+    "Kisaltmalari (DME, AMD, ERM, VMT, CSR, RVO) ve tipik Ingilizce hastalik kisaltmalarini "
+    "metin icerisinde gerekirse koruyabilirsin."
+)
+
+OCT_OUTPUT_LANG_INSTRUCTION_EN = (
+    "OUTPUT LANGUAGE: Write all narrative fields (image_quality, findings, supporting_findings, "
+    "contradicting_findings, clinical_summary, recommendations) in clear English. "
+    "Use JSON keys exactly as specified. For 'likelihood' use only: Low | Moderate | High."
+)
+
+OCT_BASE_PROMPT = """
+You are an expert ophthalmologist specializing in retinal diseases.
+
+Analyze the provided macular OCT image and generate a structured clinical assessment.
+
+IMPORTANT RULES:
+- Do NOT give definitive diagnosis.
+- Use probabilistic and descriptive medical language.
+- Base your reasoning only on visible OCT features.
+- If image quality is insufficient, clearly state it.
+
+TASKS:
+
+1. Identify key OCT findings:
+- Retinal thickness changes (thickening / thinning)
+- Intraretinal or subretinal fluid
+- Hyperreflective or hyporeflective areas
+- Disruption of retinal layers (especially ellipsoid zone)
+- Vitreomacular interface abnormalities
+
+2. Evaluate the likelihood of the following conditions:
+- Diabetic Macular Edema (DME)
+- Age-related Macular Degeneration (AMD)
+- Macular Hole
+- Epiretinal Membrane (ERM) / Vitreomacular Traction (VMT)
+- Central Serous Retinopathy (CSR)
+- Retinal Vein Occlusion (RVO)
+
+For EACH condition provide:
+- Likelihood: Low / Moderate / High (or Turkish output: Dusuk / Orta / Yuksek if instructed)
+- Supporting findings
+- Contradicting findings (if any)
+
+3. Generate a concise clinical summary for a doctor:
+- 3-5 sentences
+- Clear, medical, no unnecessary explanation
+
+4. Provide follow-up recommendations:
+- Additional imaging if needed
+- Monitoring vs referral urgency
+
+OUTPUT FORMAT (STRICT JSON only, no markdown fences):
+
+{
+  "image_quality": "Good / Moderate / Poor",
+  "findings": [
+    "..."
+  ],
+  "conditions": [
+    {
+      "name": "DME",
+      "likelihood": "Low",
+      "supporting_findings": ["..."],
+      "contradicting_findings": ["..."]
+    },
+    {
+      "name": "AMD",
+      "likelihood": "Moderate",
+      "supporting_findings": [],
+      "contradicting_findings": []
+    }
+  ],
+  "clinical_summary": "...",
+  "recommendations": [
+    "...",
+    "..."
+  ]
+}
+
+Include all six conditions (DME, AMD, Macular Hole, ERM/VMT, CSR, RVO) in "conditions" with the exact name format you judge best, but each must have the four fields above.
+"""
+
+
+def _oct_locale_to_instruction(locale_raw: str) -> str:
+    s = (locale_raw or "").strip().lower()
+    if s.startswith("tr"):
+        return OCT_OUTPUT_LANG_INSTRUCTION_TR
+    return OCT_OUTPUT_LANG_INSTRUCTION_EN
+
+
+def _coerce_str_list(v: object, max_len: int = 50) -> list[str]:
+    if v is None:
+        return []
+    if isinstance(v, str):
+        t = v.strip()
+        return [t] if t else []
+    if not isinstance(v, list):
+        return []
+    out: list[str] = []
+    for item in v:
+        t = str(item).strip()
+        if t:
+            out.append(t)
+        if len(out) >= max_len:
+            break
+    return out
+
+
+def _normalize_likelihood(raw: str) -> str:
+    s = (raw or "").strip()
+    s_low = s.lower()
+    tr_map = {
+        "düşük": "low",
+        "dusuk": "low",
+        "orta": "moderate",
+        "yüksek": "high",
+        "yuksek": "high",
+    }
+    if s_low in tr_map:
+        s_low = tr_map[s_low]
+    en = {"low", "moderate", "high"}
+    if s_low in en:
+        return s_low
+    return "low"
+
+
+def _normalize_oct_assessment(data: object) -> dict:
+    if not isinstance(data, dict):
+        data = {}
+    d = data
+    img_q = str(d.get("image_quality") or "").strip() or "Moderate"
+    findings = _coerce_str_list(d.get("findings"), 40)
+    raw_conds = d.get("conditions")
+    conditions: list[dict] = []
+    if isinstance(raw_conds, list):
+        for c in raw_conds:
+            if not isinstance(c, dict):
+                continue
+            name = str(c.get("name") or "").strip() or "—"
+            conditions.append(
+                {
+                    "name": name,
+                    "likelihood": _normalize_likelihood(str(c.get("likelihood") or "Low")),
+                    "supportingFindings": _coerce_str_list(
+                        c.get("supporting_findings"), 30
+                    ),
+                    "contradictingFindings": _coerce_str_list(
+                        c.get("contradicting_findings"), 30
+                    ),
+                }
+            )
+    summary = str(d.get("clinical_summary") or "").strip()[:12_000]
+    recs = _coerce_str_list(d.get("recommendations"), 30)
+    return {
+        "imageQuality": img_q,
+        "findings": findings,
+        "conditions": conditions,
+        "clinicalSummary": summary,
+        "recommendations": recs,
+    }
+
+
+def _predict_oct_with_gemini_core(
+    image: Image.Image, client: genai.Client, locale_tag: str
+) -> dict:
+    img_send = _resize_pil_for_gemini(image)
+    lang_inst = _oct_locale_to_instruction(locale_tag)
+    prompt = OCT_BASE_PROMPT.strip() + "\n\n" + lang_inst
+    resp = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=[prompt, img_send],
+        config=types.GenerateContentConfig(
+            temperature=0.15,
+            max_output_tokens=8192,
+            response_mime_type="application/json",
+        ),
+    )
+    try:
+        raw = (resp.text or "").strip()
+    except ValueError as err:
+        raise ValueError("Gemini OCT yaniti okunamadi veya engellendi.") from err
+
+    data = _parse_model_json_text(raw)
+    if not data:
+        raise ValueError("Gemini OCT ciktisi bos veya gecersiz JSON.")
+    normalized = _normalize_oct_assessment(data)
+    return {
+        "success": True,
+        "oct": normalized,
+        "inference": {
+            "backend": "gemini-oct",
+            "model": GEMINI_MODEL,
+            "locale": "tr" if (locale_tag or "").strip().lower().startswith("tr") else "en",
+        },
+    }
+
+
+def _predict_oct_with_gemini(image: Image.Image, locale_tag: str) -> dict:
+    keys = _gemini_api_key_list()
+    if not keys:
+        raise GeminiAllKeysExhausted(
+            "Gemini API anahtari tanimli degil (GEMINI_API_KEY veya GEMINI_API_KEYS). "
+            "Makula OCT analizi yalnizca Gemini ile calisir."
+        )
+    last_err: BaseException | None = None
+    for key in keys:
+        client = genai.Client(api_key=key)
+        try:
+            return _predict_oct_with_gemini_core(image, client, locale_tag)
+        except genai_errors.APIError as err:
+            last_err = err
+            if _is_gemini_quota_error(err):
+                continue
+            raise
+        except Exception as err:
+            last_err = err
+            if _is_gemini_quota_error(err):
+                continue
+            raise
+    raise GeminiAllKeysExhausted(
+        str(last_err) if last_err else "Tum Gemini anahtarlari kota/limit ile reddedildi."
+    )
+
+
 @app.route("/predict", methods=["POST"])
 def predict():
     request_id = resolve_request_id(request.headers)
@@ -929,6 +1180,662 @@ def predict():
         return jsonify({
             "success": False,
             "error": "Analiz sirasinda beklenmeyen bir hata olustu.",
+            "requestId": request_id,
+        }), 500
+
+
+@app.route("/predict-oct", methods=["POST"])
+def predict_oct():
+    request_id = resolve_request_id(request.headers)
+    gateway_key = request.headers.get("X-AI-Gateway-Key", "")
+    if gateway_key != AI_GATEWAY_SHARED_SECRET:
+        return jsonify({
+            "success": False,
+            "error": "Yetkisiz AI erisimi.",
+            "requestId": request_id,
+        }), 401
+
+    client_ip = (request.headers.get("X-Forwarded-For", "") or request.remote_addr or "unknown").split(",")[0].strip()
+    if _is_rate_limited(client_ip):
+        return jsonify({
+            "success": False,
+            "error": "Cok fazla istek gonderdiniz. Lutfen biraz bekleyin.",
+            "requestId": request_id,
+        }), 429
+
+    patient_id = None
+    try:
+        patient_id = (request.form.get("patientId") or "").strip() or None
+    except Exception:
+        patient_id = None
+
+    locale_tag = "en"
+    try:
+        locale_tag = (request.form.get("locale") or "en").strip() or "en"
+    except Exception:
+        locale_tag = "en"
+
+    try:
+        file = request.files.get("image")
+        image = _safe_load_image(file)
+        return jsonify(_predict_oct_with_gemini(image, locale_tag))
+    except ValueError as err:
+        log_structured_error(
+            request_id=request_id,
+            route="/predict-oct",
+            action="INVALID_REQUEST",
+            error_message=str(err),
+            patient_id=patient_id,
+            payload_summary=_safe_predict_payload_summary(),
+        )
+        return jsonify({
+            "success": False,
+            "error": str(err),
+            "requestId": request_id,
+        }), 400
+    except GeminiAllKeysExhausted as gex:
+        log_structured_error(
+            request_id=request_id,
+            route="/predict-oct",
+            action="GEMINI_ALL_KEYS_EXHAUSTED",
+            error_message=str(gex)[:2500],
+            patient_id=patient_id,
+            payload_summary=_safe_predict_payload_summary(),
+        )
+        return jsonify({
+            "success": False,
+            "error": (
+                "Makula OCT analizi icin tum Gemini anahtarlari kotaya takildi veya anahtar yok. "
+                "Biraz bekleyip tekrar deneyin veya yoneticiyle iletisime gecin."
+            ),
+            "requestId": request_id,
+        }), 503
+    except genai_errors.APIError as err:
+        if _is_gemini_quota_error(err):
+            log_structured_error(
+                request_id=request_id,
+                route="/predict-oct",
+                action="GEMINI_QUOTA_EXCEEDED",
+                error_message=str(err)[:2500],
+                patient_id=patient_id,
+                payload_summary=_safe_predict_payload_summary(),
+            )
+            return jsonify({
+                "success": False,
+                "error": (
+                    "Gemini ucretsiz kotasi asildi veya dakika basina cok fazla istek/token kullanildi. "
+                    "Yaklasik 1 dakika bekleyip tekrar deneyin; gorsel cok buyukse kucultun."
+                ),
+                "requestId": request_id,
+                "geminiQuotaExceeded": True,
+            }), 429
+        log_structured_error(
+            request_id=request_id,
+            route="/predict-oct",
+            action="GEMINI_API_ERROR",
+            error_message=str(err)[:2500],
+            stack=traceback.format_exc(),
+            patient_id=patient_id,
+            payload_summary=_safe_predict_payload_summary(),
+        )
+        return jsonify({
+            "success": False,
+            "error": f"Gemini API hatasi: {err.message or err}",
+            "requestId": request_id,
+        }), 502
+    except Exception as err:
+        if _is_gemini_quota_error(err):
+            log_structured_error(
+                request_id=request_id,
+                route="/predict-oct",
+                action="GEMINI_QUOTA_EXCEEDED",
+                error_message=str(err)[:2500],
+                patient_id=patient_id,
+                payload_summary=_safe_predict_payload_summary(),
+            )
+            return jsonify({
+                "success": False,
+                "error": (
+                    "Gemini ucretsiz kotasi asildi veya istek limiti asildi. "
+                    "Biraz bekleyip tekrar deneyin; gerekirse GEMINI_MAX_IMAGE_SIDE=256 deneyin."
+                ),
+                "requestId": request_id,
+                "geminiQuotaExceeded": True,
+            }), 429
+        cause = getattr(err, "__cause__", None)
+        cause_msg = str(cause) if cause is not None else None
+        log_structured_error(
+            request_id=request_id,
+            route="/predict-oct",
+            action="PREDICT_OCT_FAILED",
+            error_message=str(err),
+            stack=traceback.format_exc(),
+            cause=cause_msg,
+            patient_id=patient_id,
+            payload_summary=_safe_predict_payload_summary(),
+        )
+        return jsonify({
+            "success": False,
+            "error": "Makula OCT analizi sirasinda beklenmeyen bir hata olustu.",
+            "requestId": request_id,
+        }), 500
+
+
+# --- FFA (Fluorescein fundus anjiyografi) ---
+
+FFA_OUTPUT_LANG_INSTRUCTION_TR = (
+    "CIKTI: Asagidaki ZORUNLU JSON semasina harfiyen uy. Anahtar adlari Turkce kalsin. "
+    "olasilik alanlarinda yalnizca: Dusuk | Orta | Yüksek. "
+    "aktivite_degerlendirmesi icinde: Var / Yok / Belirsiz ve neovaskularizasyon ile sizinti icin Var / Yok / Şüpheli."
+)
+
+FFA_OUTPUT_LANG_INSTRUCTION_EN = (
+    "OUTPUT: Obey the JSON schema below exactly. Use English for all narrative string values. "
+    "Use these keys in English: image_quality, phase_assessment, findings, diseases, activity_assessment, "
+    "clinical_summary, recommendations, confidence_score. "
+    "diseases[].likelihood: only Low | Moderate | High. "
+    "activity_assessment: use Present | Absent | Uncertain for active_disease; "
+    "neovascularization and leakage: Present | Absent | Suspected."
+)
+
+FFA_BASE_PROMPT_TR = """
+Sen retina hastalıkları konusunda uzman bir göz hastalıkları hekimi gibi davranan klinik bir AI asistanısın.
+
+Verilen Fluorescein Fundus Anjiyografi (FFA) görüntüsünü analiz et ve klinik bir değerlendirme raporu oluştur.
+
+ÖNEMLİ KURALLAR:
+- Kesin tanı koyma.
+- "Uyumlu olabilir", "lehine bulgular", "şüpheli" gibi medikal olasılık dili kullan.
+- Sadece görüntüdeki FFA bulgularına dayan.
+- Faz bilgisi net değilse bunu belirt.
+- Görüntü kalitesi yetersizse açıkça yaz.
+
+KLİNİK AMAÇ:
+FFA özellikle aşağıdaki hastalıkların tanı ve aktivite değerlendirmesinde kullanılır:
+- Diyabetik Retinopati
+- Retinal Ven Tıkanıklığı (RVO)
+- Yaşa Bağlı Makula Dejenerasyonu (CNV)
+- Santral Seröz Koryoretinopati (CSR)
+- Üveit / retinal vaskülit
+
+GÖREVLER:
+
+1. FFA bulgularını değerlendir:
+- Boyanma (staining)
+- Sızıntı (leakage)
+- Non-perfüzyon alanları
+- Kapiller kaçak
+- Neovaskülarizasyon bulguları
+- Hiperfloresans / hipofloresans alanlar
+- Makula tutulumu
+
+2. Aşağıdaki hastalıklar için olasılık değerlendir:
+- Diyabetik Retinopati (DR)
+- Retinal Ven Tıkanıklığı (RVO)
+- AMD (koroidal neovaskülarizasyon - CNV)
+- CSR
+- Üveit / retinal vaskülit
+
+Her hastalık için:
+- Olasılık: Düşük / Orta / Yüksek
+- Destekleyen bulgular
+- Aykırı bulgular
+
+3. Aktivite değerlendirmesi yap:
+- Aktif hastalık var mı?
+- Neovaskülarizasyon var mı?
+- Aktif sızıntı var mı?
+
+4. Klinik özet yaz:
+- 3–5 cümle
+- Net, tıbbi ve doktor diliyle
+
+5. Öneriler:
+- Takip planı
+- Ek tetkikler (OCT, tekrar FFA vb.)
+- Tedavi gerekliliği (genel ifade)
+
+ÇIKTI FORMATI (SADECE JSON, aciklama yok):
+
+{
+  "goruntu_kalitesi": "İyi / Orta / Kötü",
+  "faz_degerlendirmesi": "Erken / Orta / Geç / Belirsiz",
+  "bulgular": [
+    "..."
+  ],
+  "hastaliklar": [
+    {
+      "isim": "Diyabetik Retinopati",
+      "olasilik": "Yüksek",
+      "destekleyen_bulgular": [],
+      "aykiri_bulgular": []
+    }
+  ],
+  "aktivite_degerlendirmesi": {
+    "aktif_hastalik": "Var / Yok / Belirsiz",
+    "neovaskularizasyon": "Var / Yok / Şüpheli",
+    "sizinti": "Var / Yok / Şüpheli"
+  },
+  "klinik_ozet": "...",
+  "oneriler": [
+    "..."
+  ],
+  "guven_skoru": 0
+}
+
+Bes hastalik satiri (DR, RVO, AMD/CNV, CSR, Uveit/vaskulit) "hastaliklar" listesinde olmali. guven_skoru 0-100 tamsayi.
+"""
+
+FFA_BASE_PROMPT_EN = """
+You are a clinical AI assistant acting like a specialist ophthalmologist in retinal disease.
+
+Analyze the given Fluorescein Fundus Angiography (FFA) image and produce a structured clinical report.
+
+CRITICAL RULES:
+- No definitive diagnosis.
+- Use probabilistic, cautious medical phrasing.
+- Rely only on FFA features visible in the image.
+- If angiographic phase is unclear, say so.
+- If image quality is poor, state it clearly.
+
+CLINICALLY FFA is used to assess diagnosis and especially activity for:
+- Diabetic retinopathy
+- Retinal vein occlusion (RVO)
+- Neovascular AMD (CNV)
+- Central serous chorioretinopathy
+- Uveitis / retinal vasculitis
+
+TASKS:
+1) Describe FFA findings: staining, leakage, non-perfusion, capillary leakage, neovascularization-related patterns, hyper/hypofluorescence, macular involvement.
+2) For each listed disease, give probability (Low/Moderate/High), supporting features, and contradictory features.
+3) Activity: active disease? neovascularization? active leakage?
+4) 3-5 sentence clinical summary for a physician.
+5) Recommendations: follow-up, additional tests (OCT, repeat FFA, etc.), and general need for treatment discussion.
+
+Output ONLY valid JSON (no markdown) using exactly these English keys and shapes:
+
+{
+  "image_quality": "Good / Moderate / Poor",
+  "phase_assessment": "Early / Mid / Late / Unclear",
+  "findings": ["..."],
+  "diseases": [
+    {
+      "name": "Diabetic retinopathy",
+      "likelihood": "Low",
+      "supporting_findings": [],
+      "contradicting_findings": []
+    }
+  ],
+  "activity_assessment": {
+    "active_disease": "Present / Absent / Uncertain",
+    "neovascularization": "Present / Absent / Suspected",
+    "leakage": "Present / Absent / Suspected"
+  },
+  "clinical_summary": "...",
+  "recommendations": ["..."],
+  "confidence_score": 0
+}
+
+Include all five conditions (DR, RVO, AMD/CNV, CSR, uveitis/vasculitis) in "diseases". confidence_score is an integer 0-100.
+"""
+
+
+def _dict_get(d: object, *keys: str) -> object | None:
+    if not isinstance(d, dict):
+        return None
+    for k in keys:
+        if k in d and d[k] is not None:
+            return d[k]
+    return None
+
+
+def _normalize_confidence_0_100(v: object) -> int:
+    try:
+        if isinstance(v, bool):
+            return 0
+        if isinstance(v, (int, float)):
+            i = int(round(float(v)))
+        else:
+            i = int(round(float(str(v).strip().replace(",", "."))))
+    except (TypeError, ValueError):
+        return 0
+    return max(0, min(100, i))
+
+
+def _normalize_ffa_assessment(data: object, source_locale: str) -> dict:
+    if not isinstance(data, dict):
+        data = {}
+    d: dict = data  # type: ignore[assignment]
+    is_tr = (source_locale or "").strip().lower().startswith("tr")
+
+    if is_tr:
+        img_q = str(
+            _dict_get(d, "goruntu_kalitesi", "image_quality") or ""
+        ).strip() or "Orta"
+        phase = str(
+            _dict_get(d, "faz_degerlendirmesi", "phase_assessment") or ""
+        ).strip() or "Belirsiz"
+        findings = _coerce_str_list(_dict_get(d, "bulgular", "findings"), 50)
+        raw_dis = _dict_get(d, "hastaliklar", "diseases")
+    else:
+        img_q = str(
+            _dict_get(d, "image_quality", "goruntu_kalitesi") or ""
+        ).strip() or "Moderate"
+        phase = str(
+            _dict_get(d, "phase_assessment", "faz_degerlendirmesi") or ""
+        ).strip() or "Unclear"
+        findings = _coerce_str_list(_dict_get(d, "findings", "bulgular"), 50)
+        raw_dis = _dict_get(d, "diseases", "hastaliklar")
+
+    diseases: list[dict] = []
+    if isinstance(raw_dis, list):
+        for c in raw_dis:
+            if not isinstance(c, dict):
+                continue
+            name = str(
+                _dict_get(c, "isim", "name", "disease", "condition") or ""
+            ).strip() or "—"
+            lik = str(
+                _dict_get(
+                    c,
+                    "olasilik",
+                    "likelihood",
+                )
+                or ("Düşük" if is_tr else "Low")
+            )
+            sup = _coerce_str_list(
+                _dict_get(
+                    c,
+                    "destekleyen_bulgular",
+                    "supporting_findings",
+                ),
+                40,
+            )
+            con = _coerce_str_list(
+                _dict_get(
+                    c,
+                    "aykiri_bulgular",
+                    "aykirı_bulgular",
+                    "contradicting_findings",
+                ),
+                40,
+            )
+            diseases.append(
+                {
+                    "name": name,
+                    "likelihood": _normalize_likelihood(lik),
+                    "supportingFindings": sup,
+                    "contradictingFindings": con,
+                }
+            )
+
+    if is_tr:
+        raw_act = _dict_get(d, "aktivite_degerlendirmesi", "activity_assessment")
+    else:
+        raw_act = _dict_get(d, "activity_assessment", "aktivite_degerlendirmesi")
+
+    act: dict = raw_act if isinstance(raw_act, dict) else {}
+    if is_tr:
+        d_active, d_neo, d_leak = "Belirsiz", "Şüpheli", "Şüpheli"
+    else:
+        d_active, d_neo, d_leak = "Uncertain", "Suspected", "Suspected"
+    active_dis = str(
+        _dict_get(
+            act,
+            "aktif_hastalik",
+            "active_disease",
+        )
+        or d_active
+    ).strip()
+    neo = str(
+        _dict_get(
+            act,
+            "neovaskularizasyon",
+            "neovascularization",
+        )
+        or d_neo
+    ).strip()
+    leak = str(
+        _dict_get(
+            act,
+            "sizinti",
+            "sızıntı",
+            "sızinti",
+            "leakage",
+        )
+        or d_leak
+    ).strip()
+
+    if is_tr:
+        summary = str(_dict_get(d, "klinik_ozet", "clinical_summary") or "").strip()
+        recs = _coerce_str_list(_dict_get(d, "oneriler", "recommendations"), 40)
+        conf = _normalize_confidence_0_100(
+            _dict_get(d, "guven_skoru", "confidence_score")
+        )
+    else:
+        summary = str(_dict_get(d, "clinical_summary", "klinik_ozet") or "").strip()
+        recs = _coerce_str_list(_dict_get(d, "recommendations", "oneriler"), 40)
+        conf = _normalize_confidence_0_100(
+            _dict_get(d, "confidence_score", "guven_skoru")
+        )
+
+    return {
+        "imageQuality": img_q,
+        "phaseAssessment": phase,
+        "findings": findings,
+        "diseases": diseases,
+        "activity": {
+            "activeDisease": active_dis,
+            "neovascularization": neo,
+            "leakage": leak,
+        },
+        "clinicalSummary": summary[:12_000],
+        "recommendations": recs,
+        "confidenceScore": conf,
+    }
+
+
+def _ffa_locale_to_tr_prompt(locale_raw: str) -> tuple[str, str]:
+    s = (locale_raw or "").strip().lower()
+    if s.startswith("tr"):
+        return (FFA_BASE_PROMPT_TR.strip() + "\n\n" + FFA_OUTPUT_LANG_INSTRUCTION_TR, "tr")
+    return (FFA_BASE_PROMPT_EN.strip() + "\n\n" + FFA_OUTPUT_LANG_INSTRUCTION_EN, "en")
+
+
+def _predict_ffa_with_gemini_core(
+    image: Image.Image, client: genai.Client, locale_tag: str
+) -> dict:
+    img_send = _resize_pil_for_gemini(image)
+    body, out_loc = _ffa_locale_to_tr_prompt(locale_tag)
+    prompt = body
+    resp = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=[prompt, img_send],
+        config=types.GenerateContentConfig(
+            temperature=0.15,
+            max_output_tokens=8192,
+            response_mime_type="application/json",
+        ),
+    )
+    try:
+        raw = (resp.text or "").strip()
+    except ValueError as err:
+        raise ValueError("Gemini FFA yaniti okunamadi veya engellendi.") from err
+
+    data = _parse_model_json_text(raw)
+    if not data:
+        raise ValueError("Gemini FFA ciktisi bos veya gecersiz JSON.")
+    normalized = _normalize_ffa_assessment(data, out_loc)
+    return {
+        "success": True,
+        "ffa": normalized,
+        "inference": {
+            "backend": "gemini-ffa",
+            "model": GEMINI_MODEL,
+            "locale": "tr" if out_loc == "tr" else "en",
+        },
+    }
+
+
+def _predict_ffa_with_gemini(image: Image.Image, locale_tag: str) -> dict:
+    keys = _gemini_api_key_list()
+    if not keys:
+        raise GeminiAllKeysExhausted(
+            "Gemini API anahtari tanimli degil. FFA analizi yalnizca Gemini ile calisir."
+        )
+    last_err: BaseException | None = None
+    for key in keys:
+        client = genai.Client(api_key=key)
+        try:
+            return _predict_ffa_with_gemini_core(image, client, locale_tag)
+        except genai_errors.APIError as err:
+            last_err = err
+            if _is_gemini_quota_error(err):
+                continue
+            raise
+        except Exception as err:
+            last_err = err
+            if _is_gemini_quota_error(err):
+                continue
+            raise
+    raise GeminiAllKeysExhausted(
+        str(last_err) if last_err else "Tum Gemini anahtarlari kota/limit ile reddedildi."
+    )
+
+
+@app.route("/predict-ffa", methods=["POST"])
+def predict_ffa():
+    request_id = resolve_request_id(request.headers)
+    gateway_key = request.headers.get("X-AI-Gateway-Key", "")
+    if gateway_key != AI_GATEWAY_SHARED_SECRET:
+        return jsonify({
+            "success": False,
+            "error": "Yetkisiz AI erisimi.",
+            "requestId": request_id,
+        }), 401
+
+    client_ip = (request.headers.get("X-Forwarded-For", "") or request.remote_addr or "unknown").split(",")[0].strip()
+    if _is_rate_limited(client_ip):
+        return jsonify({
+            "success": False,
+            "error": "Cok fazla istek gonderdiniz. Lutfen biraz bekleyin.",
+            "requestId": request_id,
+        }), 429
+
+    patient_id = None
+    try:
+        patient_id = (request.form.get("patientId") or "").strip() or None
+    except Exception:
+        patient_id = None
+
+    locale_tag = "en"
+    try:
+        locale_tag = (request.form.get("locale") or "en").strip() or "en"
+    except Exception:
+        locale_tag = "en"
+
+    try:
+        file = request.files.get("image")
+        image = _safe_load_image(file)
+        return jsonify(_predict_ffa_with_gemini(image, locale_tag))
+    except ValueError as err:
+        log_structured_error(
+            request_id=request_id,
+            route="/predict-ffa",
+            action="INVALID_REQUEST",
+            error_message=str(err),
+            patient_id=patient_id,
+            payload_summary=_safe_predict_payload_summary(),
+        )
+        return jsonify({
+            "success": False,
+            "error": str(err),
+            "requestId": request_id,
+        }), 400
+    except GeminiAllKeysExhausted as gex:
+        log_structured_error(
+            request_id=request_id,
+            route="/predict-ffa",
+            action="GEMINI_ALL_KEYS_EXHAUSTED",
+            error_message=str(gex)[:2500],
+            patient_id=patient_id,
+            payload_summary=_safe_predict_payload_summary(),
+        )
+        return jsonify({
+            "success": False,
+            "error": (
+                "FFA analizi icin tum Gemini anahtarlari kotaya takildi veya anahtar yok. "
+                "Biraz bekleyip tekrar deneyin veya yoneticiyle iletisime gecin."
+            ),
+            "requestId": request_id,
+        }), 503
+    except genai_errors.APIError as err:
+        if _is_gemini_quota_error(err):
+            log_structured_error(
+                request_id=request_id,
+                route="/predict-ffa",
+                action="GEMINI_QUOTA_EXCEEDED",
+                error_message=str(err)[:2500],
+                patient_id=patient_id,
+                payload_summary=_safe_predict_payload_summary(),
+            )
+            return jsonify({
+                "success": False,
+                "error": (
+                    "Gemini ucretsiz kotasi asildi veya dakika basina cok fazla istek/token kullanildi. "
+                    "Yaklasik 1 dakika bekleyip tekrar deneyin; gorsel cok buyukse kucultun."
+                ),
+                "requestId": request_id,
+                "geminiQuotaExceeded": True,
+            }), 429
+        log_structured_error(
+            request_id=request_id,
+            route="/predict-ffa",
+            action="GEMINI_API_ERROR",
+            error_message=str(err)[:2500],
+            stack=traceback.format_exc(),
+            patient_id=patient_id,
+            payload_summary=_safe_predict_payload_summary(),
+        )
+        return jsonify({
+            "success": False,
+            "error": f"Gemini API hatasi: {err.message or err}",
+            "requestId": request_id,
+        }), 502
+    except Exception as err:
+        if _is_gemini_quota_error(err):
+            log_structured_error(
+                request_id=request_id,
+                route="/predict-ffa",
+                action="GEMINI_QUOTA_EXCEEDED",
+                error_message=str(err)[:2500],
+                patient_id=patient_id,
+                payload_summary=_safe_predict_payload_summary(),
+            )
+            return jsonify({
+                "success": False,
+                "error": (
+                    "Gemini ucretsiz kotasi asildi veya istek limiti asildi. "
+                    "Biraz bekleyip tekrar deneyin; gerekirse GEMINI_MAX_IMAGE_SIDE=256 deneyin."
+                ),
+                "requestId": request_id,
+                "geminiQuotaExceeded": True,
+            }), 429
+        cause = getattr(err, "__cause__", None)
+        cause_msg = str(cause) if cause is not None else None
+        log_structured_error(
+            request_id=request_id,
+            route="/predict-ffa",
+            action="PREDICT_FFA_FAILED",
+            error_message=str(err),
+            stack=traceback.format_exc(),
+            cause=cause_msg,
+            patient_id=patient_id,
+            payload_summary=_safe_predict_payload_summary(),
+        )
+        return jsonify({
+            "success": False,
+            "error": "FFA analizi sirasinda beklenmeyen bir hata olustu.",
             "requestId": request_id,
         }), 500
 

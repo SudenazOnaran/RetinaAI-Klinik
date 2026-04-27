@@ -33,6 +33,7 @@ import {
 import {
   buildManualReportV2DoctorNoteJson,
   getFirstExceededReportSection,
+  ILACLAR_COLUMN_MAX_LEN,
   parseComorbidityJsonForStorage,
   REPORT_SECTION_MAX_LEN,
   type AnalysisReportMetaInput,
@@ -87,7 +88,6 @@ export async function saveAnalysisAction({
   /** HT, dislipidemi vb. { conditions: [...] } */
   comorbidity?: unknown;
 }) {
-  const MAX_FIELD_LENGTH = 1500;
   const getExceededReportField = (rawDoctorNote: string) => {
     if (!rawDoctorNote) return null;
 
@@ -136,7 +136,7 @@ export async function saveAnalysisAction({
         label: "Doktor Notları",
         value: String(parsed?.doctorNotes || ""),
       },
-    ].find((field) => field.value.length > MAX_FIELD_LENGTH);
+    ].find((field) => field.value.length > REPORT_SECTION_MAX_LEN);
   };
 
   try {
@@ -162,13 +162,9 @@ export async function saveAnalysisAction({
     }
     const sanitizedFeedback = resolvedFeedback ?? undefined;
     const rawIlaclar = String(ilaclar || "");
-    const sanitizedIlaclar = rawIlaclar.trim();
-    if (rawIlaclar.length > MAX_FIELD_LENGTH) {
-      return {
-        ok: false as const,
-        error: `Tedavi ve Öneriler alanında maksimum karakter sınırı aşıldı (${rawIlaclar.length}/${MAX_FIELD_LENGTH}).`,
-      };
-    }
+    const sanitizedIlaclar = rawIlaclar
+      .trim()
+      .slice(0, ILACLAR_COLUMN_MAX_LEN);
 
     const rawDoctorNote = String(doctorNote || "");
 
@@ -210,7 +206,7 @@ export async function saveAnalysisAction({
       if (exceededField) {
         return {
           ok: false as const,
-          error: `${exceededField.label} alanında maksimum karakter sınırı aşıldı (${exceededField.value.length}/${MAX_FIELD_LENGTH}).`,
+          error: `${exceededField.label} alanında maksimum karakter sınırı aşıldı (${exceededField.value.length}/${REPORT_SECTION_MAX_LEN}).`,
         };
       }
     }
@@ -476,13 +472,13 @@ export async function saveAnalysisAction({
       if (exceededFieldAfterCatch) {
         return {
           ok: false as const,
-          error: `${exceededFieldAfterCatch.label} alanında maksimum karakter sınırı aşıldı (${exceededFieldAfterCatch.value.length}/${MAX_FIELD_LENGTH}).`,
+          error: `${exceededFieldAfterCatch.label} alanında maksimum karakter sınırı aşıldı (${exceededFieldAfterCatch.value.length}/${REPORT_SECTION_MAX_LEN}).`,
         };
       }
-      if (String(ilaclar || "").length > MAX_FIELD_LENGTH) {
+      if (String(ilaclar || "").length > ILACLAR_COLUMN_MAX_LEN) {
         return {
           ok: false as const,
-          error: `Tedavi ve Öneriler alanında maksimum karakter sınırı aşıldı (${String(ilaclar || "").length}/${MAX_FIELD_LENGTH}).`,
+          error: `Tedavi ve Öneriler alanında maksimum karakter sınırı aşıldı (${String(ilaclar || "").length}/${ILACLAR_COLUMN_MAX_LEN}).`,
         };
       }
       return {

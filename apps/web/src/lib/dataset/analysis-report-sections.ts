@@ -1,7 +1,10 @@
 import type { Prisma } from "@prisma/client";
 
 export const REPORT_FORMAT_VERSION = "manual_report_v2" as const;
-export const REPORT_SECTION_MAX_LEN = 1500;
+/** Manuel rapor metin alanlari (OCT/AI ciktisi icin yeterli ust sinir) */
+export const REPORT_SECTION_MAX_LEN = 8000;
+/** Legacy `Analysis.ilaclar` sütunu; tam tedavi metni `sectionTreatmentRecommendations` içinde kalir */
+export const ILACLAR_COLUMN_MAX_LEN = 1500;
 
 export type AnalysisReportSectionsInput = {
   reportTitle: string;

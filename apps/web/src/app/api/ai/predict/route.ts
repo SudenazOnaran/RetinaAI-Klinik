@@ -8,20 +8,9 @@ import {
   formatErrorCause,
   logStructuredError,
 } from "@/lib/structured-error-log";
+import { aiFailureShouldBypassQueue } from "@/lib/ai-gateway-queue-policy";
 
 export const runtime = "nodejs";
-
-/** AI servisi dondugunde kuyruk "sonra duzelir" degildir; kullaniciya dogrudan mesaj gosterilir. */
-function aiFailureShouldBypassQueue(message: string): boolean {
-  const m = message.toLowerCase();
-  return (
-    /\((429|401|400|403|502|503)\)\s*:/.test(message) ||
-    m.includes("quota") ||
-    m.includes("ucretsiz kota") ||
-    m.includes("resource_exhausted") ||
-    m.includes("geminiquotaexceeded")
-  );
-}
 
 function statusFromAiGatewayError(message: string): number {
   const hit = message.match(/\((\d{3})\)\s*:/);

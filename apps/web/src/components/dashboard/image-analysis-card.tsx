@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import {
@@ -158,6 +158,9 @@ type ImageAnalysisCardProps = {
   onDraftChange?: (draft: AiAnalysisDraft | null) => void;
   /** Analiz başarılı olunca (ör. üst Collapsible’ı açık tutmak için) */
   onAnalysisSuccess?: () => void;
+  /** AI analiz panelinde dış başlık kullanıldığında kart içi başlık gizlenir */
+  suppressHeader?: boolean;
+  className?: string;
 };
 
 export function ImageAnalysisCard({
@@ -165,8 +168,11 @@ export function ImageAnalysisCard({
   compact = false,
   onDraftChange,
   onAnalysisSuccess,
+  suppressHeader = false,
+  className,
 }: ImageAnalysisCardProps) {
   const { t, locale } = useTranslation();
+  const fundusFileInputId = useId();
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [base64Image, setBase64Image] = useState<string | null>(null);
@@ -303,69 +309,119 @@ export function ImageAnalysisCard({
     <Card
       className={`w-full min-w-0 overflow-hidden border border-slate-200 bg-gradient-to-b from-slate-50 to-white ${
         compact ? "rounded-2xl shadow-md" : "rounded-3xl shadow-xl"
-      }`}
+      }${className ? ` ${className}` : ""}`}
     >
-      <CardHeader
-        className={`space-y-2 border-b border-slate-200 bg-white/90 ${
-          compact ? "pb-3" : "pb-5"
-        }`}
-      >
-        <CardTitle
-          className={`font-semibold tracking-tight text-slate-900 ${
-            compact ? "text-lg md:text-xl" : "text-2xl md:text-3xl"
+      {!suppressHeader ? (
+        <CardHeader
+          className={`space-y-2 border-b border-slate-200 bg-white/90 ${
+            compact ? "pb-3" : "pb-5"
           }`}
         >
-          {t("analysisCard.title")}
-        </CardTitle>
-        <CardDescription
-          className={`text-slate-600 ${compact ? "max-w-none text-xs md:text-sm" : "max-w-3xl text-sm md:text-base"}`}
-        >
-          {t("analysisCard.description")}
-        </CardDescription>
-      </CardHeader>
+          <CardTitle
+            className={`font-semibold tracking-tight text-slate-900 ${
+              compact ? "text-lg md:text-xl" : "text-2xl md:text-3xl"
+            }`}
+          >
+            {t("analysisCard.title")}
+          </CardTitle>
+          <CardDescription
+            className={`text-slate-600 ${compact ? "max-w-none text-xs md:text-sm" : "max-w-3xl text-sm md:text-base"}`}
+          >
+            {t("analysisCard.description")}
+          </CardDescription>
+        </CardHeader>
+      ) : null}
 
       <CardContent
         className={`space-y-4 ${compact ? "p-3 md:p-4" : "p-4 md:p-6"}`}
       >
         {!previewUrl ? (
-          <div className="relative overflow-hidden rounded-2xl border-2 border-dashed border-cyan-300 bg-cyan-50/40 p-10 text-center transition-colors hover:border-cyan-400 hover:bg-cyan-50 md:p-14">
-            <Upload className="mx-auto mb-4 h-12 w-12 text-cyan-700" />
-            <p className="text-base font-semibold text-slate-800 md:text-lg">
-              {t("analysisCard.pickImage")}
-            </p>
-            <p className="mt-1 text-sm text-slate-500">
-              {t("analysisCard.supportedFormats")}
-            </p>
-            <input
-              type="file"
-              accept="image/*"
-              className="absolute inset-0 cursor-pointer opacity-0"
-              onChange={handleFileChange}
-            />
-          </div>
-        ) : (
-          <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-950">
-            <div
-              className={`relative w-full ${compact ? "h-[240px] md:h-[280px]" : "h-[320px] md:h-[420px]"}`}
-            >
-              <Image
-                src={previewUrl}
-                alt="Preview"
-                fill
-                unoptimized
-                sizes="(max-width: 768px) 100vw, 900px"
-                className="object-contain"
+          compact ? (
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+              <div className="min-w-0 flex-1 space-y-1">
+                <label
+                  className="flex h-9 cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 text-xs text-slate-700"
+                  htmlFor={fundusFileInputId}
+                >
+                  <Upload className="h-3.5 w-3.5" />
+                  {t("analysisCard.pickImage")}
+                </label>
+                <input
+                  id={fundusFileInputId}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="relative overflow-hidden rounded-2xl border-2 border-dashed border-cyan-300 bg-cyan-50/40 p-10 text-center transition-colors hover:border-cyan-400 hover:bg-cyan-50 md:p-14">
+              <Upload className="mx-auto mb-4 h-12 w-12 text-cyan-700" />
+              <p className="text-base font-semibold text-slate-800 md:text-lg">
+                {t("analysisCard.pickImage")}
+              </p>
+              <p className="mt-1 text-sm text-slate-500">
+                {t("analysisCard.supportedFormats")}
+              </p>
+              <input
+                type="file"
+                accept="image/*"
+                className="absolute inset-0 cursor-pointer opacity-0"
+                onChange={handleFileChange}
               />
             </div>
-            <Button
-              variant="destructive"
-              size="icon"
-              className="absolute right-3 top-3 h-9 w-9 rounded-xl"
-              onClick={resetAnalysis}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
+          )
+        ) : (
+          <>
+            {compact && file ? (
+              <p className="truncate text-[11px] text-slate-600">{file.name}</p>
+            ) : null}
+            <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-950">
+              <div
+                className={`relative w-full ${
+                  compact
+                    ? result
+                      ? "h-[min(40vh,380px)] min-h-[220px] sm:min-h-[260px]"
+                      : "h-[min(52vh,480px)] min-h-[300px] sm:min-h-[360px]"
+                    : "h-[320px] md:h-[420px]"
+                }`}
+              >
+                <Image
+                  src={previewUrl}
+                  alt="Preview"
+                  fill
+                  unoptimized
+                  sizes="(max-width: 768px) 100vw, 50vw"
+                  className="object-contain"
+                />
+              </div>
+              <Button
+                variant="destructive"
+                size="icon"
+                className="absolute right-3 top-3 h-9 w-9 rounded-xl"
+                onClick={resetAnalysis}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </>
+        )}
+
+        {compact && !result && (
+          <Button
+            className="h-9 w-full rounded-lg bg-[var(--retina-primary)] text-sm text-white"
+            type="button"
+            onClick={handleAnalyze}
+            disabled={isLoading || !file}
+          >
+            {isLoading ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Zap className="mr-2 h-4 w-4" />
+            )}
+            {t("analysisCard.startAnalysis")}
+          </Button>
         )}
 
         {result && (
@@ -413,14 +469,14 @@ export function ImageAnalysisCard({
                     {t("analysisCard.heatmapTitle")}
                   </div>
                   <div
-                    className={`relative w-full ${compact ? "h-[220px] md:h-[250px]" : "h-[260px] md:h-[300px]"}`}
+                    className={`relative w-full ${compact ? "h-[min(36vh,320px)] min-h-[200px] sm:h-[min(40vh,340px)]" : "h-[260px] md:h-[300px]"}`}
                   >
                     <Image
                       src={result.heatmapPlus}
                       alt={t("analysisCard.heatmapAlt")}
                       fill
                       unoptimized
-                      sizes="(max-width: 768px) 100vw, 900px"
+                      sizes="(max-width: 768px) 100vw, 50vw"
                       className="object-contain"
                     />
                   </div>
@@ -604,27 +660,15 @@ export function ImageAnalysisCard({
         ) : null}
       </CardContent>
 
-      <div
-        className={`border-t border-slate-200 bg-slate-50/70 ${
-          compact
-            ? "px-3 pb-4 pt-4 md:px-4 md:pb-5"
-            : "px-4 pb-6 pt-5 md:px-6 md:pb-8"
-        }`}
-      >
-        {!result ? (
-          <Button
-            className="h-13 w-full rounded-xl bg-cyan-700 text-base font-semibold text-white shadow-sm transition hover:bg-cyan-800"
-            onClick={handleAnalyze}
-            disabled={isLoading || !file}
-          >
-            {isLoading ? (
-              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-            ) : (
-              <Zap className="mr-2 h-5 w-5" />
-            )}
-            {t("analysisCard.startAnalysis")}
-          </Button>
-        ) : (
+      {(result || !compact) && (
+        <div
+          className={`border-t border-slate-200 bg-slate-50/70 ${
+            compact
+              ? "px-3 pb-4 pt-4 md:px-4 md:pb-5"
+              : "px-4 pb-6 pt-5 md:px-6 md:pb-8"
+          }`}
+        >
+          {result ? (
           <div className="w-full space-y-4">
             <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-4 md:flex-row md:items-center md:justify-between md:p-5">
               <div className="flex items-center gap-3 text-slate-800">
@@ -710,8 +754,23 @@ export function ImageAnalysisCard({
               </Button>
             </div>
           </div>
-        )}
-      </div>
+          ) : (
+            <Button
+              className="h-13 w-full rounded-xl bg-cyan-700 text-base font-semibold text-white shadow-sm transition hover:bg-cyan-800"
+              onClick={handleAnalyze}
+              disabled={isLoading || !file}
+              type="button"
+            >
+              {isLoading ? (
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              ) : (
+                <Zap className="mr-2 h-5 w-5" />
+              )}
+              {t("analysisCard.startAnalysis")}
+            </Button>
+          )}
+        </div>
+      )}
     </Card>
   );
 }

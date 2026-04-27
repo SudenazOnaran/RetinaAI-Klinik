@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
+import { formatAiUpstreamErrorBody } from "@/lib/ai-upstream-error";
 import { logStructuredError } from "@/lib/structured-error-log";
 
 type QueuePayload = {
@@ -49,6 +50,44 @@ export async function enqueueAiRequest(input: {
 
 function getAiServiceUrl() {
   return process.env.AI_SERVICE_URL || "http://localhost:5000/predict";
+}
+
+/** Makula OCT: varsayilan olarak `AI_SERVICE_URL` temelinde `/predict-oct` (Gemini: 5001). */
+function getDerivedOctServiceUrl() {
+  const explicit = (process.env.AI_OCT_SERVICE_URL || "").trim();
+  if (explicit) return explicit;
+  const base = process.env.AI_SERVICE_URL || "http://localhost:5000/predict";
+  try {
+    const u = new URL(base);
+    const path = u.pathname.replace(/\/$/, "");
+    if (path.endsWith("/predict")) {
+      u.pathname = path.replace(/\/predict$/, "/predict-oct");
+    } else {
+      u.pathname = `${path}/predict-oct`;
+    }
+    return u.toString();
+  } catch {
+    return "http://localhost:5000/predict-oct";
+  }
+}
+
+/** FFA: `AI_FFA_SERVICE_URL` veya `.../predict` -> `.../predict-ffa`. */
+function getDerivedFfaServiceUrl() {
+  const explicit = (process.env.AI_FFA_SERVICE_URL || "").trim();
+  if (explicit) return explicit;
+  const base = process.env.AI_SERVICE_URL || "http://localhost:5000/predict";
+  try {
+    const u = new URL(base);
+    const path = u.pathname.replace(/\/$/, "");
+    if (path.endsWith("/predict")) {
+      u.pathname = path.replace(/\/predict$/, "/predict-ffa");
+    } else {
+      u.pathname = `${path}/predict-ffa`;
+    }
+    return u.toString();
+  } catch {
+    return "http://localhost:5000/predict-ffa";
+  }
 }
 
 function getAiGatewaySecret() {
@@ -154,10 +193,190 @@ export async function callAiServiceWithRetry(
         const bodyText = await response.text();
         const transient = response.status >= 500 || response.status === 429;
         if (!transient || attempt === retries) {
-          const bodySnippet =
-            bodyText.length > 400
-              ? `${bodyText.slice(0, 400)}…`
-              : bodyText;
+          const bodySnippet = formatAiUpstreamErrorBody(
+            response.status,
+            bodyText,
+          );
+          const err = new Error(
+            `AI servisi hatasi (${response.status}): ${bodySnippet}`,
+          );
+          logAndThrow(ctx, err, {
+            aiResponseSummary: bodyText.slice(0, 200),
+            payloadSummary: upstreamSummary,
+          });
+        }
+
+        await delay(300 * (attempt + 1));
+        continue;
+      }
+
+      try {
+        return await response.json();
+      } catch (parseErr) {
+        const err =
+          parseErr instanceof Error
+            ? parseErr
+            : new Error("AI yaniti JSON olarak cozumlenemedi.");
+        logAndThrow(ctx, err, {
+          aiResponseSummary: "json_parse_failed",
+          payloadSummary: upstreamSummary,
+        });
+      }
+    } catch (error) {
+      clearTimeout(timer);
+      const err =
+        error instanceof Error
+          ? error.name === "AbortError"
+            ? new Error(
+                `AI servisi ${timeoutMs}ms icinde yanit vermedi (timeout).`,
+              )
+            : error
+          : new Error("Bilinmeyen hata");
+      lastError = err;
+      if (attempt === retries) break;
+      await delay(300 * (attempt + 1));
+    }
+  }
+
+  const finalErr = lastError || new Error("AI servisine ulasilamadi.");
+  logAndThrow(ctx, finalErr, { payloadSummary: upstreamSummary });
+}
+
+export async function callAiFfaServiceWithRetry(
+  formData: FormData,
+  ctx: AiGatewayCallContext,
+) {
+  const url = new URL(getDerivedFfaServiceUrl());
+  if (shouldUseTlsEnforcement(url) && url.protocol !== "https:") {
+    const err = new Error("AI servisi production ortaminda HTTPS kullanmalidir.");
+    logAndThrow(ctx, err, {
+      payloadSummary: JSON.stringify({ upstream: `${url.host}${url.pathname}` }),
+    });
+  }
+
+  const timeoutMs = getTimeoutMs();
+  const retries = getRetryCount();
+  let lastError: Error | null = null;
+  const upstreamSummary = JSON.stringify({
+    upstream: `${url.host}${url.pathname}`,
+    timeoutMs,
+  });
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(url.toString(), {
+        method: "POST",
+        body: formData,
+        headers: {
+          "X-AI-Gateway-Key": getAiGatewaySecret(),
+          "x-request-id": ctx.requestId,
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timer);
+
+      if (!response.ok) {
+        const bodyText = await response.text();
+        const transient = response.status >= 500 || response.status === 429;
+        if (!transient || attempt === retries) {
+          const bodySnippet = formatAiUpstreamErrorBody(
+            response.status,
+            bodyText,
+          );
+          const err = new Error(
+            `AI servisi hatasi (${response.status}): ${bodySnippet}`,
+          );
+          logAndThrow(ctx, err, {
+            aiResponseSummary: bodyText.slice(0, 200),
+            payloadSummary: upstreamSummary,
+          });
+        }
+
+        await delay(300 * (attempt + 1));
+        continue;
+      }
+
+      try {
+        return await response.json();
+      } catch (parseErr) {
+        const err =
+          parseErr instanceof Error
+            ? parseErr
+            : new Error("AI yaniti JSON olarak cozumlenemedi.");
+        logAndThrow(ctx, err, {
+          aiResponseSummary: "json_parse_failed",
+          payloadSummary: upstreamSummary,
+        });
+      }
+    } catch (error) {
+      clearTimeout(timer);
+      const err =
+        error instanceof Error
+          ? error.name === "AbortError"
+            ? new Error(
+                `AI servisi ${timeoutMs}ms icinde yanit vermedi (timeout).`,
+              )
+            : error
+          : new Error("Bilinmeyen hata");
+      lastError = err;
+      if (attempt === retries) break;
+      await delay(300 * (attempt + 1));
+    }
+  }
+
+  const finalErr = lastError || new Error("AI servisine ulasilamadi.");
+  logAndThrow(ctx, finalErr, { payloadSummary: upstreamSummary });
+}
+
+export async function callAiOctServiceWithRetry(
+  formData: FormData,
+  ctx: AiGatewayCallContext,
+) {
+  const url = new URL(getDerivedOctServiceUrl());
+  if (shouldUseTlsEnforcement(url) && url.protocol !== "https:") {
+    const err = new Error("AI servisi production ortaminda HTTPS kullanmalidir.");
+    logAndThrow(ctx, err, {
+      payloadSummary: JSON.stringify({ upstream: `${url.host}${url.pathname}` }),
+    });
+  }
+
+  const timeoutMs = getTimeoutMs();
+  const retries = getRetryCount();
+  let lastError: Error | null = null;
+  const upstreamSummary = JSON.stringify({
+    upstream: `${url.host}${url.pathname}`,
+    timeoutMs,
+  });
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(url.toString(), {
+        method: "POST",
+        body: formData,
+        headers: {
+          "X-AI-Gateway-Key": getAiGatewaySecret(),
+          "x-request-id": ctx.requestId,
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timer);
+
+      if (!response.ok) {
+        const bodyText = await response.text();
+        const transient = response.status >= 500 || response.status === 429;
+        if (!transient || attempt === retries) {
+          const bodySnippet = formatAiUpstreamErrorBody(
+            response.status,
+            bodyText,
+          );
           const err = new Error(
             `AI servisi hatasi (${response.status}): ${bodySnippet}`,
           );
