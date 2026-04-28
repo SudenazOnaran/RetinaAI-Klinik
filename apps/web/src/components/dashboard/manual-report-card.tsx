@@ -133,6 +133,21 @@ export function ManualReportCard({
           setBusy(false);
           return;
         }
+
+        const hasAnyTransferredSummary =
+          Boolean(aiDraft) ||
+          Boolean(modalityAppendixOct.trim()) ||
+          Boolean(modalityAppendixFfa.trim());
+        if (!hasAnyTransferredSummary) {
+          toast({
+            variant: "destructive",
+            title: t("radiologicalReport.transferRequiredTitle"),
+            description: t("radiologicalReport.transferRequiredBody"),
+            duration: 7000,
+          });
+          setBusy(false);
+          return;
+        }
       }
 
       const exceededField = [

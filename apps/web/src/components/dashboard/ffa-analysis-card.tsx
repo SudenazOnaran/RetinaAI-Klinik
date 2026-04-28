@@ -73,6 +73,40 @@ function displayLikelihood(norm: string, t: (k: string) => string): string {
   return t("ffaAnalysis.likelihoodLow");
 }
 
+function isUncertainPhase(phaseAssessment: string | null | undefined): boolean {
+  const v = String(phaseAssessment ?? "")
+    .trim()
+    .toLowerCase();
+  return (
+    v.includes("belirsiz") ||
+    v.includes("undetermined") ||
+    v.includes("uncertain") ||
+    v.includes("indeterminate")
+  );
+}
+
+function isUncertainText(value: string | null | undefined): boolean {
+  const v = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  return (
+    v.includes("belirsiz") ||
+    v.includes("undetermined") ||
+    v.includes("uncertain") ||
+    v.includes("indeterminate")
+  );
+}
+
+function likelihoodRank(raw: string | null | undefined): number {
+  const x = String(raw ?? "")
+    .trim()
+    .toLowerCase();
+  if (x === "high") return 3;
+  if (x === "moderate") return 2;
+  if (x === "low") return 1;
+  return 0;
+}
+
 type FfaAnalysisCardProps = {
   patientId: string;
   variant?: "full" | "panel";
@@ -190,13 +224,10 @@ export function FfaAnalysisCard({
           description: t("analysisCard.queueDesc"),
         });
       } else {
-        const detail = String(
-          data.error || data.message || t("ffaAnalysis.analysisFail"),
-        );
         toast({
           variant: "destructive",
           title: t("errorPage.title"),
-          description: detail,
+          description: t("analysisCard.serviceUnavailableRetry"),
         });
       }
     } catch (error) {
@@ -230,23 +261,44 @@ export function FfaAnalysisCard({
     [result],
   );
 
+  const ffaPrimaryAny = useMemo(() => {
+    if (!result?.diseases?.length) return null;
+    return [...result.diseases]
+      .filter((d) => String(d.name ?? "").trim().length > 0)
+      .sort((a, b) => likelihoodRank(b.likelihood) - likelihoodRank(a.likelihood))[0] ?? null;
+  }, [result]);
+
+  const isGeminiUncertain = useMemo(() => {
+    if (!result) return false;
+    return (
+      isUncertainPhase(result.phaseAssessment) ||
+      isUncertainText(result.clinicalSummary)
+    );
+  }, [result]);
+
   const ffaBannerLabel = useMemo(() => {
     if (!result) return "";
+    if (isGeminiUncertain) {
+      return t("radiologicalReport.confidenceUndeterminedShort");
+    }
     const healthyLbl = t(`modalityDisagree.ffa.${FFA_HEALTHY_VALUE}`);
     if (ffaPrimaryElevated?.name?.trim()) return ffaPrimaryElevated.name.trim();
     if (result.diseases?.length) return healthyLbl;
     return "—";
-  }, [result, ffaPrimaryElevated, t]);
+  }, [result, isGeminiUncertain, ffaPrimaryElevated, t]);
 
   /** «Evet» geri bildirimi için saklanacak düz metin (AI’nın özet tanısı). */
   const ffaApprovalAiSummaryLabel = useMemo(() => {
     if (!result) return "";
+    if (isGeminiUncertain) {
+      return t("radiologicalReport.confidenceUndeterminedShort");
+    }
     const healthyLbl = t(`modalityDisagree.ffa.${FFA_HEALTHY_VALUE}`);
     if (ffaPrimaryElevated?.name?.trim()) return ffaPrimaryElevated.name.trim();
     if (result.diseases?.length) return healthyLbl;
     const cs = result.clinicalSummary?.trim();
     return cs ? cs.slice(0, 280) : healthyLbl;
-  }, [result, ffaPrimaryElevated, t]);
+  }, [result, isGeminiUncertain, ffaPrimaryElevated, t]);
 
   const drffa = result?.diabeticRetinopathyFfa;
   const showFfaDrStagingCard =
@@ -376,10 +428,17 @@ export function FfaAnalysisCard({
 
             {(() => {
               const pct = normalizePercentScore(result.confidenceScore);
+              const confidenceTextOverride = isUncertainPhase(
+                result.phaseAssessment,
+              )
+                || isGeminiUncertain
+                ? t("radiologicalReport.confidenceUndeterminedShort")
+                : undefined;
               return (
                 <RadiologicalAiSummaryOneLine
                   diseaseLabel={ffaBannerLabel || "—"}
                   confidencePct={pct}
+                  confidenceTextOverride={confidenceTextOverride}
                 />
               );
             })()}

@@ -83,32 +83,66 @@ export default async function DashboardPage() {
       take: 5,
       orderBy: { createdAt: "desc" },
     }),
-    prisma.patient.findMany({
-      where: {
-        doctorId: doctor.id,
-        analyses: {
-          some: {},
-        },
-      },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        fullName: true,
-        risk: true,
-        analyses: {
-          orderBy: { createdAt: "desc" },
-          take: 1,
-          select: {
-            createdAt: true,
-            confidence: true,
-            aiResult: true,
-            drFeedback: true,
-            octDrFeedback: true,
-            ffaDrFeedback: true,
-          },
-        },
-      },
-    }),
+    prisma.$queryRaw<
+      Array<{
+        id: string;
+        fullName: string;
+        risk: string | null;
+        latestAnalysisAt: Date | null;
+        latestConfidence: number | null;
+        latestDrFeedback: string | null;
+        latestOctDrFeedback: string | null;
+        latestFfaDrFeedback: string | null;
+      }>
+    >`
+      SELECT
+        p."id",
+        p."fullName",
+        p."risk",
+        la."createdAt" AS "latestAnalysisAt",
+        la."confidence" AS "latestConfidence",
+        ldf."drFeedback" AS "latestDrFeedback",
+        loct."octDrFeedback" AS "latestOctDrFeedback",
+        lffa."ffaDrFeedback" AS "latestFfaDrFeedback"
+      FROM "Patient" p
+      LEFT JOIN LATERAL (
+        SELECT a."createdAt", a."confidence"
+        FROM "Analysis" a
+        WHERE a."patientId" = p."id"
+        ORDER BY a."createdAt" DESC
+        LIMIT 1
+      ) la ON true
+      LEFT JOIN LATERAL (
+        SELECT a."drFeedback"
+        FROM "Analysis" a
+        WHERE a."patientId" = p."id"
+          AND NULLIF(TRIM(COALESCE(a."drFeedback", '')), '') IS NOT NULL
+          AND a."drFeedback" <> 'null'
+        ORDER BY a."createdAt" DESC
+        LIMIT 1
+      ) ldf ON true
+      LEFT JOIN LATERAL (
+        SELECT a."octDrFeedback"
+        FROM "Analysis" a
+        WHERE a."patientId" = p."id"
+          AND NULLIF(TRIM(COALESCE(a."octDrFeedback", '')), '') IS NOT NULL
+          AND a."octDrFeedback" <> 'null'
+        ORDER BY a."createdAt" DESC
+        LIMIT 1
+      ) loct ON true
+      LEFT JOIN LATERAL (
+        SELECT a."ffaDrFeedback"
+        FROM "Analysis" a
+        WHERE a."patientId" = p."id"
+          AND NULLIF(TRIM(COALESCE(a."ffaDrFeedback", '')), '') IS NOT NULL
+          AND a."ffaDrFeedback" <> 'null'
+        ORDER BY a."createdAt" DESC
+        LIMIT 1
+      ) lffa ON true
+      WHERE p."doctorId" = ${doctor.id}
+        AND la."createdAt" IS NOT NULL
+      ORDER BY p."createdAt" DESC
+    `,
   ]);
 
   const highRiskCount = await prisma.patient.count({
@@ -140,21 +174,25 @@ export default async function DashboardPage() {
     };
 
     for (const patient of alertPatients) {
-      const latest = patient.analyses[0];
       if (
-        latest &&
+        patient.latestAnalysisAt &&
         isCriticalAlertCandidate(
           patient.risk,
-          latest.confidence,
+          patient.latestConfidence,
           retinaSettings,
           {
-            drFeedback: latest.drFeedback,
-            octDrFeedback: latest.octDrFeedback,
-            ffaDrFeedback: latest.ffaDrFeedback,
+            drFeedback: patient.latestDrFeedback,
+            octDrFeedback: patient.latestOctDrFeedback,
+            ffaDrFeedback: patient.latestFfaDrFeedback,
           },
         )
       ) {
-        upsert(patient.id, patient.fullName, patient.risk, latest.createdAt);
+        upsert(
+          patient.id,
+          patient.fullName,
+          patient.risk,
+          patient.latestAnalysisAt,
+        );
       }
     }
 
@@ -173,19 +211,20 @@ export default async function DashboardPage() {
   })();
 
   const dashboardAlertPatients = alertPatients.map((patient) => {
-    const latest = patient.analyses[0];
-
     return {
       id: patient.id,
       fullName: patient.fullName,
       risk: patient.risk ?? "",
-      latestAnalysisAt: latest?.createdAt.toISOString() ?? null,
-      latestConfidence: latest?.confidence ?? null,
-      latestFeedback: latest
+      latestAnalysisAt: patient.latestAnalysisAt?.toISOString() ?? null,
+      latestConfidence: patient.latestConfidence ?? null,
+      latestFeedback:
+        patient.latestDrFeedback ||
+        patient.latestOctDrFeedback ||
+        patient.latestFfaDrFeedback
         ? {
-            drFeedback: latest.drFeedback,
-            octDrFeedback: latest.octDrFeedback,
-            ffaDrFeedback: latest.ffaDrFeedback,
+            drFeedback: patient.latestDrFeedback,
+            octDrFeedback: patient.latestOctDrFeedback,
+            ffaDrFeedback: patient.latestFfaDrFeedback,
           }
         : null,
     };

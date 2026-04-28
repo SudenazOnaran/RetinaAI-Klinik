@@ -169,23 +169,47 @@ export default async function HastalarPage({
           WHERE ax."patientId" = p."id"
         ) AS "analysisCount",
         la."createdAt" AS "latestAnalysisAt",
-        la."drFeedback" AS "latestDrFeedback",
+        ldf."drFeedback" AS "latestDrFeedback",
         la."aiResult" AS "latestAiResult",
-        la."octDrFeedback" AS "latestOctDrFeedback",
-        la."ffaDrFeedback" AS "latestFfaDrFeedback"
+        loct."octDrFeedback" AS "latestOctDrFeedback",
+        lffa."ffaDrFeedback" AS "latestFfaDrFeedback"
       FROM "Patient" p
       LEFT JOIN LATERAL (
         SELECT
-          a."drFeedback",
           a."aiResult",
-          a."createdAt",
-          a."octDrFeedback",
-          a."ffaDrFeedback"
+          a."createdAt"
         FROM "Analysis" a
         WHERE a."patientId" = p."id"
         ORDER BY a."createdAt" DESC
         LIMIT 1
       ) la ON true
+      LEFT JOIN LATERAL (
+        SELECT a."drFeedback"
+        FROM "Analysis" a
+        WHERE a."patientId" = p."id"
+          AND NULLIF(TRIM(COALESCE(a."drFeedback", '')), '') IS NOT NULL
+          AND a."drFeedback" <> 'null'
+        ORDER BY a."createdAt" DESC
+        LIMIT 1
+      ) ldf ON true
+      LEFT JOIN LATERAL (
+        SELECT a."octDrFeedback"
+        FROM "Analysis" a
+        WHERE a."patientId" = p."id"
+          AND NULLIF(TRIM(COALESCE(a."octDrFeedback", '')), '') IS NOT NULL
+          AND a."octDrFeedback" <> 'null'
+        ORDER BY a."createdAt" DESC
+        LIMIT 1
+      ) loct ON true
+      LEFT JOIN LATERAL (
+        SELECT a."ffaDrFeedback"
+        FROM "Analysis" a
+        WHERE a."patientId" = p."id"
+          AND NULLIF(TRIM(COALESCE(a."ffaDrFeedback", '')), '') IS NOT NULL
+          AND a."ffaDrFeedback" <> 'null'
+        ORDER BY a."createdAt" DESC
+        LIMIT 1
+      ) lffa ON true
     ),
     patient_norm AS (
       SELECT

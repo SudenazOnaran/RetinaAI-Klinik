@@ -109,6 +109,47 @@ class GeminiAllKeysExhausted(RuntimeError):
     """Tum Gemini anahtarlari kota/limit nedeniyle kullanilamadi veya hic anahtar yok."""
 
 
+# Gemini key secimi: round-robin baslangic + kota hatasinda gecici cooldown.
+_gemini_key_rr_lock = threading.Lock()
+_gemini_key_rr_next_index = 0
+_gemini_key_cooldown_until: dict[str, float] = {}
+_gemini_key_cooldown_seconds = max(
+    5,
+    int(os.environ.get("GEMINI_KEY_COOLDOWN_SECONDS", "60")),
+)
+
+
+def _pick_gemini_rr_start_index(keys: list[str]) -> int:
+    global _gemini_key_rr_next_index
+    if not keys:
+        return 0
+    with _gemini_key_rr_lock:
+        start = _gemini_key_rr_next_index % len(keys)
+        _gemini_key_rr_next_index = (start + 1) % len(keys)
+        return start
+
+
+def _ordered_gemini_key_indices(keys: list[str], start_index: int) -> list[int]:
+    if not keys:
+        return []
+    now = time.time()
+    base = [(start_index + i) % len(keys) for i in range(len(keys))]
+    active: list[int] = []
+    cooldown: list[int] = []
+    for idx in base:
+        key = keys[idx]
+        until = _gemini_key_cooldown_until.get(key, 0.0)
+        if until > now:
+            cooldown.append(idx)
+        else:
+            active.append(idx)
+    return active + cooldown
+
+
+def _mark_gemini_key_quota_cooldown(key: str) -> None:
+    _gemini_key_cooldown_until[key] = time.time() + _gemini_key_cooldown_seconds
+
+
 if not _any_backend_configured():
     raise RuntimeError(
         "AI arka uc yapilandirmasi yok. Secenekler: (1) GEMINI_API_KEY ve istege bagli "
@@ -765,19 +806,24 @@ def _predict_with_gemini(image: Image.Image) -> dict:
         raise GeminiAllKeysExhausted(
             "Gemini API anahtari tanimli degil (GEMINI_API_KEY veya GEMINI_API_KEYS)."
         )
+    start_idx = _pick_gemini_rr_start_index(keys)
+    ordered_indices = _ordered_gemini_key_indices(keys, start_idx)
     last_err: BaseException | None = None
-    for key in keys:
+    for idx in ordered_indices:
+        key = keys[idx]
         client = genai.Client(api_key=key)
         try:
             return _predict_with_gemini_core(image, client)
         except genai_errors.APIError as err:
             last_err = err
             if _is_gemini_quota_error(err):
+                _mark_gemini_key_quota_cooldown(key)
                 continue
             raise
         except Exception as err:
             last_err = err
             if _is_gemini_quota_error(err):
+                _mark_gemini_key_quota_cooldown(key)
                 continue
             raise
     raise GeminiAllKeysExhausted(
@@ -996,19 +1042,24 @@ def _predict_oct_with_gemini(image: Image.Image, locale_tag: str) -> dict:
             "Gemini API anahtari tanimli degil (GEMINI_API_KEY veya GEMINI_API_KEYS). "
             "Makula OCT analizi yalnizca Gemini ile calisir."
         )
+    start_idx = _pick_gemini_rr_start_index(keys)
+    ordered_indices = _ordered_gemini_key_indices(keys, start_idx)
     last_err: BaseException | None = None
-    for key in keys:
+    for idx in ordered_indices:
+        key = keys[idx]
         client = genai.Client(api_key=key)
         try:
             return _predict_oct_with_gemini_core(image, client, locale_tag)
         except genai_errors.APIError as err:
             last_err = err
             if _is_gemini_quota_error(err):
+                _mark_gemini_key_quota_cooldown(key)
                 continue
             raise
         except Exception as err:
             last_err = err
             if _is_gemini_quota_error(err):
+                _mark_gemini_key_quota_cooldown(key)
                 continue
             raise
     raise GeminiAllKeysExhausted(
@@ -1727,19 +1778,24 @@ def _predict_ffa_with_gemini(image: Image.Image, locale_tag: str) -> dict:
         raise GeminiAllKeysExhausted(
             "Gemini API anahtari tanimli degil. FFA analizi yalnizca Gemini ile calisir."
         )
+    start_idx = _pick_gemini_rr_start_index(keys)
+    ordered_indices = _ordered_gemini_key_indices(keys, start_idx)
     last_err: BaseException | None = None
-    for key in keys:
+    for idx in ordered_indices:
+        key = keys[idx]
         client = genai.Client(api_key=key)
         try:
             return _predict_ffa_with_gemini_core(image, client, locale_tag)
         except genai_errors.APIError as err:
             last_err = err
             if _is_gemini_quota_error(err):
+                _mark_gemini_key_quota_cooldown(key)
                 continue
             raise
         except Exception as err:
             last_err = err
             if _is_gemini_quota_error(err):
+                _mark_gemini_key_quota_cooldown(key)
                 continue
             raise
     raise GeminiAllKeysExhausted(

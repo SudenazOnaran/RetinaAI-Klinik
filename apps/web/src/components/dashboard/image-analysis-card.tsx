@@ -249,13 +249,10 @@ export function ImageAnalysisCard({
           description: t("analysisCard.queueDesc"),
         });
       } else {
-        const detail = String(
-          data.error || data.message || t("analysisCard.analysisFail"),
-        );
         toast({
           variant: "destructive",
           title: t("errorPage.title"),
-          description: detail,
+          description: t("analysisCard.serviceUnavailableRetry"),
         });
       }
     } catch (error) {

@@ -25,6 +25,11 @@ export type ModalityDoctorFeedbackFields = {
   ffaDrFeedback?: string | null;
 };
 
+function isUrgentDrStageIndex(idx: number): boolean {
+  // Acil etiket: sadece Moderate / Severe / Proliferative (Evre 2+)
+  return idx >= 2;
+}
+
 function trimRaw(v: string | null | undefined): string {
   return String(v ?? "").trim();
 }
@@ -41,8 +46,7 @@ function classifyFundus(raw: string): ModalitySlice {
 
   const idx = getDrStageIndexFromLabel(s);
   if (idx !== null) {
-    if (idx === 0) return "routine";
-    return "urgent";
+    return isUrgentDrStageIndex(idx) ? "urgent" : "routine";
   }
 
   /* Çözülemeyen metin → doktor düzeltmesi (patoloji varsayımı). */
@@ -67,8 +71,7 @@ function classifyFfa(raw: string): ModalitySlice {
       if (!st) return "pending";
       const idx = getDrStageIndexFromLabel(st);
       if (idx === null) return "urgent";
-      if (idx === 0) return "routine";
-      return "urgent";
+      return isUrgentDrStageIndex(idx) ? "urgent" : "routine";
     }
     return "urgent";
   }
@@ -80,8 +83,7 @@ function classifyFfa(raw: string): ModalitySlice {
       if (!st) return "pending";
       const idx = getDrStageIndexFromLabel(st);
       if (idx === null) return "urgent";
-      if (idx === 0) return "routine";
-      return "urgent";
+      return isUrgentDrStageIndex(idx) ? "urgent" : "routine";
     }
     if (parsed.diagnosis === FFA_HEALTHY_VALUE) return "routine";
     /* Diğer FFA tanıları (RVO, CSR, …) → patoloji */
@@ -90,8 +92,7 @@ function classifyFfa(raw: string): ModalitySlice {
 
   const idx = getDrStageIndexFromLabel(s);
   if (idx !== null) {
-    if (idx === 0) return "routine";
-    return "urgent";
+    return isUrgentDrStageIndex(idx) ? "urgent" : "routine";
   }
 
   return classifyFundus(s);

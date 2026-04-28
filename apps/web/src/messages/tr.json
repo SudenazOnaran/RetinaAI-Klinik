@@ -859,6 +859,7 @@
   "analysisCard": {
     "queueTitle": "AI isteği kuyrukta",
     "queueDesc": "AI servisi geçici olarak ulaşılamıyor. İstek kuyruğa alındı.",
+    "serviceUnavailableRetry": "Şu anda AI servisine erişilemiyor. Lütfen kısa bir süre sonra tekrar deneyin.",
     "gatewayFail": "AI servisine güvenli gateway üzerinden bağlanılamadı.",
     "analysisFail": "Analiz başarısız",
     "addedTitle": "AI sonucu forma eklendi",
@@ -1017,12 +1018,15 @@
     "toastSavedDesc": "Radyolojik AI raporu kaydedildi.",
     "validationTitle": "Kayıt için görüntü gerekli",
     "validationBody": "En az bir modalitede (fundus, OCT veya FFA) görüntü veya tamamlanmış analiz ekleyin.",
+    "transferRequiredTitle": "Özet aktarımı gerekli",
+    "transferRequiredBody": "Kaydetmeden önce analiz sonucunu «Rapora aktar» ile rapora ekleyin.",
 
     "summaryOctYes": "OCT görüntüsü eklendi",
     "summaryFfaYes": "FFA görüntüsü eklendi",
     "medicalDisclaimerExact": "Bu sonuçlar kesin tanı için kullanılamaz; yalnızca hekimin klinik kararına yardımcı amaçlıdır. Nihai değerlendirme ve sorumluluk hekime aittir.",
     "aiSummaryLabel": "AI özeti",
     "confidenceApproxShort": "yaklaşık güven",
+    "confidenceUndeterminedShort": "belirsiz",
     "clinicalDetailTitle": "Klinik detay",
     "readyBannerTitle": "Analiz hazır.",
     "readyBannerBody": "Radyolojik raporlar listenize eklemek için «Rapora aktar» düğmesini kullanın; ardından sayfanın altından «Radyolojik raporu kaydet» ile kaydı tamamlayın.",

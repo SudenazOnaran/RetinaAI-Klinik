@@ -48,14 +48,20 @@ export function RadiologicalAnalysisTimestamp({
 export function RadiologicalAiSummaryOneLine({
   diseaseLabel,
   confidencePct,
+  confidenceTextOverride,
   className,
 }: {
   diseaseLabel: string;
   confidencePct: number;
+  confidenceTextOverride?: string | null;
   className?: string;
 }) {
   const { t } = useTranslation();
   const pct = Number.isFinite(confidencePct) ? confidencePct : 0;
+  const confidenceText =
+    confidenceTextOverride && confidenceTextOverride.trim().length > 0
+      ? confidenceTextOverride.trim()
+      : `${t("radiologicalReport.confidenceApproxShort")} %${pct.toFixed(0)}`;
   return (
     <div
       className={cn(
@@ -71,7 +77,7 @@ export function RadiologicalAiSummaryOneLine({
           {diseaseLabel.trim() ? diseaseLabel : "—"}
         </span>
         <span className="text-sm text-cyan-100">
-          · {t("radiologicalReport.confidenceApproxShort")} %{pct.toFixed(0)}
+          · {confidenceText}
         </span>
       </p>
     </div>
