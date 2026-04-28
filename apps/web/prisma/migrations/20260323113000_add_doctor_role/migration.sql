@@ -1,9 +1,0 @@
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'DoctorRole') THEN
-    CREATE TYPE "DoctorRole" AS ENUM ('DOCTOR', 'ASSISTANT', 'MANAGER', 'AUDITOR');
-  END IF;
-END $$;
-
-ALTER TABLE "Doctor"
-ADD COLUMN IF NOT EXISTS "role" "DoctorRole" NOT NULL DEFAULT 'DOCTOR';

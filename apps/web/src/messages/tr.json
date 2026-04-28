@@ -216,7 +216,6 @@
     },
     "critical": {
       "title": "Kritik Risk İzleme",
-      "rate": "Yüksek risk oranı: %{{rate}}",
       "empty": "Şu anda kritik vaka bulunmuyor."
     }
   },
@@ -299,7 +298,12 @@
     "colLastAnalysis": "Son Analiz Tarihi",
     "colConfidence": "Son Güven Skoru",
     "colEmergency": "Acil Etiketi",
+    "colDiseaseRisk": "Risk",
+    "badgeDiseaseUrgent": "Acil",
+    "badgeDiseaseRoutine": "Rutin",
+    "badgeDiseasePending": "Beklemede",
     "colDrRisk": "Dr Risk Seviyesi",
+    "modalityFeedbackAgreesAi": "AI özeti onaylı",
     "colActions": "Eylem",
     "emergencyAssessment": "DEĞERLENDİRME",
     "emergencyUrgent": "ACİL",
@@ -336,7 +340,7 @@
     "a11yBulkDeleteSelected": "Seçili hastaları sil",
     "a11ySelectAllOnPage": "Bu sayfadaki tüm kayıtları seç",
     "a11yPatientsTable": "Hasta listesi tablosu",
-    "a11yPatientsTableCaption": "Son analiz tarihi, güven skoru ve acil etiketi ile hasta listesi",
+    "a11yPatientsTableCaption": "Son analiz tarihi, güven skoru, acil etiketi ve hastalık risk özeti ile hasta listesi",
     "a11yPageSize": "Sayfa boyutu seçimi"
   },
   "newPatientPage": {
@@ -409,9 +413,12 @@
     "diabetesDurationLabel": "Diyabet Süresi:",
     "updateInfoButton": "Bilgileri Güncelle",
     "tabCreateReport": "Rapor Oluştur",
+    "tabAiAnalysis": "AI & Görüntü Analizi",
     "tabPastReports": "Geçmiş Raporlar",
+    "tabRadiologicalReports": "Radyolojik raporlar",
     "tabDrProgression": "DR Değişim Analizi",
-    "reportCreateInfo": "Sol: rapor editörü; sağ: AI Analiz Paneli (Fundus, OCT, FFA). OCT/FFA metinleri «Rapora aktar» ile muayene bulgularına eklenir. Kesin tanı değildir; triyaj amaçlıdır."
+
+    "aiAnalysisInfo": "Fundus, OCT ve FFA için yapay zeka analizlerini kullanın; kayıt «Radyolojik raporlar» listesinde görünür."
   },
   "octAnalysis": {
     "title": "AI makula OCT görüntü analizi",
@@ -459,11 +466,13 @@
     "likelihoodModerate": "Orta",
     "likelihoodHigh": "Yüksek",
     "analysisFail": "FFA analizi tamamlanamadı.",
-    "parseFail": "Sunucu yanıtı işlenemedi."
+    "parseFail": "Sunucu yanıtı işlenemedi.",
+    "drStagingTitle": "Diyabetik retinopati — FFA üzerinden tahmini evre (ICDR uyumlu)",
+    "drStagingStage": "Tahmini evre",
+    "drStagingConfidence": "Güven düzeyi",
+    "drStagingRationale": "Kısa gerekçe"
   },
   "aiAnalysisPanel": {
-    "title": "AI Analiz Paneli",
-    "subtitle": "Fundus, OCT ve FFA; metin özetlerini aşağıdaki geri bildirim alanına yazıp «Rapora aktar» ile Muayene Bulguları alanına ekleyin. Fundus sonucu kayıtta görüntü+AI ile birlikte gider.",
     "fundusShort": "Fundus",
     "fundusHint": "Düzeltme ve «Rapora ekle» fundus kartının altındadır.",
     "octShort": "OCT",
@@ -477,12 +486,47 @@
     "addToReport": "Rapora aktar",
     "clearModality": "Temizle",
     "appendSuccessTitle": "Metin eklendi",
-    "appendSuccessDesc": "İçerik «Muayene Bulguları» alanına eklendi; düzenleyebilirsiniz.",
+    "appendSuccessDesc": "Metin ayrı OCT/FFA alanına eklendi; klinik «Muayene bulguları» metnini etkilemez.",
+    "appendModalityDesc": "OCT/FFA eki en fazla {{max}} karakter. Metni kısaltıp tekrar deneyin.",
     "appendLimitTitle": "Karakter sınırı",
-    "appendLimitDesc": "Muayene bulguları alanı en fazla {{max}} karakter. Metni kısaltıp tekrar deneyin."
+    "appendLimitDesc": "Muayene bulguları alanı en fazla {{max}} karakter. Metni kısaltıp tekrar deneyin.",
+    "octDoctorFeedbackLabel": "Doktor değerlendirmesi (OCT) — AI koşul listesine göre kayıt",
+    "ffaDoctorFeedbackLabel": "Doktor değerlendirmesi (FFA) — AI teşhis listesine göre kayıt",
+    "modalityDoctorFeedbackPlaceholder": "Onay, düzeltme veya kısa klinik not (AI sonucu yerine sizin değerlendirmeniz önceliklidir).",
+    "modalityAgreeQuestion": "Yapay Zeka Sonucu Doğru mu?",
+    "modalityPickOctCondition": "Hayırsanız, yukarıdaki hastalık / durum olasılıklarından klinik görüşünüzü seçin:",
+    "modalityPickFfaCondition": "Hayırsanız, yukarıdaki FFA teşhis listesinden uygun olanı seçin:",
+    "modalityNoAiListForPickOct": "Bu analizde koşul listesi yok; yalnızca «Evet» ile AI özetini onaylayabilirsiniz.",
+    "modalityNoAiListForPickFfa": "Bu analizde teşhis listesi yok; yalnızca «Evet» ile AI özetini onaylayabilirsiniz.",
+    "octAiSummaryTitle": "AI sonuç özeti",
+    "octClinicalDetailTitle": "Klinik detay (bulgular, koşullar, öneriler)",
+    "ffaAiSummaryTitle": "AI sonuç özeti",
+    "ffaClinicalDetailTitle": "Klinik detay (faaz, bulgular, teşhisler)",
+    "modalityPanelToggle": "Paneli aç / kapa",
+    "modalityPickOctDisagreeStatic": "Hayırsanız klinik görüşünüzü aşağıdaki OÇT öncelikli tanılardan (veya sağlıklı makula) ile kaydedin:"
+  },
+  "modalityDisagree": {
+    "oct": {
+      "oct_dme": "DME",
+      "oct_amd": "AMD",
+      "oct_macular_hole": "Maküler delik",
+      "oct_erm": "ERM / VMT",
+      "oct_saglikli_makula": "Sağlıklı / normal makula"
+    },
+    "ffa": {
+      "ffa_healthy": "Sağlıklı / belirgin patoloji yok",
+      "ffa_dr": "Diyabetik retinopati (DR)",
+      "ffa_rvo": "Retinal ven tıkanıklığı (RVO)",
+      "ffa_amd_cnv": "AMD (koroidal neovaskülarizasyon - CNV)",
+      "ffa_csr": "Santral seröz koryoretinopati (CSR)",
+      "ffa_uveitis": "Üveit / retinal vaskülit"
+    },
+    "ffaDrStageTitle": "DR evresi (ICDR: sağlıklı → hafif → orta → şiddetli → proliferatif)",
+    "ffaDrStageHint": "FFA tek başına tam evre için yetersiz olabilir; kayıt için fundus ile uyumlu bir ICDR evresi seçin (listedeki Türkçe/İngilizce etiketler aynı evreleri temsil eder)."
   },
   "patientDetailReports": {
     "foundRecords": "{{count}} kayıt bulundu",
+    "foundRadiologicalRecords": "{{count}} radyolojik kayıt",
     "reportNo": "Rapor #{{no}}",
     "dateLabel": "Tarih",
     "viewPdf": "PDF Görüntüle",
@@ -495,7 +539,36 @@
     "doctorFeedback": "Doktor geri bildirimi",
     "aiOtherRiskConfidence": "AI Diğer Hastalık Risk Tahmini - Güven",
     "fundusImage": "Fundus Görseli",
-    "heatmap": "Isı Haritası"
+    "heatmap": "Isı Haritası",
+    "octImage": "OCT görüntüsü",
+    "ffaImage": "FFA görüntüsü",
+    "defaultReportTitle": "Retina hekim raporu",
+    "reportTitle": "Rapor başlığı",
+    "reportingDoctor": "Raporu düzenleyen hekim",
+    "listPreviewNote": "Liste önizlemesinde uzun metinler kısaltılır; tam metin PDF önizlemede.",
+    "examFindingsCore": "Muayene bulguları (klinik)",
+    "doctorNotesField": "Doktor notları",
+    "aiAssessments": "Yapay zeka değerlendirmeleri (özet)",
+    "aiFundusBlock": "Fundus analizi",
+    "aiFundusRisk": "AI risk",
+    "doctorFeedbackShort": "Doktor geri bildirimi",
+    "aiFundusMissing": "Fundus AI bu kayıtta yok",
+    "aiOctBlock": "OCT (rapora eklenen metin)",
+    "aiOctMissing": "OCT metni eklenmemiş",
+    "aiFfaBlock": "FFA (rapora eklenen metin)",
+    "aiFfaMissing": "FFA metni eklenmemiş",
+    "odirShort": "ODIR",
+    "radiologicalAiTabOnly": "{{count}} kayıt. Yalnızca «AI & Görüntü Analizi» sekmesinden kaydedilenler; fundus, OCT ve FFA",
+    "generalDoctorNotes": "Genel doktor notları (rapor)",
+    "modalityFundusSection": "Fundus",
+    "modalityOctSection": "OCT",
+    "modalityFfaSection": "FFA",
+    "aiResultConfidenceRow": "AI analiz sonucu ve güven",
+    "aiNarrativeShort": "AI açıklamaları (özet)",
+    "doctorFeedbackEmphasis": "Doktor geri bildirimi",
+    "radiologyEmptyModalities": "Bu kayıtta görüntülenecek modalite bulunamadı.",
+    "imageLightboxClose": "Kapat",
+    "imageLightboxTitle": "Görüntü önizleme"
   },
   "patientDetailProgress": {
     "title": "Klinik Sonuç Değişim Grafiği",
@@ -540,9 +613,13 @@
     "colTc": "TC",
     "colLastReport": "Son Rapor Tarihi",
     "colReportCount": "Rapor Sayısı",
+    "colClinicalCount": "Klinik rapor",
+    "colRadiologicalCount": "Radyolojik",
     "colAction": "İşlem",
     "emptyRow": "Filtrelere uygun hasta raporu bulunamadı.",
-    "detail": "Detay"
+    "detail": "Detay",
+    "openClinical": "Geçmiş raporlar",
+    "openRadiological": "Radyoloji"
   },
   "history": {
     "placeholderSearch": "Hasta, TC, tanı veya not ara",
@@ -813,6 +890,7 @@
     "noUpper": "HAYIR",
     "correctionTitle": "Düzeltme Seçimi",
     "correctionPlaceholder": "Düzeltme etiketini seçin...",
+    "correctionMultiHint": "AI ile hemfikir olmadığınız bir veya birden fazla DR evresini işaretleyebilirsiniz.",
     "pushToForm": "Rapora aktar",
     "clear": "Temizle",
     "detailTitle": "Klinik detay (AI destek)",
@@ -899,8 +977,10 @@
     "title": "Rapor Oluştur",
     "description": "Görsel yükleme zorunlu değildir. Standart göz kliniği rapor alanlarını doldurarak doğrudan rapor oluşturabilirsiniz.",
     "editorTitle": "Rapor editörü",
-    "editorDescription": "Klinik metin alanlarını doldurun. Sağdaki AI panelinden fundus, OCT ve FFA triyajını aynı sayfada kullanın.",
-    "aiOptionalHintEditor": "Fundus AI özeti, kayıtla birlikte görüntü ve ısı haritası olarak eklenir. OCT/FFA metin özetlerini sağ panelden «Rapora aktar» ile muayene bulgularına ekleyin.",
+    "editorDescription": "Klinik metin alanlarını doldurun. Sağdaki panelde fundus, OCT ve FFA incelemelerine erişebilirsiniz.",
+    "editorDescriptionClinical": "Klinik metin alanlarını doldurun. Fundus, OCT ve FFA yapay zeka araçları «AI & Görüntü Analizi» sekmesindedir.",
+
+    "aiOptionalHintEditor": "Fundus AI sonucu kayıtla birlikte görüntü ve ısı haritası ile saklanır. Muayene bulguları yalnızca aşağıdaki klinik alana girilen metinlerden oluşur.",
     "aiWillInclude": "AI analizi rapora eklenecek",
     "resultPrefix": "Sonuç:",
     "confidencePrefix": "Güven:",
@@ -913,7 +993,8 @@
     "anamnesis": "Klinik Öykü (Anamnez)",
     "anamnesisPlaceholder": "Hastanın şikayeti, semptom süresi, önceki tedavi öyküsü",
     "examFindings": "Muayene Bulguları",
-    "examFindingsPlaceholder": "Görme keskinliği, biyomikroskopi, fundus muayenesi bulguları",
+
+    "examFindingsPlaceholder": "Görme keskinliği, biyomikroskopi, fundus muayenesi; yalnız klinik gözlemler",
     "labResults": "Laboratuvar Sonuçları",
     "labResultsPlaceholder": "HbA1c, glukoz, lipid profili gibi laboratuvar bilgileri",
     "clinicalAssessment": "Teşhis / Klinik Değerlendirme",
@@ -926,5 +1007,35 @@
     "saving": "Kaydediliyor...",
     "saveWithAi": "Rapor + AI Sonucunu Kaydet",
     "save": "Raporu Kaydet"
+  },
+  "radiologicalReport": {
+    "defaultTitle": "Radyolojik AI raporu",
+    "panelTitle": "AI analizi (Fundus / OCT / FFA)",
+    "panelDescription": "Görüntüleri yükleyin veya analiz edin; kayıt «Radyolojik raporlar» listesinde görünür.",
+    "workflowBelowPanel": "Gerekli incelemeleri tamamlayıp özeti «Rapora aktar» ile metne ekledikten sonra kaydı tamamlamak için sayfanın altındaki «Radyolojik raporu kaydet» düğmesini kullanın.",
+    "saveButton": "Radyolojik raporu kaydet",
+    "toastSavedDesc": "Radyolojik AI raporu kaydedildi.",
+    "validationTitle": "Kayıt için görüntü gerekli",
+    "validationBody": "En az bir modalitede (fundus, OCT veya FFA) görüntü veya tamamlanmış analiz ekleyin.",
+
+    "summaryOctYes": "OCT görüntüsü eklendi",
+    "summaryFfaYes": "FFA görüntüsü eklendi",
+    "medicalDisclaimerExact": "Bu sonuçlar kesin tanı için kullanılamaz; yalnızca hekimin klinik kararına yardımcı amaçlıdır. Nihai değerlendirme ve sorumluluk hekime aittir.",
+    "aiSummaryLabel": "AI özeti",
+    "confidenceApproxShort": "yaklaşık güven",
+    "clinicalDetailTitle": "Klinik detay",
+    "readyBannerTitle": "Analiz hazır.",
+    "readyBannerBody": "Radyolojik raporlar listenize eklemek için «Rapora aktar» düğmesini kullanın; ardından sayfanın altından «Radyolojik raporu kaydet» ile kaydı tamamlayın.",
+    "readyBannerAddedBody": "Özet rapor metnine eklendi. Kaydı tamamlamak için sayfanın altındaki «Radyolojik raporu kaydet» düğmesini kullanabilirsiniz.",
+    "analysisCompletedAt": "Analiz zamanı",
+    "appendToReport": "Rapora aktar",
+    "clearModality": "Temizle",
+    "expandSection": "Detayı göster",
+    "collapseSection": "Detayı gizle",
+    "optionalTag": "isteğe bağlı",
+    "analysisNotesLabel": "Analiz notları",
+    "analysisNotesPlaceholder": "Bu modaliteye özel kısa klinik veya operasyonel notlar…",
+    "analysisNotesHeading": "Analiz notları",
+    "analysisNotesSummaryTag": "Analiz notları"
   }
 }

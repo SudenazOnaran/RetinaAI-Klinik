@@ -23,9 +23,13 @@ import { useTranslation } from "@/components/providers/i18n-provider";
 import {
   DR_STAGE_LABELS_EN,
   DR_STAGE_LABELS_TR,
-  getDrStageIndexFromLabel,
 } from "@/lib/dr-stage-labels";
-import { isDoctorApprovalToken } from "@/lib/doctor-feedback";
+import {
+  type DiseaseTriageLevel,
+  computeDiseaseTriageFromAnalysisFields,
+} from "@/lib/patient-disease-triage";
+import { humanizeEmbeddedMaiPrefixes } from "@/lib/doctor-feedback";
+import { humanizeEmbeddedFfaJsonInText } from "@/lib/ffa-doctor-feedback-display";
 
 type Patient = {
   id: string;
@@ -33,10 +37,11 @@ type Patient = {
   tcNo: string;
   createdAt: string;
   latestAnalysisAt?: string | null;
-  latestConfidence?: number | null;
   risk?: string;
   aiResult?: string;
   drFeedback?: string | (string | null)[];
+  latestOctDrFeedback?: string | null;
+  latestFfaDrFeedback?: string | null;
   _count?: {
     analyses?: number;
   };
@@ -61,114 +66,40 @@ const DEFAULT_FILTERS = {
   sort: "createdAt_desc" as SortKey,
 };
 
-function normalizeRisk(value?: string) {
-  return String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "_")
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/ı/g, "i")
-    .replace(/ç/g, "c")
-    .replace(/ğ/g, "g")
-    .replace(/ö/g, "o")
-    .replace(/ş/g, "s")
-    .replace(/ü/g, "u");
+function cleanFeedbackForTriage(
+  feedback: Patient["drFeedback"],
+): string | undefined {
+  if (Array.isArray(feedback)) {
+    const firstValid = feedback.find((v) => v !== null && v !== "null");
+    return firstValid != null ? String(firstValid).trim() : undefined;
+  }
+  if (typeof feedback === "string" && feedback !== "null") {
+    return feedback.trim();
+  }
+  return undefined;
 }
 
-function getEffectiveRisk(patient: Patient): string {
-  const analysesCount = Number(patient._count?.analyses || 0);
-  if (analysesCount === 0) {
-    return "analiz_yapilmadi";
-  }
-
-  const feedback = patient.drFeedback;
-  const cleanFeedback = Array.isArray(feedback)
-    ? feedback.find((v) => v && v !== "null")
-    : feedback && feedback !== "null"
-      ? feedback
-      : undefined;
-
-  const fromFeedback =
-    typeof cleanFeedback === "string" ? cleanFeedback.trim() : "";
-  const fromAi =
-    typeof patient.aiResult === "string" ? patient.aiResult.trim() : "";
-  const fromRisk =
-    typeof patient.risk === "string" ? patient.risk.trim() : "";
-
-  /* Doktor geri bildirimi (gerçek evre düzeltmesi) her zaman AI ve hasta.risk üstünde. */
-  if (fromFeedback && !isDoctorApprovalToken(fromFeedback)) {
-    return fromFeedback;
-  }
-  if (fromAi) return fromAi;
-  if (fromRisk) return fromRisk;
-
-  /* Analiz sayısı > 0 ama sonuç etiketi gelmediyse "yok" kullanma: o hem DR yok hem eksik veri sanılıyordu. */
-  return "analiz_bekliyor";
+function getPatientDiseaseTriage(patient: Patient): DiseaseTriageLevel {
+  return computeDiseaseTriageFromAnalysisFields({
+    drFeedback: cleanFeedbackForTriage(patient.drFeedback) ?? null,
+    octDrFeedback: patient.latestOctDrFeedback ?? null,
+    ffaDrFeedback: patient.latestFfaDrFeedback ?? null,
+  }).triage;
 }
 
-function getRiskStyle(
-  risk: string,
-  t: (key: string, params?: Record<string, string | number>) => string,
-) {
-  const normalized = normalizeRisk(risk);
-
-  if (normalized === "analiz_yapilmadi") {
-    return {
-      label: t("patientsList.badgeNoAnalysis"),
-      className: "bg-slate-100 text-slate-600 border-slate-200",
-    };
-  }
-  if (normalized === "analiz_bekliyor") {
-    return {
-      label: t("patientsList.badgeAwaitingAnalysis"),
-      className: "bg-slate-100 text-slate-500 border-slate-200",
-    };
-  }
-
-  const stageIdx = getDrStageIndexFromLabel(risk);
-  if (stageIdx !== null) {
-    if (stageIdx === 4) {
-      return {
-        label: t("patientsList.badgeVeryHighRisk"),
-        className: "bg-amber-100/80 text-amber-700 border-amber-200",
-      };
-    }
-    if (stageIdx === 3) {
-      return {
-        label: t("patientsList.badgeHighRisk"),
-        className: "bg-amber-100/80 text-amber-700 border-amber-200",
-      };
-    }
-    if (stageIdx === 2) {
-      return {
-        label: t("patientsList.badgeMediumRisk"),
-        className: "bg-[#efe7da] text-[#8b6a49] border-[#d9cab5]",
-      };
-    }
-    if (stageIdx === 1) {
-      return {
-        label: t("patientsList.badgeLowRisk"),
-        className: "bg-[#e8f2ef] text-[#5b8d82] border-[#cfe0dc]",
-      };
-    }
-    return {
-      label: t("patientsList.badgeHealthy"),
-      className: "bg-[#dff0ea] text-[#4c8a7d] border-[#c5ddd6]",
-    };
-  }
-
-  if (["no_dr", "healthy", "saglikli"].includes(normalized)) {
-    return {
-      label: t("patientsList.badgeHealthy"),
-      className: "bg-[#dff0ea] text-[#4c8a7d] border-[#c5ddd6]",
-    };
-  }
-
-  return {
-    label: t("patientsList.badgeAwaitingAnalysis"),
-    className: "bg-slate-100 text-slate-500 border-slate-200",
-  };
+function getDoctorFacingDiseaseSummary(
+  patient: Patient,
+  summaryLocale: "tr" | "en",
+): string {
+  const computed = computeDiseaseTriageFromAnalysisFields({
+    drFeedback: cleanFeedbackForTriage(patient.drFeedback) ?? null,
+    octDrFeedback: patient.latestOctDrFeedback ?? null,
+    ffaDrFeedback: patient.latestFfaDrFeedback ?? null,
+  }).summaryLine;
+  return humanizeEmbeddedFfaJsonInText(
+    humanizeEmbeddedMaiPrefixes(computed),
+    summaryLocale,
+  );
 }
 
 function getEmergencyTag(
@@ -184,9 +115,8 @@ function getEmergencyTag(
     };
   }
 
-  const effective = getEffectiveRisk(patient);
-  const stageIdx = getDrStageIndexFromLabel(effective);
-  if (stageIdx === 3 || stageIdx === 4) {
+  const triage = getPatientDiseaseTriage(patient);
+  if (triage === "urgent") {
     return {
       label: t("patientsList.emergencyUrgent"),
       className: "bg-rose-100 text-rose-700 border-rose-200",
@@ -199,11 +129,6 @@ function getEmergencyTag(
     className: "bg-emerald-100 text-emerald-700 border-emerald-200",
     isEmergency: false,
   };
-}
-
-function formatConfidence(confidence?: number | null) {
-  if (typeof confidence !== "number" || Number.isNaN(confidence)) return "-";
-  return `%${(confidence * 100).toFixed(1)}`;
 }
 
 function formatDateCell(dateValue?: string | null) {
@@ -710,13 +635,10 @@ export default function HastalarClient({
                           {t("patientsList.colLastAnalysis")}
                         </th>
                         <th scope="col" className="px-3 py-3 text-left">
-                          {t("patientsList.colConfidence")}
-                        </th>
-                        <th scope="col" className="px-3 py-3 text-left">
                           {t("patientsList.colEmergency")}
                         </th>
                         <th scope="col" className="px-3 py-3 text-left">
-                          {t("patientsList.colDrRisk")}
+                          {t("patientsList.colDiseaseRisk")}
                         </th>
                         <th scope="col" className="px-3 py-3 text-right">
                           {t("patientsList.colActions")}
@@ -725,12 +647,11 @@ export default function HastalarClient({
                     </thead>
                     <tbody>
                       {patients.map((patient) => {
-                        const effectiveRisk = getEffectiveRisk(patient);
-                        const analysisCount = Number(
-                          patient._count?.analyses || 0,
-                        );
-                        const riskInfo = getRiskStyle(effectiveRisk, t);
                         const emergencyTag = getEmergencyTag(patient, t);
+                        const diseaseSummary = getDoctorFacingDiseaseSummary(
+                          patient,
+                          locale === "en" ? "en" : "tr",
+                        );
                         const checked = selectedIds.includes(patient.id);
 
                         return (
@@ -758,9 +679,6 @@ export default function HastalarClient({
                             <td className="px-3 py-3 text-slate-700">
                               {formatDateCell(patient.latestAnalysisAt)}
                             </td>
-                            <td className="px-3 py-3 text-slate-700">
-                              {formatConfidence(patient.latestConfidence)}
-                            </td>
                             <td className="px-3 py-3">
                               <Badge
                                 variant="outline"
@@ -769,13 +687,19 @@ export default function HastalarClient({
                                 {emergencyTag.label}
                               </Badge>
                             </td>
-                            <td className="px-3 py-3">
-                              <Badge
-                                variant="outline"
-                                className={`inline-flex min-w-[132px] justify-center font-semibold ${riskInfo.className}`}
+                            <td className="max-w-[min(100%,280px)] px-3 py-3">
+                              <p
+                                className="line-clamp-4 text-sm leading-snug text-slate-700 [overflow-wrap:anywhere]"
+                                title={
+                                  diseaseSummary && diseaseSummary !== "—"
+                                    ? diseaseSummary
+                                    : undefined
+                                }
                               >
-                                {riskInfo.label}
-                              </Badge>
+                                {diseaseSummary && diseaseSummary !== "—"
+                                  ? diseaseSummary
+                                  : "—"}
+                              </p>
                             </td>
                             <td className="px-3 py-3 text-right">
                               <Button
@@ -800,10 +724,11 @@ export default function HastalarClient({
 
                 <div className="grid gap-3 p-4 md:hidden">
                   {patients.map((patient) => {
-                    const effectiveRisk = getEffectiveRisk(patient);
-                    const analysisCount = Number(patient._count?.analyses || 0);
-                    const riskInfo = getRiskStyle(effectiveRisk, t);
                     const emergencyTag = getEmergencyTag(patient, t);
+                    const diseaseSummary = getDoctorFacingDiseaseSummary(
+                      patient,
+                      locale === "en" ? "en" : "tr",
+                    );
                     const checked = selectedIds.includes(patient.id);
 
                     return (
@@ -834,26 +759,32 @@ export default function HastalarClient({
                             {emergencyTag.label}
                           </Badge>
                         </div>
-                        <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
-                          <div className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
-                            {t("patientsList.lastAnalysisShort")}{" "}
-                            {formatDateCell(patient.latestAnalysisAt)}
-                          </div>
-                          <div className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
-                            {t("patientsList.confidenceLabel")} {formatConfidence(patient.latestConfidence)}
-                          </div>
+                        <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-600">
+                          {t("patientsList.lastAnalysisShort")}{" "}
+                          {formatDateCell(patient.latestAnalysisAt)}
                         </div>
-                        <div className="mt-3 flex items-center justify-between">
-                          <Badge
-                            variant="outline"
-                            className={`inline-flex min-w-[132px] justify-center ${riskInfo.className}`}
-                          >
-                            {riskInfo.label}
-                          </Badge>
+                        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-medium text-slate-500">
+                              {t("patientsList.colDiseaseRisk")}
+                            </p>
+                            <p
+                              className="mt-1 line-clamp-4 text-sm leading-snug text-slate-700 [overflow-wrap:anywhere]"
+                              title={
+                                diseaseSummary && diseaseSummary !== "—"
+                                  ? diseaseSummary
+                                  : undefined
+                              }
+                            >
+                              {diseaseSummary && diseaseSummary !== "—"
+                                ? diseaseSummary
+                                : "—"}
+                            </p>
+                          </div>
                           <Button
                             asChild
                             size="sm"
-                            className="h-10 rounded-xl bg-[var(--retina-primary)] px-4 text-white"
+                            className="h-10 shrink-0 self-start rounded-xl bg-[var(--retina-primary)] px-4 text-white sm:self-auto"
                           >
                             <Link
                               href={`/dashboard/hastalar/${patient.id}?tab=report-create`}

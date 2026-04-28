@@ -7,36 +7,22 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum DoctorRole {
-  DOCTOR
-  ASSISTANT
-  MANAGER
-  AUDITOR
-  ADMIN
-}
-
-enum ApprovalStatus {
-  PENDING
-  APPROVED
-  REJECTED
-}
-
 model Doctor {
-  id             String            @id @default(cuid())
-  name           String
-  surname        String
-  email          String            @unique
-  password       String
-  specialty      String
-  hospital       String
-  role           DoctorRole        @default(DOCTOR)
-  approvalStatus ApprovalStatus    @default(APPROVED)
-  isActive       Boolean           @default(true)
-  createdAt      DateTime          @default(now())
-  patients         Patient[]
-  settings         DoctorSettings?
+  id               String                  @id @default(cuid())
+  name             String
+  email            String                  @unique
+  password         String
+  role             DoctorRole              @default(DOCTOR)
+  isActive         Boolean                 @default(true)
+  createdAt        DateTime                @default(now())
+  surname          String
+  specialty        String
+  hospital         String
+  approvalStatus   ApprovalStatus          @default(APPROVED)
   calendarEvents   CalendarEvent[]
   credentialPolicy DoctorCredentialPolicy?
+  settings         DoctorSettings?
+  patients         Patient[]
 }
 
 model Patient {
@@ -55,82 +41,91 @@ model Patient {
 }
 
 model Analysis {
-  id                   String   @id @default(cuid())
-  patientId            String
-  aiResult             String
-  confidence           Float
-  heatmapUrl           String?
-  originalImage        String?
+  id                              String                @id @default(cuid())
+  patientId                       String
+  aiResult                        String
+  confidence                      Float
+  heatmapUrl                      String?
+  originalImage                   String?
   /// Geriye dönük: manual_report_v2 JSON; yeni kayıtlarda structured alanlar + bu alan birlikte dolar
-  doctorNote           String?
-  /// Rapor başlığı (örn. Göz Muayene Raporu)
-  reportTitle          String?  @db.VarChar(500)
-  /// Rapor tarihi metni (örn. 24.04.2026 veya ISO)
-  reportDateKey        String?  @db.VarChar(32)
-  /// Raporda gösterilen hekim adı
-  reportDoctorDisplayName String? @db.VarChar(200)
-  sectionAnamnesis         String? @db.Text
-  sectionExamFindings      String? @db.Text
-  sectionLabResults        String? @db.Text
-  sectionClinicalAssessment String? @db.Text
-  sectionTreatmentRecommendations String? @db.Text
-  sectionDoctorNotes       String? @db.Text
-  /// HT, dislipidemi vb. yapılandırılmış komorbidite
-  comorbidityJson      Json?
-  /// Model belirsizliği 0–1 (yüksek = daha belirsiz); snapshot veya 1−DR güveni
-  uncertaintyScore     Float?
-  isCorrect            Boolean?
-  actualResult         String?
-  createdAt            DateTime @default(now())
-  aiOdriLabels         String?
-  aiOdriConfidences    String?
-  ilaclar              String?  @db.VarChar(1500)
-  drFeedback           String?
-  /// Doktorun yapısal düzeltmeleri (fundus, DME, clinicalDecision vb.); eğitimde altın/ince ayar
-  doctorStructuredReview Json?
-  /// Doktorun serbest klinik gerekçe metni (LLM teacher’a ek veya yerine geçen hedef)
-  physicianClinicalReasoning String? @db.Text
+  doctorNote                      String?
+  isCorrect                       Boolean?
+  actualResult                    String?
+  createdAt                       DateTime              @default(now())
+  aiOdriLabels                    String?
+  aiOdriConfidences               String?
+  ilaclar                         String?               @db.VarChar(1500)
+  drFeedback                      String?
   /// LLM /predict yapısal çıktısı (heatmap base64 hariç); veri seti export için
-  aiInferenceJson      Json?
-  /// DR 0–4: tercihen klinik özeti (doktor geri bildirimi > AI snapshot > yok)
-  drGradeInt           Int?
+  aiInferenceJson                 Json?
   /// `src/lib/dataset/manifest-v1.schema.json` ile uyumlu export şema sürümü
-  datasetSchemaVersion String   @default("1")
-  patient              Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  trainingDatasetEntry TrainingDatasetEntry?
+  datasetSchemaVersion            String                @default("1")
+  /// DR 0–4: tercihen klinik özeti (doktor geri bildirimi > AI snapshot > yok)
+  drGradeInt                      Int?
+  /// Doktorun yapısal düzeltmeleri (fundus, DME, clinicalDecision vb.); eğitimde altın/ince ayar
+  doctorStructuredReview          Json?
+  /// Doktorun serbest klinik gerekçe metni (LLM teacher’a ek veya yerine geçen hedef)
+  physicianClinicalReasoning      String?
+  /// HT, dislipidemi vb. yapılandırılmış komorbidite
+  comorbidityJson                 Json?
+  /// Rapor tarihi metni (örn. 24.04.2026 veya ISO)
+  reportDateKey                   String?               @db.VarChar(32)
+  /// Raporda gösterilen hekim adı
+  reportDoctorDisplayName         String?               @db.VarChar(200)
+  /// Rapor başlığı (örn. Göz Muayene Raporu)
+  reportTitle                     String?               @db.VarChar(500)
+  sectionAnamnesis                String?
+  sectionClinicalAssessment       String?
+  sectionDoctorNotes              String?
+  sectionExamFindings             String?
+  sectionLabResults               String?
+  sectionTreatmentRecommendations String?
+  /// Model belirsizliği 0–1 (yüksek = daha belirsiz); snapshot veya 1−DR güveni
+  uncertaintyScore                Float?
+  /// Kayıtlı FFA kaynak görüntüsü (URL)
+  ffaImageUrl                     String?
+  /// Kayıtlı maküler OCT kaynak görüntüsü (URL)
+  octImageUrl                     String?
+  /// Son analizde FFA için doktor geri bildirimi / düzeltme
+  ffaDrFeedback                   String?
+  /// Son analizde OCT için doktor geri bildirimi / düzeltme
+  octDrFeedback                   String?
+  /// Klinik metin raporu vs radyolojik (AI görüntü) kaydı; eski satırlarda null olabilir
+  reportKind                      AnalysisReportKind?
+  patient                         Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  trainingDatasetEntry            TrainingDatasetEntry?
 }
 
 /// Egitim satiri: goruntu URL, efektif DR, doktor notlari ozeti, `training_snapshot_v2` JSON, ML sutunlari.
 /// Ayrintili yapı: `src/lib/dataset/training-snapshot-v2.ts`. Diger klinik alanlar: Analysis.
 model TrainingDatasetEntry {
-  id                    String   @id @default(cuid())
-  analysisId            String   @unique
-  originalImageUrl      String
+  id                           String   @id @default(cuid())
+  analysisId                   String   @unique
+  originalImageUrl             String
   /// Etkin DR etiketi (TR depo formu): doktor duzeltmesi veya AI onayi ile ayni metin; egitimde null olmamali
-  drFeedback            String?
-  /// Rapor: doktor notlari + klinik/muayene/tedavi metinleri birlesik (parse + egitim metni)
-  doctorNotesText       String?  @db.Text
-  /// Analysis.doctorNote ile ayni: manual_report_v2 JSON (rapor meta + sections + aiSummary)
-  doctorNote            String?  @db.Text
+  drFeedback                   String?
+  updatedAt                    DateTime @updatedAt
   /// `training_snapshot_v2`: from_image | from_teacher_text | provenance
-  inferenceSnapshotJson Json?
+  inferenceSnapshotJson        Json?
   /// Doktor notları / klinik metin parse: sağlıklı→0, mild ile uyumlu→1, moderate→2, severe→3, PDR→4
   doctorNotesDerivedDrGradeInt Int?
   /// MA yükü: 0 yok, 1 az/sparse, 2 yaygın (fundus_assessment veya fundus_findings)
-  microaneurysmCountLevel Int?
+  microaneurysmCountLevel      Int?
   /// Hemoraji kadran sayısı 0–4
-  hemorrhageQuadrants   Int?
+  hemorrhageQuadrants          Int?
   /// Maküler sert eksüda / makula yakını eksüda 0/1
-  hardExudateMacula     Int?
-  cottonWoolSpots       Int?
-  venousBeading         Int?
-  irma                  Int?
-  neovascularization    Int?
+  hardExudateMacula            Int?
+  cottonWoolSpots              Int?
+  venousBeading                Int?
+  irma                         Int?
+  neovascularization           Int?
   /// DME şüphesi 0/1 (makula+eksüda kuralı, fundus_assessment, API DME)
-  trainingDmeSuspected  Int?
-  updatedAt             DateTime @updatedAt
-
-  analysis Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+  trainingDmeSuspected         Int?
+  /// Rapor: doktor notlari + klinik/muayene/tedavi metinleri birlesik (parse + egitim metni)
+  doctorNotesText              String?
+  /// Analysis.doctorNote ile ayni: manual_report_v2 JSON (rapor meta + sections + aiSummary)
+  doctorNote                   String?
+  analysis                     Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
 }
 
 model DoctorSettings {
@@ -192,16 +187,15 @@ model DoctorCredentialPolicy {
   mustResetPassword          Boolean   @default(false)
   temporaryPasswordExpiresAt DateTime?
   updatedAt                  DateTime  @updatedAt
-
-  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  doctor                     Doctor    @relation(fields: [doctorId], references: [id], onDelete: Cascade)
 }
 
 model LoginAttempt {
-  key             String   @id
-  failedCount     Int      @default(0)
+  key             String    @id
+  failedCount     Int       @default(0)
   windowStartedAt DateTime
   lockedUntil     DateTime?
-  updatedAt       DateTime @updatedAt
+  updatedAt       DateTime  @updatedAt
 
   @@index([lockedUntil])
 }
@@ -221,15 +215,15 @@ model AiRequestQueue {
 }
 
 model KvkkConsent {
-  id             String   @id
+  id             String    @id
   doctorId       String
   patientId      String
-  consentGiven   Boolean  @default(false)
-  consentVersion String   @default("v1")
+  consentGiven   Boolean   @default(false)
+  consentVersion String    @default("v1")
   consentAt      DateTime?
   note           String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@unique([doctorId, patientId])
   @@index([doctorId, updatedAt(sort: Desc)])
@@ -280,12 +274,12 @@ model PilotMetricEvent {
 }
 
 model PilotMetricSnapshot {
-  id           String   @id
-  doctorId     String
+  id            String   @id
+  doctorId      String
   snapshotMonth String
-  summaryJson  Json
-  eventCount   Int      @default(0)
-  generatedAt  DateTime @default(now())
+  summaryJson   Json
+  eventCount    Int      @default(0)
+  generatedAt   DateTime @default(now())
 
   @@unique([doctorId, snapshotMonth])
   @@index([doctorId, generatedAt(sort: Desc)])
@@ -297,8 +291,27 @@ model LandingContactRequest {
   fullName  String
   email     String?
   phone     String?
-  message   String?  @db.Text
+  message   String?
   createdAt DateTime @default(now())
 
   @@index([createdAt(sort: Desc)])
+}
+
+enum DoctorRole {
+  DOCTOR
+  ASSISTANT
+  MANAGER
+  AUDITOR
+  ADMIN
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum AnalysisReportKind {
+  clinical_manual
+  radiological_ai
 }

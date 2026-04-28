@@ -1,5 +1,14 @@
 import { RetinaSettings } from "@/lib/retina-settings";
 import { getDrStageIndexFromLabel } from "@/lib/dr-stage-labels";
+import { computeDiseaseTriageFromAnalysisFields } from "@/lib/patient-disease-triage";
+
+/** Son kayıtta hastalık triajı `Patient.risk` içinde `__DTG__:URGENT|` ile işaretlenir. */
+export function isUrgentDiseaseTriageStored(
+  value: string | null | undefined,
+): boolean {
+  const s = String(value ?? "").trim();
+  return s.startsWith("__DTG__:") && s.includes("URGENT");
+}
 
 export function isHighRiskLabel(value: string | null | undefined): boolean {
   const idx = getDrStageIndexFromLabel(value);
@@ -10,6 +19,10 @@ export function getFollowupDaysForRisk(
   risk: string | null | undefined,
   settings: RetinaSettings,
 ): number {
+  if (isUrgentDiseaseTriageStored(risk)) {
+    return settings.triage.highRiskFollowupDays;
+  }
+
   const idx = getDrStageIndexFromLabel(risk);
 
   if (idx === 3 || idx === 4) {
@@ -61,11 +74,30 @@ export function daysUntil(date: Date): number {
   return Math.floor((startOfTargetUtc - startOfTodayUtc) / dayMs);
 }
 
+export type CriticalAlertLatestFeedback = {
+  drFeedback?: string | null;
+  octDrFeedback?: string | null;
+  ffaDrFeedback?: string | null;
+};
+
 export function isCriticalAlertCandidate(
   risk: string | null | undefined,
   confidence: number | null | undefined,
   settings: RetinaSettings,
+  latestFeedback?: CriticalAlertLatestFeedback | null,
 ): boolean {
+  if (latestFeedback) {
+    const { triage } = computeDiseaseTriageFromAnalysisFields({
+      drFeedback: latestFeedback.drFeedback ?? null,
+      octDrFeedback: latestFeedback.octDrFeedback ?? null,
+      ffaDrFeedback: latestFeedback.ffaDrFeedback ?? null,
+    });
+    if (triage === "urgent") return true;
+  }
+
+  if (isUrgentDiseaseTriageStored(risk)) {
+    return true;
+  }
   const safeConfidence = confidence ?? 0;
   return (
     isHighRiskLabel(risk) &&

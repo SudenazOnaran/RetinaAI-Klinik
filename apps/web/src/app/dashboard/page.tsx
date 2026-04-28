@@ -21,11 +21,15 @@ import {
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { DashboardAlertCenter } from "@/components/dashboard/dashboard-alert-center";
-import { getRequestMessages } from "@/lib/i18n/server";
-import { isDoctorApprovalToken } from "@/lib/doctor-feedback";
+import { getRequestLocale, getRequestMessages } from "@/lib/i18n/server";
+import { formatPatientRiskForUi } from "@/lib/patient-disease-triage";
+import { getDefaultRetinaSettings } from "@/lib/retina-settings";
+import { isCriticalAlertCandidate } from "@/lib/risk-alerts";
 
 export default async function DashboardPage() {
   const messages = await getRequestMessages();
+  const locale = await getRequestLocale();
+  const riskUiLocale = locale === "en" ? "en" : "tr";
   const homeT = messages.dashboardHome;
   const doctor = await getCurrentDoctorSession();
   if (!doctor) {
@@ -35,6 +39,7 @@ export default async function DashboardPage() {
   const highRiskWhere: Prisma.PatientWhereInput = {
     doctorId: doctor.id,
     OR: [
+      { risk: { startsWith: "__DTG__:URGENT" } },
       { risk: { contains: "Evre 3", mode: "insensitive" } },
       { risk: { contains: "Evre 4", mode: "insensitive" } },
       { risk: { contains: "Stage 3", mode: "insensitive" } },
@@ -60,7 +65,7 @@ export default async function DashboardPage() {
     prisma.analysis.count({ where: { patient: { doctorId: doctor.id } } }),
     prisma.patient.findMany({
       where: highRiskWhere,
-      take: 5,
+      take: 50,
       orderBy: { createdAt: "desc" },
       include: {
         analyses: {
@@ -98,6 +103,8 @@ export default async function DashboardPage() {
             confidence: true,
             aiResult: true,
             drFeedback: true,
+            octDrFeedback: true,
+            ffaDrFeedback: true,
           },
         },
       },
@@ -108,24 +115,79 @@ export default async function DashboardPage() {
     where: highRiskWhere,
   });
 
-  const highRiskRate = totalPatients
-    ? Math.round((highRiskCount / totalPatients) * 100)
-    : 0;
+  const retinaSettings = getDefaultRetinaSettings();
+
+  const criticalMonitoringPatients = (() => {
+    type Row = {
+      id: string;
+      fullName: string;
+      risk: string | null;
+      latestAt: number;
+    };
+    const rows = new Map<string, Row>();
+
+    const upsert = (
+      id: string,
+      fullName: string,
+      risk: string | null,
+      latestAt: Date | null | undefined,
+    ) => {
+      const t = latestAt?.getTime() ?? 0;
+      const cur = rows.get(id);
+      if (!cur || t > cur.latestAt) {
+        rows.set(id, { id, fullName, risk, latestAt: t });
+      }
+    };
+
+    for (const patient of alertPatients) {
+      const latest = patient.analyses[0];
+      if (
+        latest &&
+        isCriticalAlertCandidate(
+          patient.risk,
+          latest.confidence,
+          retinaSettings,
+          {
+            drFeedback: latest.drFeedback,
+            octDrFeedback: latest.octDrFeedback,
+            ffaDrFeedback: latest.ffaDrFeedback,
+          },
+        )
+      ) {
+        upsert(patient.id, patient.fullName, patient.risk, latest.createdAt);
+      }
+    }
+
+    for (const patient of highRiskPatients) {
+      upsert(
+        patient.id,
+        patient.fullName,
+        patient.risk,
+        patient.analyses[0]?.createdAt,
+      );
+    }
+
+    return Array.from(rows.values())
+      .sort((a, b) => b.latestAt - a.latestAt)
+      .slice(0, 10);
+  })();
 
   const dashboardAlertPatients = alertPatients.map((patient) => {
     const latest = patient.analyses[0];
-    const fb = latest?.drFeedback?.trim();
-    const finalRisk =
-      fb && !isDoctorApprovalToken(fb)
-        ? fb
-        : latest?.aiResult?.trim() || patient.risk;
 
     return {
       id: patient.id,
       fullName: patient.fullName,
-      risk: finalRisk,
+      risk: patient.risk ?? "",
       latestAnalysisAt: latest?.createdAt.toISOString() ?? null,
       latestConfidence: latest?.confidence ?? null,
+      latestFeedback: latest
+        ? {
+            drFeedback: latest.drFeedback,
+            octDrFeedback: latest.octDrFeedback,
+            ffaDrFeedback: latest.ffaDrFeedback,
+          }
+        : null,
     };
   });
 
@@ -255,14 +317,11 @@ export default async function DashboardPage() {
                 <AlertTriangle className="h-5 w-5 text-amber-600" />
                 {homeT.critical.title}
               </CardTitle>
-              <CardDescription className="text-slate-600">
-                {homeT.critical.rate.replace("{{rate}}", String(highRiskRate))}
-              </CardDescription>
             </CardHeader>
 
             <CardContent className="space-y-3 pt-4">
-              {highRiskPatients.length > 0 ? (
-                highRiskPatients.map((p: (typeof highRiskPatients)[number]) => (
+              {criticalMonitoringPatients.length > 0 ? (
+                criticalMonitoringPatients.map((p) => (
                   <Link
                     key={p.id}
                     href={`/dashboard/hastalar/${p.id}`}
@@ -272,8 +331,8 @@ export default async function DashboardPage() {
                       <span className="text-sm font-semibold text-slate-900">
                         {p.fullName}
                       </span>
-                      <span className="rounded-md bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
-                        {p.risk}
+                      <span className="max-w-[min(100%,14rem)] text-right break-words rounded-md bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                        {formatPatientRiskForUi(p.risk ?? "", riskUiLocale)}
                       </span>
                     </div>
                   </Link>

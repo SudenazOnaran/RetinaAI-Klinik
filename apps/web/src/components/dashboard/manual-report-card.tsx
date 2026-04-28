@@ -17,7 +17,7 @@ import { saveAnalysisAction } from "@/app/actions/save-analysis";
 import { isStaleServerActionError } from "@/lib/server-action-client";
 import { type AiAnalysisDraft } from "@/components/dashboard/image-analysis-card";
 import { AiAnalysisPanel } from "@/components/dashboard/ai-analysis-panel";
-import { ClipboardPlus, Sparkles, X } from "lucide-react";
+import { ClipboardPlus, Microscope } from "lucide-react";
 import { useTranslation } from "@/components/providers/i18n-provider";
 import {
   DR_STAGE_LABELS_EN,
@@ -26,6 +26,9 @@ import {
   resolveDrLabelToStoredForm,
 } from "@/lib/dr-stage-labels";
 import { REPORT_SECTION_MAX_LEN } from "@/lib/dataset/analysis-report-sections";
+import { modalityDrFeedbackForStorage } from "@/lib/doctor-feedback";
+
+export type ManualReportCardMode = "clinical" | "radiological";
 
 type ManualReportCardProps = {
   patientId: string;
@@ -37,6 +40,8 @@ type ManualReportCardProps = {
     risk?: string | null;
   };
   doctorName?: string;
+  /** clinical: yalnızca metin formu; radiological: Fundus/OCT/FFA AI paneli */
+  mode?: ManualReportCardMode;
 };
 
 const MAX_FIELD_LENGTH = REPORT_SECTION_MAX_LEN;
@@ -45,6 +50,7 @@ export function ManualReportCard({
   patientId,
   patientInfo,
   doctorName,
+  mode = "clinical",
 }: ManualReportCardProps) {
   const router = useRouter();
   const { t, locale } = useTranslation();
@@ -61,38 +67,86 @@ export function ManualReportCard({
   const [reportDate, setReportDate] = useState(
     new Date().toISOString().slice(0, 10),
   );
+  const [octImageDataUrl, setOctImageDataUrl] = useState<string | null>(null);
+  const [ffaImageDataUrl, setFfaImageDataUrl] = useState<string | null>(null);
+  const [modalityPanelKey, setModalityPanelKey] = useState(0);
+  const [octDoctorFeedback, setOctDoctorFeedback] = useState("");
+  const [ffaDoctorFeedback, setFfaDoctorFeedback] = useState("");
+  const [modalityAppendixOct, setModalityAppendixOct] = useState("");
+  const [modalityAppendixFfa, setModalityAppendixFfa] = useState("");
 
-  const appendToExamFindings = useCallback(
-    (block: string) => {
-      setExamFindings((prev) => {
-        const trimmed = prev.trim();
-        const next = trimmed ? `${trimmed}\n\n${block}` : block;
-        if (next.length > MAX_FIELD_LENGTH) {
+  const appendOctToReport = useCallback(
+    (text: string) => {
+      setModalityAppendixOct((prev) => {
+        const next = prev.trim() ? `${prev.trim()}\n\n━━━\n\n${text}` : text;
+        if (next.length > REPORT_SECTION_MAX_LEN) {
           toast({
             variant: "destructive",
             title: t("aiAnalysisPanel.appendLimitTitle"),
-            description: t("aiAnalysisPanel.appendLimitDesc", {
-              max: MAX_FIELD_LENGTH,
+            description: t("aiAnalysisPanel.appendModalityDesc", {
+              max: REPORT_SECTION_MAX_LEN,
             }),
-            duration: 6000,
           });
           return prev;
         }
         return next;
       });
     },
-    [t, toast],
+    [toast, t],
+  );
+
+  const appendFfaToReport = useCallback(
+    (text: string) => {
+      setModalityAppendixFfa((prev) => {
+        const next = prev.trim() ? `${prev.trim()}\n\n━━━\n\n${text}` : text;
+        if (next.length > REPORT_SECTION_MAX_LEN) {
+          toast({
+            variant: "destructive",
+            title: t("aiAnalysisPanel.appendLimitTitle"),
+            description: t("aiAnalysisPanel.appendModalityDesc", {
+              max: REPORT_SECTION_MAX_LEN,
+            }),
+          });
+          return prev;
+        }
+        return next;
+      });
+    },
+    [toast, t],
   );
 
   const handleSave = async () => {
     setBusy(true);
     try {
+      if (mode === "radiological") {
+        const hasAnyModality =
+          Boolean(aiDraft?.originalImage?.trim()) ||
+          Boolean(octImageDataUrl) ||
+          Boolean(ffaImageDataUrl);
+        if (!hasAnyModality) {
+          toast({
+            variant: "destructive",
+            title: t("radiologicalReport.validationTitle"),
+            description: t("radiologicalReport.validationBody"),
+            duration: 7000,
+          });
+          setBusy(false);
+          return;
+        }
+      }
+
       const exceededField = [
         { label: t("manualReport.anamnesis"), value: anamnesis },
         { label: t("manualReport.examFindings"), value: examFindings },
         { label: t("manualReport.labResults"), value: labResults },
-        { label: t("manualReport.clinicalAssessment"), value: clinicalAssessment },
-        { label: t("manualReport.treatment"), value: treatmentRecommendations },
+        {
+          label: t("manualReport.clinicalAssessment"),
+          value: clinicalAssessment,
+        },
+        {
+          label: t("manualReport.treatment"),
+          value: treatmentRecommendations,
+        },
         { label: t("manualReport.doctorNotes"), value: doctorNotes },
       ].find((field) => field.value.length > MAX_FIELD_LENGTH);
 
@@ -106,48 +160,109 @@ export function ManualReportCard({
         locale === "tr" ? DR_STAGE_LABELS_TR[0] : DR_STAGE_LABELS_EN[0];
       const riskForSave =
         resolveDrLabelToStoredForm(patientInfo.risk, locale) ?? defaultEvre0;
+
       const resolvedAiOnly =
         aiDraft?.aiResult != null && String(aiDraft.aiResult).trim() !== ""
           ? resolveDrLabelToStoredForm(aiDraft.aiResult, locale)
           : null;
       const aiResultForDb = resolvedAiOnly ?? riskForSave;
+      const correctionLabelSources =
+        aiDraft?.correctionLabels != null && aiDraft.correctionLabels.length > 0
+          ? aiDraft.correctionLabels
+          : aiDraft?.correctionLabel != null &&
+              String(aiDraft.correctionLabel).trim() !== ""
+            ? [String(aiDraft.correctionLabel).trim()]
+            : [];
       const resolvedCorrection =
-        aiDraft?.correctionLabel != null &&
-        String(aiDraft.correctionLabel).trim() !== ""
-          ? resolveDrLabelToStoredForm(aiDraft.correctionLabel, locale)
+        correctionLabelSources.length > 0
+          ? correctionLabelSources
+              .map((lbl) =>
+                resolveDrLabelToStoredForm(String(lbl).trim(), locale),
+              )
+              .filter(Boolean)
+              .join("\n")
           : null;
       const finalConfidence =
         typeof aiDraft?.confidence === "number" ? aiDraft.confidence : 0;
 
-      const aiSummary = aiDraft
-        ? [
-            `${t("manualReport.aiResult")}: ${formatDrLabelForDisplay(aiDraft.aiResult, locale)}`,
-            `${t("manualReport.aiConfidence")}: %${Math.round((aiDraft.confidence || 0) * 100)}`,
-            `${t("manualReport.aiCorrection")}: ${aiDraft.correctionLabel ? formatDrLabelForDisplay(aiDraft.correctionLabel, locale) : t("manualReport.none")}`,
-          ].join(" | ")
-        : t("manualReport.aiNotIncluded");
+      const aiIncludedRadiological =
+        Boolean(aiDraft) || Boolean(octImageDataUrl || ffaImageDataUrl);
+
+      let aiSummary =
+        mode === "clinical"
+          ? t("manualReport.aiNotIncluded")
+          : aiDraft
+            ? [
+                `${t("manualReport.aiResult")}: ${formatDrLabelForDisplay(aiDraft.aiResult, locale)}`,
+                `${t("manualReport.aiConfidence")}: %${Math.round((aiDraft.confidence || 0) * 100)}`,
+                `${t("manualReport.aiCorrection")}: ${correctionLabelSources.length > 0 ? correctionLabelSources.map((lbl) => formatDrLabelForDisplay(String(lbl).trim(), locale)).join(" · ") : t("manualReport.none")}`,
+                ...(aiDraft.analysisNotes?.trim()
+                  ? [
+                      `${t("radiologicalReport.analysisNotesSummaryTag")}: ${aiDraft.analysisNotes.trim()}`,
+                    ]
+                  : []),
+              ].join(" | ")
+            : [
+                t("radiologicalReport.summaryFundusSkipped"),
+                octImageDataUrl ? t("radiologicalReport.summaryOctYes") : "",
+                ffaImageDataUrl ? t("radiologicalReport.summaryFfaYes") : "",
+              ]
+                .filter(Boolean)
+                .join(" | ");
+
+      const reportKind =
+        mode === "clinical"
+          ? ("clinical_manual" as const)
+          : ("radiological_ai" as const);
+
+      const reportTitleResolved =
+        mode === "radiological"
+          ? t("radiologicalReport.defaultTitle")
+          : reportTitle.trim() || t("manualReport.defaultTitle");
+      const reportSectionsPayload =
+        mode === "radiological"
+          ? {
+              reportTitle: reportTitleResolved,
+              reportDate: reportDate || "-",
+              doctorDisplayName: doctorName || t("manualReport.notSpecified"),
+              anamnesis: "-",
+              examFindings: "-",
+              labResults: "-",
+              clinicalAssessment: "-",
+              treatmentRecommendations: "-",
+              doctorNotes: "-",
+            }
+          : {
+              reportTitle: reportTitleResolved,
+              reportDate: reportDate || "-",
+              doctorDisplayName: doctorName || t("manualReport.notSpecified"),
+              anamnesis: anamnesis.trim() || "-",
+              examFindings: examFindings.trim() || "-",
+              labResults: labResults.trim() || "-",
+              clinicalAssessment: clinicalAssessment.trim() || "-",
+              treatmentRecommendations: treatmentRecommendations.trim() || "-",
+              doctorNotes: doctorNotes.trim() || "-",
+            };
 
       const saveResult = await saveAnalysisAction({
         patientId,
         aiResult: aiResultForDb,
         confidence: finalConfidence,
-        heatmapUrl: aiDraft?.heatmapUrl,
-        originalImage: aiDraft?.originalImage,
-        aiOdriLabels: aiDraft?.aiOdriLabels,
-        aiOdriConfidences: aiDraft?.aiOdriConfidences,
-        reportSections: {
-          reportTitle: reportTitle.trim() || t("manualReport.defaultTitle"),
-          reportDate: reportDate || "-",
-          doctorDisplayName: doctorName || t("manualReport.notSpecified"),
-          anamnesis: anamnesis.trim() || "-",
-          examFindings: examFindings.trim() || "-",
-          labResults: labResults.trim() || "-",
-          clinicalAssessment: clinicalAssessment.trim() || "-",
-          treatmentRecommendations: treatmentRecommendations.trim() || "-",
-          doctorNotes: doctorNotes.trim() || "-",
-        },
+        heatmapUrl: mode === "radiological" ? aiDraft?.heatmapUrl : undefined,
+        originalImage:
+          mode === "radiological" ? aiDraft?.originalImage : undefined,
+        octImage:
+          mode === "radiological" ? (octImageDataUrl ?? undefined) : undefined,
+        ffaImage:
+          mode === "radiological" ? (ffaImageDataUrl ?? undefined) : undefined,
+        aiOdriLabels:
+          mode === "radiological" ? aiDraft?.aiOdriLabels : undefined,
+        aiOdriConfidences:
+          mode === "radiological" ? aiDraft?.aiOdriConfidences : undefined,
+        reportSections: reportSectionsPayload,
         reportMeta: {
-          aiIncluded: Boolean(aiDraft),
+          reportKind,
+          aiIncluded: mode === "clinical" ? false : aiIncludedRadiological,
           patientInfo: {
             fullName: patientInfo.fullName,
             tcNo: patientInfo.tcNo,
@@ -155,10 +270,24 @@ export function ManualReportCard({
             gender: patientInfo.gender ?? null,
           },
           aiSummary,
+          modalityAppendixOct: modalityAppendixOct.trim(),
+          modalityAppendixFfa: modalityAppendixFfa.trim(),
         },
-        ilaclar: treatmentRecommendations.trim(),
+        ilaclar:
+          mode === "radiological" ? "-" : treatmentRecommendations.trim(),
         drFeedback: resolvedCorrection ?? undefined,
-        aiInferenceSnapshot: aiDraft?.aiInferenceSnapshot ?? undefined,
+        octDrFeedback:
+          mode === "radiological"
+            ? modalityDrFeedbackForStorage(octDoctorFeedback)
+            : undefined,
+        ffaDrFeedback:
+          mode === "radiological"
+            ? modalityDrFeedbackForStorage(ffaDoctorFeedback)
+            : undefined,
+        aiInferenceSnapshot:
+          mode === "radiological"
+            ? (aiDraft?.aiInferenceSnapshot ?? undefined)
+            : undefined,
       });
 
       if (!saveResult?.ok) {
@@ -167,9 +296,10 @@ export function ManualReportCard({
 
       toast({
         title: t("manualReport.toastSavedTitle"),
-        description: aiDraft
-          ? t("manualReport.toastSavedWithAi")
-          : t("manualReport.toastSavedNoAi"),
+        description:
+          mode === "radiological"
+            ? t("radiologicalReport.toastSavedDesc")
+            : t("manualReport.toastSavedNoAi"),
         duration: 4000,
       });
 
@@ -182,6 +312,13 @@ export function ManualReportCard({
       setReportTitle("");
       setReportDate(new Date().toISOString().slice(0, 10));
       setAiDraft(null);
+      setOctImageDataUrl(null);
+      setFfaImageDataUrl(null);
+      setModalityPanelKey((k) => k + 1);
+      setOctDoctorFeedback("");
+      setFfaDoctorFeedback("");
+      setModalityAppendixOct("");
+      setModalityAppendixFfa("");
       router.refresh();
     } catch (error) {
       const errorMessage =
@@ -204,46 +341,66 @@ export function ManualReportCard({
     }
   };
 
+  if (mode === "radiological") {
+    return (
+      <Card className="min-w-0 w-full border border-[#d8e0df] bg-white shadow-sm">
+        <CardHeader className="border-b border-slate-100">
+          <CardTitle className="flex items-center gap-2 text-slate-900">
+            <Microscope className="h-5 w-5 text-[var(--retina-primary)]" />
+            {t("radiologicalReport.panelTitle")}
+          </CardTitle>
+          <CardDescription className="space-y-2">
+            <span>{t("radiologicalReport.panelDescription")}</span>
+            <span className="block text-sm text-slate-600">
+              {t("radiologicalReport.workflowBelowPanel")}
+            </span>
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4 pt-4">
+          <AiAnalysisPanel
+            patientId={patientId}
+            patientInfo={patientInfo}
+            doctorName={doctorName}
+            onFundusDraftChange={setAiDraft}
+            onAppendOctToReport={appendOctToReport}
+            onAppendFfaToReport={appendFfaToReport}
+            onOctReportImageChange={setOctImageDataUrl}
+            onFfaReportImageChange={setFfaImageDataUrl}
+            modalityRemountKey={modalityPanelKey}
+            octDoctorFeedback={octDoctorFeedback}
+            onOctDoctorFeedbackChange={setOctDoctorFeedback}
+            ffaDoctorFeedback={ffaDoctorFeedback}
+            onFfaDoctorFeedbackChange={setFfaDoctorFeedback}
+          />
+          <div className="flex justify-end border-t border-slate-100 pt-4">
+            <Button
+              onClick={handleSave}
+              disabled={busy}
+              className="min-w-[200px] rounded-lg bg-[var(--retina-primary)] px-5 text-white shadow-sm transition-all duration-200 hover:bg-[var(--retina-primary-deep)] hover:shadow-md"
+            >
+              {busy
+                ? t("manualReport.saving")
+                : t("radiologicalReport.saveButton")}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start">
+    <div className="grid grid-cols-1 gap-4 lg:items-start">
       <Card className="min-w-0 w-full border border-[#d8e0df] bg-white shadow-sm">
         <CardHeader className="border-b border-slate-100">
           <CardTitle className="flex items-center gap-2 text-slate-900">
             <ClipboardPlus className="h-5 w-5 text-[var(--retina-primary)]" />
             {t("manualReport.editorTitle")}
           </CardTitle>
-          <CardDescription>{t("manualReport.editorDescription")}</CardDescription>
+          <CardDescription>
+            {t("manualReport.editorDescriptionClinical")}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 pt-4">
-          {aiDraft ? (
-            <div className="flex items-start justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
-              <div>
-                <p className="flex items-center gap-2 font-medium">
-                  <Sparkles className="h-4 w-4" />{" "}
-                  {t("manualReport.aiWillInclude")}
-                </p>
-                <p className="mt-1 text-xs text-emerald-800">
-                  {t("manualReport.resultPrefix")}{" "}
-                  {aiDraft.correctionLabel || aiDraft.aiResult} |{" "}
-                  {t("manualReport.confidencePrefix")} %
-                  {Math.round((aiDraft.confidence || 0) * 100)}
-                </p>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 px-2 text-emerald-900 hover:bg-emerald-100"
-                onClick={() => setAiDraft(null)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          ) : (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-              {t("manualReport.aiOptionalHintEditor")}
-            </div>
-          )}
-
           <div className="grid gap-3 md:grid-cols-2">
             <label className="space-y-1 text-sm text-slate-700 md:col-span-2">
               <span>{t("manualReport.reportTitle")}</span>
@@ -293,12 +450,14 @@ export function ManualReportCard({
 
           <label className="block space-y-1 text-sm text-slate-700">
             <span>{t("manualReport.examFindings")}</span>
+
             <Textarea
               value={examFindings}
               onChange={(e) => setExamFindings(e.target.value)}
               placeholder={t("manualReport.examFindingsPlaceholder")}
               rows={4}
               maxLength={MAX_FIELD_LENGTH}
+              className="leading-relaxed"
             />
           </label>
 
@@ -352,25 +511,11 @@ export function ManualReportCard({
               disabled={busy}
               className="min-w-[200px] rounded-lg bg-[var(--retina-primary)] px-5 text-white shadow-sm transition-all duration-200 hover:bg-[var(--retina-primary-deep)] hover:shadow-md"
             >
-              {busy
-                ? t("manualReport.saving")
-                : aiDraft
-                  ? t("manualReport.saveWithAi")
-                  : t("manualReport.save")}
+              {busy ? t("manualReport.saving") : t("manualReport.save")}
             </Button>
           </div>
         </CardContent>
       </Card>
-
-      <aside className="min-w-0 w-full space-y-1 lg:sticky lg:top-4 lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto lg:overflow-x-hidden">
-        <AiAnalysisPanel
-          patientId={patientId}
-          patientInfo={patientInfo}
-          doctorName={doctorName}
-          onFundusDraftChange={setAiDraft}
-          onAppendExamFindings={appendToExamFindings}
-        />
-      </aside>
     </div>
   );
 }

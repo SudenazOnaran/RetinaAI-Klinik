@@ -3,6 +3,7 @@
 import { useId, useState } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Card,
   CardContent,
@@ -33,6 +34,14 @@ import {
   stripPredictResponseForStorage,
   type AiInferenceSnapshot,
 } from "@/lib/dataset/snapshot";
+import { ANALYSIS_NOTES_MAX_LEN } from "@/lib/dataset/analysis-report-sections";
+import {
+  RadiologicalAiSummaryOneLine,
+  RadiologicalAnalysisTimestamp,
+  RadiologicalClinicalDetailCollapsible,
+  RadiologicalMedicalDisclaimer,
+  RadiologicalReadyBanner,
+} from "@/components/dashboard/radiological-modality-blocks";
 
 const FUNDUS_I18N: Record<Locale, Record<string, string>> = {
   tr: {
@@ -145,7 +154,12 @@ export type AiAnalysisDraft = {
   originalImage?: string;
   aiOdriLabels?: string[];
   aiOdriConfidences?: number[];
+  /** Tek seçim (geri uyumluluk); `correctionLabels` varsa göz ardı edilir */
   correctionLabel?: string;
+  /** Birden fazla evre/hastalık düzeltmesi */
+  correctionLabels?: string[];
+  /** Opsiyonel fundus analiz notları (radyolojik özet) */
+  analysisNotes?: string;
   /** Veri seti: /predict yapısal çıktısı (heatmap base64 hariç) */
   aiInferenceSnapshot?: AiInferenceSnapshot | null;
 };
@@ -179,8 +193,13 @@ export function ImageAnalysisCard({
   const [result, setResult] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
-  const [actualResult, setActualResult] = useState("");
+  /** «Hayır» dalında birden çok evre seçimi */
+  const [correctionSelections, setCorrectionSelections] = useState<string[]>([]);
   const [isAddedToForm, setIsAddedToForm] = useState(false);
+  const [analysisCompletedAt, setAnalysisCompletedAt] = useState<Date | null>(
+    null,
+  );
+  const [analysisNotes, setAnalysisNotes] = useState("");
 
   const { toast } = useToast();
 
@@ -191,8 +210,10 @@ export function ImageAnalysisCard({
     setPreviewUrl(URL.createObjectURL(f));
     setResult(null);
     setIsCorrect(null);
-    setActualResult("");
+    setCorrectionSelections([]);
     setIsAddedToForm(false);
+    setAnalysisCompletedAt(null);
+    setAnalysisNotes("");
     onDraftChange?.(null);
 
     const reader = new FileReader();
@@ -220,6 +241,7 @@ export function ImageAnalysisCard({
       if (res.ok && data.success) {
         setResult(data);
         setIsAddedToForm(false);
+        setAnalysisCompletedAt(new Date());
         onAnalysisSuccess?.();
       } else if (data.queued) {
         toast({
@@ -275,12 +297,14 @@ export function ImageAnalysisCard({
     setBase64Image(null);
     setResult(null);
     setIsCorrect(null);
-    setActualResult("");
+    setCorrectionSelections([]);
     setIsAddedToForm(false);
+    setAnalysisCompletedAt(null);
+    setAnalysisNotes("");
     onDraftChange?.(null);
   };
 
-  const publishDraft = (correction?: string) => {
+  const publishDraft = () => {
     if (!result) return;
     const aiResultStored =
       resolveDrLabelToStoredForm(result.pytorch?.label, locale) ??
@@ -294,7 +318,11 @@ export function ImageAnalysisCard({
       originalImage: base64Image || "",
       aiOdriLabels: odirVisible.map((r) => String(r.label ?? "")),
       aiOdriConfidences: odirVisible.map((r) => Number(r.confidence ?? 0)),
-      correctionLabel: correction?.trim() || undefined,
+      correctionLabels:
+        isCorrect === false && correctionSelections.length > 0
+          ? correctionSelections
+          : undefined,
+      analysisNotes: analysisNotes.trim() || undefined,
       aiInferenceSnapshot: aiInferenceSnapshot ?? undefined,
     };
     onDraftChange?.(draft);
@@ -382,8 +410,8 @@ export function ImageAnalysisCard({
                 className={`relative w-full ${
                   compact
                     ? result
-                      ? "h-[min(40vh,380px)] min-h-[220px] sm:min-h-[260px]"
-                      : "h-[min(52vh,480px)] min-h-[300px] sm:min-h-[360px]"
+                      ? "h-[min(44vh,480px)] min-h-[260px] sm:min-h-[300px]"
+                      : "h-[min(56vh,560px)] min-h-[320px] sm:min-h-[380px]"
                     : "h-[320px] md:h-[420px]"
                 }`}
               >
@@ -426,57 +454,40 @@ export function ImageAnalysisCard({
 
         {result && (
           <div className="space-y-4">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs leading-relaxed text-slate-700">
-              {t("analysisCard.clinicalAssistiveDisclaimer")}
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="rounded-2xl border border-cyan-100 bg-gradient-to-br from-cyan-700 to-blue-700 p-5 text-white shadow-lg">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-100">
-                  {t("analysisCard.summary")}
-                </p>
-                <p className="mt-3 text-3xl font-bold leading-tight">
-                  {drLabelTr(
-                    result.pytorch?.label || getStorageDrLabel(0, locale),
-                    locale,
-                  )}
-                </p>
-                <p className="mt-4 rounded-lg bg-white/15 px-3 py-2 text-sm font-medium">
-                  {t("analysisCard.confidencePrefix")}
-                  {(Number(result.pytorch?.confidence || 0) * 100).toFixed(1)}
-                </p>
-
-                {(() => {
-                  const rows = visibleOdirResultRows(result.odir?.results);
-                  return rows.length > 0 ? (
-                    <div className="mt-3 rounded-lg bg-white/10 px-3 py-2 text-xs text-cyan-100">
-                      {t("analysisCard.extraRisks")}{" "}
-                      {rows
-                        .slice(0, 6)
-                        .map(
-                          (r: { label?: string; confidence?: number }) =>
-                            `${displayOdirLabel(String(r.label || ""), t)} (%${(Number(r.confidence || 0) * 100).toFixed(0)})`,
-                        )
-                        .join(", ")}
-                    </div>
-                  ) : null;
-                })()}
+            {compact ? (
+              <>
+                <RadiologicalMedicalDisclaimer className="text-[11px]" />
+                {analysisCompletedAt ? (
+                  <RadiologicalAnalysisTimestamp at={analysisCompletedAt} />
+                ) : null}
+              </>
+            ) : (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-xs leading-relaxed text-slate-700">
+                {t("analysisCard.clinicalAssistiveDisclaimer")}
               </div>
+            )}
+
+            <div className="space-y-4">
+              <RadiologicalAiSummaryOneLine
+                diseaseLabel={drLabelTr(
+                  result.pytorch?.label || getStorageDrLabel(0, locale),
+                  locale,
+                )}
+                confidencePct={Number(result.pytorch?.confidence || 0) * 100}
+              />
 
               {result.heatmapPlus ? (
-                <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-950 shadow-lg">
-                  <div className="border-b border-slate-800 bg-slate-900/80 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-cyan-200">
+                <div className="mx-auto w-full max-w-[220px] overflow-hidden rounded-2xl border border-slate-200 bg-slate-950 shadow-lg">
+                  <div className="border-b border-slate-800 bg-slate-900/80 px-3 py-1.5 text-center text-[10px] font-semibold uppercase tracking-[0.1em] text-cyan-200">
                     {t("analysisCard.heatmapTitle")}
                   </div>
-                  <div
-                    className={`relative w-full ${compact ? "h-[min(36vh,320px)] min-h-[200px] sm:h-[min(40vh,340px)]" : "h-[260px] md:h-[300px]"}`}
-                  >
+                  <div className="relative aspect-square w-full max-h-[220px] min-h-[140px]">
                     <Image
                       src={result.heatmapPlus}
                       alt={t("analysisCard.heatmapAlt")}
                       fill
                       unoptimized
-                      sizes="(max-width: 768px) 100vw, 50vw"
+                      sizes="220px"
                       className="object-contain"
                     />
                   </div>
@@ -489,11 +500,17 @@ export function ImageAnalysisCard({
               result.fundusFindings ||
               result.clinicalDecision ||
               result.dmeSuspected ||
-              result.uncertaintyNote) && (
-              <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:p-5">
-                <p className="text-sm font-semibold text-slate-900">
-                  {t("analysisCard.detailTitle")}
-                </p>
+              result.uncertaintyNote ||
+              visibleOdirResultRows(result.odir?.results).length > 0) && (
+              <RadiologicalClinicalDetailCollapsible
+                title={
+                  compact
+                    ? t("radiologicalReport.clinicalDetailTitle")
+                    : t("analysisCard.detailTitle")
+                }
+                defaultOpen
+              >
+              <div className="max-h-[min(56vh,480px)] space-y-4 overflow-y-auto text-sm md:space-y-5">
 
                 {result.drLabel ? (
                   <div>
@@ -563,6 +580,26 @@ export function ImageAnalysisCard({
                     </p>
                   )}
                 </div>
+
+                {(() => {
+                  const rows = visibleOdirResultRows(result.odir?.results);
+                  return rows.length > 0 ? (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        {t("analysisCard.extraRisks")}
+                      </p>
+                      <p className="mt-1 text-sm leading-relaxed text-slate-800">
+                        {rows
+                          .slice(0, 8)
+                          .map(
+                            (r: { label?: string; confidence?: number }) =>
+                              `${displayOdirLabel(String(r.label || ""), t)} (%${(Number(r.confidence || 0) * 100).toFixed(0)})`,
+                          )
+                          .join(", ")}
+                      </p>
+                    </div>
+                  ) : null;
+                })()}
 
                 {result.clinicalDecision &&
                 typeof result.clinicalDecision === "object" ? (
@@ -639,24 +676,29 @@ export function ImageAnalysisCard({
                   </div>
                 ) : null}
               </div>
+              </RadiologicalClinicalDetailCollapsible>
             )}
           </div>
         )}
 
         {result ? (
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-            <div className="flex items-center gap-2 font-medium">
-              <CheckCircle2 className="h-4 w-4" />
-              {isAddedToForm
-                ? t("analysisCard.addedShort")
-                : t("analysisCard.readyHint")}
+          compact ? (
+            <RadiologicalReadyBanner addedToReport={isAddedToForm} />
+          ) : (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+              <div className="flex items-center gap-2 font-medium">
+                <CheckCircle2 className="h-4 w-4" />
+                {isAddedToForm
+                  ? t("analysisCard.addedShort")
+                  : t("analysisCard.readyHint")}
+              </div>
+              <p className="mt-1 text-xs text-emerald-700">
+                {isAddedToForm
+                  ? t("analysisCard.addedFlowHint")
+                  : t("analysisCard.validationHint")}
+              </p>
             </div>
-            <p className="mt-1 text-xs text-emerald-700">
-              {isAddedToForm
-                ? t("analysisCard.addedFlowHint")
-                : t("analysisCard.validationHint")}
-            </p>
-          </div>
+          )
         ) : null}
       </CardContent>
 
@@ -685,7 +727,7 @@ export function ImageAnalysisCard({
                   }`}
                   onClick={() => {
                     setIsCorrect(true);
-                    setActualResult("");
+                    setCorrectionSelections([]);
                     setIsAddedToForm(false);
                   }}
                 >
@@ -712,37 +754,81 @@ export function ImageAnalysisCard({
                 <span className="mb-2 block text-sm font-semibold uppercase tracking-[0.08em] text-rose-700">
                   {t("analysisCard.correctionTitle")}
                 </span>
-                <select
-                  className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium outline-none transition focus:border-cyan-500"
-                  value={actualResult}
-                  onChange={(e) => {
-                    const next = e.target.value;
-                    setActualResult(next);
-                    setIsAddedToForm(false);
-                  }}
-                >
-                  <option value="">{t("analysisCard.correctionPlaceholder")}</option>
+                <p className="mb-3 text-xs text-rose-800/90">
+                  {t("analysisCard.correctionMultiHint")}
+                </p>
+                <div className="grid gap-2 sm:grid-cols-2">
                   {(locale === "tr" ? DR_STAGE_LABELS_TR : DR_STAGE_LABELS_EN).map(
-                    (label) => (
-                      <option key={label} value={label}>
-                        {label.trim()}
-                      </option>
-                    ),
+                    (label) => {
+                      const v = label.trim();
+                      const checked = correctionSelections.includes(v);
+                      return (
+                        <label
+                          key={v}
+                          className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition ${
+                            checked
+                              ? "border-rose-400 bg-white shadow-sm"
+                              : "border-rose-100 bg-white/80 hover:border-rose-200"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            className="h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+                            onChange={() => {
+                              setCorrectionSelections((prev) =>
+                                prev.includes(v)
+                                  ? prev.filter((x) => x !== v)
+                                  : [...prev, v],
+                              );
+                              setIsAddedToForm(false);
+                            }}
+                          />
+                          <span>{v}</span>
+                        </label>
+                      );
+                    },
                   )}
-                </select>
+                </div>
               </div>
             )}
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <label className="block text-sm font-medium text-slate-800">
+                <span>{t("radiologicalReport.analysisNotesLabel")}</span>
+                <span className="font-normal text-slate-500">
+                  {" "}
+                  ({t("radiologicalReport.optionalTag")})
+                </span>
+                <Textarea
+                  value={analysisNotes}
+                  onChange={(e) => {
+                    setAnalysisNotes(e.target.value);
+                    setIsAddedToForm(false);
+                  }}
+                  className="mt-2 min-h-[80px] text-sm"
+                  placeholder={t("radiologicalReport.analysisNotesPlaceholder")}
+                  maxLength={ANALYSIS_NOTES_MAX_LEN}
+                />
+                <span className="mt-1 block text-[11px] text-slate-500">
+                  {analysisNotes.length}/{ANALYSIS_NOTES_MAX_LEN}
+                </span>
+              </label>
+            </div>
 
             <div className="grid gap-3 md:grid-cols-2">
               <Button
                 className="h-11 rounded-xl border border-slate-300 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-100"
-                onClick={() => publishDraft(actualResult || undefined)}
+                onClick={() => publishDraft()}
                 disabled={
-                  isCorrect === null || (isCorrect === false && !actualResult)
+                  isCorrect === null ||
+                  (isCorrect === false && correctionSelections.length === 0)
                 }
               >
                 <CheckCircle2 className="mr-2 h-4 w-4" />
-                {t("analysisCard.pushToForm")}
+                {compact
+                  ? t("radiologicalReport.appendToReport")
+                  : t("analysisCard.pushToForm")}
               </Button>
 
               <Button
@@ -750,7 +836,9 @@ export function ImageAnalysisCard({
                 onClick={resetAnalysis}
               >
                 <RefreshCw className="mr-2 h-4 w-4" />
-                {t("analysisCard.clear")}
+                {compact
+                  ? t("radiologicalReport.clearModality")
+                  : t("analysisCard.clear")}
               </Button>
             </div>
           </div>

@@ -16,6 +16,7 @@ import {
   computePlannedFollowupDate,
   daysUntil,
   isCriticalAlertCandidate,
+  type CriticalAlertLatestFeedback,
 } from "@/lib/risk-alerts";
 import { useTranslation } from "@/components/providers/i18n-provider";
 
@@ -25,6 +26,7 @@ type AlertPatient = {
   risk: string;
   latestAnalysisAt: string | null;
   latestConfidence: number | null;
+  latestFeedback?: CriticalAlertLatestFeedback | null;
 };
 
 type DashboardAlertCenterProps = {
@@ -156,6 +158,7 @@ export function DashboardAlertCenter({ patients }: DashboardAlertCenterProps) {
           patient.risk,
           patient.latestConfidence,
           settings,
+          patient.latestFeedback ?? null,
         ),
       );
 

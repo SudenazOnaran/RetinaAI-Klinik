@@ -39,20 +39,34 @@ import {
   YAxis,
 } from "recharts";
 import {
-  downloadRetinaReportPdf,
   previewRetinaReportPdf,
+  previewRetinaReportPdfViaApi,
 } from "@/lib/retina-report-pdf";
-import { loadRetinaSettingsFromStorage } from "@/lib/retina-settings";
 import { ManualReportCard } from "@/components/dashboard/manual-report-card";
+import { RadiologicalReportsList } from "@/components/dashboard/radiological-reports-list";
 import {
   formatDrLabelForDisplay,
   getDrStageIndexFromLabel,
   getStorageDrLabel,
 } from "@/lib/dr-stage-labels";
 import { isDoctorApprovalToken } from "@/lib/doctor-feedback";
+import {
+  clipReportListPreview,
+  resolveExamAndModalityText,
+} from "@/lib/report-display";
+import { resolveClinicalFinalLabelForReport } from "@/lib/report-clinical-final-label";
 import { useTranslation } from "@/components/providers/i18n-provider";
+import {
+  isClinicalReport,
+  isRadiologicalAiWorkflowReport,
+} from "@/lib/report-kind";
 
-type PatientDetailTab = "report-create" | "reports" | "progress";
+type PatientDetailTab =
+  | "report-create"
+  | "ai-analysis"
+  | "reports"
+  | "radiological-reports"
+  | "progress";
 
 /** Next.js 15: `useSearchParams` alt ağaçta kendi Suspense sınırında olmalı; aksi halde hasta sayfası istemcide çökebiliyor. */
 function PatientDetailSearchParamsSync({
@@ -66,6 +80,14 @@ function PatientDetailSearchParamsSync({
   useEffect(() => {
     if (tabParam === "reports") {
       setActiveTab("reports");
+      return;
+    }
+    if (tabParam === "radiological-reports") {
+      setActiveTab("radiological-reports");
+      return;
+    }
+    if (tabParam === "ai-analysis") {
+      setActiveTab("ai-analysis");
       return;
     }
     if (tabParam === "progression") {
@@ -102,6 +124,10 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
   };
 
   const reports = patient.analyses ?? [];
+  const clinicalReports = reports.filter((r: any) => isClinicalReport(r));
+  const radiologicalReports = reports.filter((r: any) =>
+    isRadiologicalAiWorkflowReport(r),
+  );
 
   const parseJsonArray = (value: string | null | undefined) => {
     if (!value) return [];
@@ -186,23 +212,6 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
     return report?.ilaclar || "-";
   };
 
-  const isAiIncludedInReport = (report: any) => {
-    const structured = parseStructuredReport(report?.doctorNote);
-    if (typeof structured?.aiIncluded === "boolean") {
-      return structured.aiIncluded;
-    }
-
-    const summaryText = String(structured?.aiSummary || "")
-      .trim()
-      .toLocaleLowerCase("tr-TR");
-
-    if (summaryText.includes("ai analizi eklenmedi")) {
-      return false;
-    }
-
-    return Boolean(report?.originalImage || report?.heatmapUrl);
-  };
-
   const getDoctorFeedback = (report: any) => {
     const feedback = report?.drFeedback;
 
@@ -221,14 +230,15 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
   const formatDiagnosisLabel = (label: string) =>
     formatDrLabelForDisplay(label, locale);
 
-  const resolveEffectiveDiagnosis = (report: any) => {
-    const doctorFeedback = getDoctorFeedback(report);
-    if (doctorFeedback && !isDoctorApprovalToken(doctorFeedback)) {
-      return doctorFeedback;
-    }
-    if (report?.aiResult) return report.aiResult;
-    return getStorageDrLabel(0, locale);
-  };
+  const resolveEffectiveDiagnosis = (report: any) =>
+    resolveClinicalFinalLabelForReport({
+      originalImage: report?.originalImage,
+      heatmapUrl: report?.heatmapUrl,
+      aiResult: report?.aiResult,
+      drFeedback: report?.drFeedback,
+      doctorNote: report?.doctorNote,
+      sectionClinicalAssessment: report?.sectionClinicalAssessment,
+    });
 
   const resolveAiOnlyDiagnosis = (report: any) => {
     if (report?.aiResult) return report.aiResult;
@@ -276,7 +286,8 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
         stage: score,
         stageLabel: severityLabel(score),
         delta,
-        trendType: delta < 0 ? "improvement" : delta > 0 ? "worsening" : "stable",
+        trendType:
+          delta < 0 ? "improvement" : delta > 0 ? "worsening" : "stable",
         trend:
           delta < 0
             ? t("patientDetailProgress.trendImprovement")
@@ -300,7 +311,10 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
         ? t("patientDetailProgress.netWorsening")
         : t("patientDetailProgress.netStable");
 
-  const handlePreviewReportPdf = async (report: any) => {
+  const handlePreviewReportPdf = async (
+    report: any,
+    pdfVariant: "clinical" | "radiological" = "clinical",
+  ) => {
     const labels = parseJsonArray(report.aiOdriLabels);
     const confidences = parseJsonArray(report.aiOdriConfidences);
     const odirResults = labels.map((label: string, idx: number) => ({
@@ -310,6 +324,7 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
 
     const structured = parseStructuredReport(report.doctorNote);
     const drFb = getDoctorFeedback(report);
+    const pdfLocale = (locale === "en" ? "en" : "tr") as "tr" | "en";
     const payload = {
       patientId: patient.id,
       patientInfo: {
@@ -323,23 +338,29 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
       confidence: Number(report.confidence ?? 0),
       odirResults,
       clinicalFinalResult: resolveEffectiveDiagnosis(report),
-      doctorFeedback:
-        drFb && !isDoctorApprovalToken(drFb) ? drFb : undefined,
+      doctorFeedback: drFb && !isDoctorApprovalToken(drFb) ? drFb : undefined,
       doctorNote: report.doctorNote,
       medications: getTreatmentText(report),
       originalImage: report.originalImage,
       heatmapUrl: report.heatmapUrl,
+      octImageUrl: report.octImageUrl,
+      ffaImageUrl: report.ffaImageUrl,
       reportTitle: report.reportTitle ?? structured?.reportTitle,
       reportDateLabel: report.reportDateKey ?? structured?.reportDate,
+      reportDoctorDisplayName:
+        report.reportDoctorDisplayName ?? structured?.doctorName,
+      fundusModalityActive: Boolean(
+        report?.originalImage?.trim() || report?.heatmapUrl?.trim(),
+      ),
       sectionAnamnesis: report.sectionAnamnesis,
       sectionExamFindings: report.sectionExamFindings,
       sectionLabResults: report.sectionLabResults,
       sectionClinicalAssessment: report.sectionClinicalAssessment,
       sectionTreatmentRecommendations: report.sectionTreatmentRecommendations,
       sectionDoctorNotes: report.sectionDoctorNotes,
+      pdfVariant,
+      pdfLocale,
     };
-
-    const settings = loadRetinaSettingsFromStorage();
 
     try {
       await fetch("/api/audit/log", {
@@ -349,10 +370,10 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
           action: "DOWNLOAD",
           entityType: "REPORT",
           entityId: report.id,
-          description: "Hasta detayindan PDF rapor indirildi/önizlendi",
+          description: "Hasta detayindan PDF önizlendi",
           metadata: {
             patientId: patient.id,
-            autoOpenPreview: settings.report.autoOpenPreview,
+            pdfMode: "preview",
           },
         }),
       });
@@ -360,11 +381,19 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
       // Log hatasi PDF akisina engel olmasin.
     }
 
-    if (settings.report.autoOpenPreview) {
-      await previewRetinaReportPdf(payload);
-    } else {
-      await downloadRetinaReportPdf(payload);
+    try {
+      await previewRetinaReportPdfViaApi({
+        patientId: patient.id,
+        reportId: report.id,
+        pdfVariant,
+        pdfLocale,
+      });
+      return;
+    } catch (serverPdfErr) {
+      console.warn("Sunucu PDF basarisiz, jsPDF kullaniliyor", serverPdfErr);
     }
+
+    await previewRetinaReportPdf(payload);
   };
 
   return (
@@ -373,429 +402,440 @@ export default function PatientDetailClient({ patient }: { patient: any }) {
         <PatientDetailSearchParamsSync setActiveTab={setActiveTab} />
       </Suspense>
       <div className="space-y-6 p-4 md:p-6">
-      <Card className="border border-[#d8e0df] bg-white shadow-sm">
-        <CardContent className="flex flex-col justify-between gap-4 p-6 md:flex-row md:items-center">
-          <div>
-            <h1 className="text-xl font-bold text-slate-900">
-              {patient.fullName}
-            </h1>
-            <p className="text-sm text-slate-600">
-              {t("patientDetail.tcPrefix")} {patient.tcNo} |{" "}
-              {t("patientDetail.ageLabel")} {patient.age} |{" "}
-              {t("patientDetail.diabetesDurationLabel")}{" "}
-              {patient.diabetesYears ?? "-"} | HbA1c: {patient.hba1c ?? "-"}
-            </p>
-          </div>
-
-          <Button
-            className="h-11 rounded-xl bg-[var(--retina-primary)] px-5 text-white shadow-sm transition-all duration-200 hover:bg-[var(--retina-primary-deep)] hover:shadow-md"
-            onClick={() => setEditOpen(true)}
-          >
-            {t("patientDetail.updateInfoButton")}
-          </Button>
-          <UpdatePatientDialog
-            open={editOpen}
-            onOpenChange={setEditOpen}
-            patient={patient}
-          />
-        </CardContent>
-      </Card>
-
-      <div className="flex flex-wrap gap-4">
-        <Button
-          className={tabButtonClass("report-create")}
-          variant="outline"
-          onClick={() => setActiveTab("report-create")}
-        >
-          {t("patientDetail.tabCreateReport")}
-        </Button>
-        <Button
-          className={tabButtonClass("reports")}
-          variant="outline"
-          onClick={() => setActiveTab("reports")}
-        >
-          {t("patientDetail.tabPastReports")}
-        </Button>
-        <Button
-          className={tabButtonClass("progress")}
-          variant="outline"
-          onClick={() => setActiveTab("progress")}
-        >
-          {t("patientDetail.tabDrProgression")}
-        </Button>
-      </div>
-
-      {activeTab === "report-create" ? (
         <Card className="border border-[#d8e0df] bg-white shadow-sm">
-          <CardContent className="space-y-4 p-4 md:p-5">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-              {t("patientDetail.reportCreateInfo")}
+          <CardContent className="flex flex-col justify-between gap-4 p-6 md:flex-row md:items-center">
+            <div>
+              <h1 className="text-xl font-bold text-slate-900">
+                {patient.fullName}
+              </h1>
+              <p className="text-sm text-slate-600">
+                {t("patientDetail.tcPrefix")} {patient.tcNo} |{" "}
+                {t("patientDetail.ageLabel")} {patient.age} |{" "}
+                {t("patientDetail.diabetesDurationLabel")}{" "}
+                {patient.diabetesYears ?? "-"} | HbA1c: {patient.hba1c ?? "-"}
+              </p>
             </div>
 
-            <ManualReportCard
-              patientId={patient.id}
-              patientInfo={{
-                fullName: patient.fullName,
-                tcNo: patient.tcNo,
-                age: patient.age,
-                gender: patient.gender,
-                risk: patient.risk,
-              }}
-              doctorName={patient?.doctor?.name}
+            <Button
+              className="h-11 rounded-xl bg-[var(--retina-primary)] px-5 text-white shadow-sm transition-all duration-200 hover:bg-[var(--retina-primary-deep)] hover:shadow-md"
+              onClick={() => setEditOpen(true)}
+            >
+              {t("patientDetail.updateInfoButton")}
+            </Button>
+            <UpdatePatientDialog
+              open={editOpen}
+              onOpenChange={setEditOpen}
+              patient={patient}
             />
           </CardContent>
         </Card>
-      ) : activeTab === "reports" ? (
-        <Card className="border border-[#d8e0df] bg-white shadow-sm">
-          <CardHeader className="border-b border-slate-100 bg-[#f8faf9]">
-            <CardTitle>{t("patientDetail.tabPastReports")}</CardTitle>
-            <CardDescription>
-              {t("patientDetailReports.foundRecords", { count: reports.length })}
-            </CardDescription>
-          </CardHeader>
 
-          <CardContent className="min-w-0 space-y-4 overflow-x-hidden pt-4">
-            {[...reports]
-              .sort(
-                (a: any, b: any) =>
-                  new Date(b.createdAt).getTime() -
-                  new Date(a.createdAt).getTime(),
-              )
-              .map((r: any, idx: number) => {
-                const odirLabels = parseJsonArray(r.aiOdriLabels);
-                const odirConfs = parseJsonArray(r.aiOdriConfidences);
-                const hasAiAnalysis = isAiIncludedInReport(r);
-                const aiRiskLabel = hasAiAnalysis
-                  ? formatDiagnosisLabel(resolveAiOnlyDiagnosis(r))
-                  : "-";
-                const aiConfidenceLabel =
-                  hasAiAnalysis && Number.isFinite(Number(r.confidence))
-                    ? `%${Math.round(Number(r.confidence) * 100)}`
-                    : "-";
-                const doctorFeedbackRaw = getDoctorFeedback(r);
-                const doctorFeedbackLabel =
-                  doctorFeedbackRaw &&
-                  !isDoctorApprovalToken(doctorFeedbackRaw)
-                    ? formatDiagnosisLabel(doctorFeedbackRaw)
-                    : null;
+        <div className="flex flex-wrap gap-4">
+          <Button
+            className={tabButtonClass("report-create")}
+            variant="outline"
+            onClick={() => setActiveTab("report-create")}
+          >
+            {t("patientDetail.tabCreateReport")}
+          </Button>
+          <Button
+            className={tabButtonClass("ai-analysis")}
+            variant="outline"
+            onClick={() => setActiveTab("ai-analysis")}
+          >
+            {t("patientDetail.tabAiAnalysis")}
+          </Button>
+          <Button
+            className={tabButtonClass("reports")}
+            variant="outline"
+            onClick={() => setActiveTab("reports")}
+          >
+            {t("patientDetail.tabPastReports")}
+          </Button>
+          <Button
+            className={tabButtonClass("radiological-reports")}
+            variant="outline"
+            onClick={() => setActiveTab("radiological-reports")}
+          >
+            {t("patientDetail.tabRadiologicalReports")}
+          </Button>
+          <Button
+            className={tabButtonClass("progress")}
+            variant="outline"
+            onClick={() => setActiveTab("progress")}
+          >
+            {t("patientDetail.tabDrProgression")}
+          </Button>
+        </div>
 
-                return (
-                  <div
-                    key={r.id}
-                    className={`max-w-full min-w-0 overflow-hidden rounded-xl border border-slate-200 border-l-4 p-4 shadow-sm ${getReportAccentClass(idx)}`}
-                  >
-                    <div className="mb-3 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
-                      <div className="flex items-center gap-2">
-                        <Badge
-                          variant="outline"
-                          className="border-slate-300 bg-white text-slate-700"
-                        >
-                          {t("patientDetailReports.reportNo", {
-                            no: reports.length - idx,
-                          })}
-                        </Badge>
-                        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                          {t("patientDetailReports.dateLabel")}
-                        </span>
-                        <Badge className="bg-slate-700 text-white">
-                          {format(new Date(r.createdAt), "dd MMM yyyy", {
-                            locale: locale === "en" ? undefined : tr,
-                          })}
-                        </Badge>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="border-[#b8ccd6] text-[#355769] transition-colors hover:border-[#91afbd] hover:bg-[#edf6fb] hover:text-[#24485d]"
-                        onClick={() => handlePreviewReportPdf(r)}
-                      >
-                        {t("patientDetailReports.viewPdf")}
-                      </Button>
-                    </div>
-
-                    <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-3">
-                      <div className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white p-3">
-                        <p className="text-xs font-semibold text-slate-500">
-                          {t("patientDetailReports.anamnesis")}
-                        </p>
-                        <p className="mt-1 break-words text-sm text-slate-800 [overflow-wrap:anywhere]">
-                          {getReportSectionValue(
-                            r,
-                            "anamnesis",
-                            "Klinik Öykü (Anamnez)",
-                          )}
-                        </p>
-                      </div>
-
-                      <div className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white p-3">
-                        <p className="text-xs font-semibold text-slate-500">
-                          {t("patientDetailReports.examFindings")}
-                        </p>
-                        <p className="mt-1 break-words text-sm text-slate-800 [overflow-wrap:anywhere]">
-                          {getReportSectionValue(
-                            r,
-                            "examFindings",
-                            "Muayene Bulguları",
-                          )}
-                        </p>
-                      </div>
-
-                      <div className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white p-3">
-                        <p className="text-xs font-semibold text-slate-500">
-                          {t("patientDetailReports.labResults")}
-                        </p>
-                        <p className="mt-1 break-words text-sm text-slate-800 [overflow-wrap:anywhere]">
-                          {getReportSectionValue(
-                            r,
-                            "labResults",
-                            "Laboratuvar Sonuçları",
-                          )}
-                        </p>
-                      </div>
-
-                      <div className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white p-3">
-                        <p className="text-xs font-semibold text-slate-500">
-                          {t("patientDetailReports.clinicalAssessment")}
-                        </p>
-                        <p className="mt-1 break-words text-sm text-slate-800 [overflow-wrap:anywhere]">
-                          {getReportSectionValue(
-                            r,
-                            "clinicalAssessment",
-                            "Teşhis / Klinik Değerlendirme",
-                            hasAiAnalysis
-                              ? formatDiagnosisLabel(
-                                  resolveEffectiveDiagnosis(r) || "-",
-                                )
-                              : "-",
-                          )}
-                        </p>
-                      </div>
-
-                      <div className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white p-3">
-                        <p className="text-xs font-semibold text-slate-500">
-                          {t("patientDetailReports.treatment")}
-                        </p>
-                        <p className="mt-1 break-words text-sm text-slate-800 [overflow-wrap:anywhere]">
-                          {getTreatmentText(r)}
-                        </p>
-                      </div>
-
-                      <div className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white p-3">
-                        <p className="text-xs font-semibold text-slate-500">
-                          {t("patientDetailReports.aiDrRiskConfidence")}
-                        </p>
-                        <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
-                          <Badge className="max-w-full break-words [overflow-wrap:anywhere]">
-                            {aiRiskLabel}
-                          </Badge>
-                          <Badge
-                            variant="outline"
-                            className="border-[#c5d8d3] bg-[#edf6f3] text-[#446b62]"
-                          >
-                            {aiConfidenceLabel}
-                          </Badge>
-                        </div>
-                      </div>
-
-                      {doctorFeedbackLabel ? (
-                        <div className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white p-3">
-                          <p className="text-xs font-semibold text-slate-500">
-                            {t("patientDetailReports.doctorFeedback")}
-                          </p>
-                          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
-                            <Badge
-                              variant="outline"
-                              className="max-w-full break-words border-amber-200 bg-amber-50 text-amber-900 [overflow-wrap:anywhere]"
-                            >
-                              {doctorFeedbackLabel}
-                            </Badge>
-                          </div>
-                        </div>
-                      ) : null}
-
-                      <div className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white p-3 md:col-span-2 xl:col-span-1">
-                        <p className="text-xs font-semibold text-slate-500">
-                          {t("patientDetailReports.aiOtherRiskConfidence")}
-                        </p>
-                        <p className="mt-1 break-words text-sm text-slate-800 [overflow-wrap:anywhere]">
-                          {odirLabels.length > 0
-                            ? odirLabels
-                                .map(
-                                  (label: string, i: number) =>
-                                    `${label} (%${Math.round(Number(odirConfs[i] ?? 0) * 100)})`,
-                                )
-                                .join(", ")
-                            : "-"}
-                        </p>
-                      </div>
-
-                      <div className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white p-3">
-                        <p className="text-xs font-semibold text-slate-500">
-                          {t("patientDetailReports.fundusImage")}
-                        </p>
-                        {r.originalImage ? (
-                          <Image
-                            src={r.originalImage}
-                            alt={t("patientDetailReports.fundusImage")}
-                            width={96}
-                            height={96}
-                            unoptimized
-                            className="mt-2 h-24 w-24 rounded border border-slate-200 object-cover"
-                          />
-                        ) : (
-                          <p className="mt-1 text-sm text-slate-500">-</p>
-                        )}
-                      </div>
-
-                      <div className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white p-3">
-                        <p className="text-xs font-semibold text-slate-500">
-                          {t("patientDetailReports.heatmap")}
-                        </p>
-                        {r.heatmapUrl ? (
-                          <Image
-                            src={r.heatmapUrl}
-                            alt={t("patientDetailReports.heatmap")}
-                            width={96}
-                            height={96}
-                            unoptimized
-                            className="mt-2 h-24 w-24 rounded border border-slate-200 object-cover"
-                          />
-                        ) : (
-                          <p className="mt-1 text-sm text-slate-500">-</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-4">
+        {activeTab === "report-create" ? (
           <Card className="border border-[#d8e0df] bg-white shadow-sm">
-            <CardHeader className="border-b border-slate-100">
-              <CardTitle>{t("patientDetailProgress.title")}</CardTitle>
-              <CardDescription>
-                {t("patientDetailProgress.description")}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4 pt-6">
-              {progressionData.length < 2 ? (
-                <p className="text-sm text-slate-600">
-                  {t("patientDetailProgress.minRecords")}
-                </p>
-              ) : (
-                <>
-                  <div className="grid gap-3 md:grid-cols-3">
-                    <div className="rounded-lg border border-[#d8e0df] bg-[#f8fbff] p-3">
-                      <p className="text-xs text-slate-500">
-                        {t("patientDetailProgress.latestStatus")}
-                      </p>
-                      <p className="text-base font-semibold text-slate-900">
-                        {
-                          progressionData[progressionData.length - 1]
-                            .finalDiagnosisLabel
-                        }
-                      </p>
-                    </div>
-                    <div className="rounded-lg border border-[#d8e0df] bg-[#f8fbff] p-3">
-                      <p className="text-xs text-slate-500">
-                        {t("patientDetailProgress.overallChange")}
-                      </p>
-                      <p className="text-base font-semibold text-slate-900">
-                        {netTrendLabel}
-                      </p>
-                    </div>
-                    <div className="rounded-lg border border-[#d8e0df] bg-[#f8fbff] p-3">
-                      <p className="text-xs text-slate-500">
-                        {t("patientDetailProgress.totalExams")}
-                      </p>
-                      <p className="text-base font-semibold text-slate-900">
-                        {progressionData.length}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="h-[320px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={progressionData}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="dateLabel" />
-                        <YAxis
-                          domain={[0, 4]}
-                          ticks={[0, 1, 2, 3, 4]}
-                          tickFormatter={(value) =>
-                            severityLabel(Number(value))
-                          }
-                        />
-                        <Tooltip
-                          formatter={(value: number, _name, payload: any) => [
-                            payload?.payload?.finalDiagnosisLabel ||
-                              `${severityLabel(Number(value))}`,
-                            payload?.payload?.trend ||
-                              t("patientDetailProgress.statusLabel"),
-                          ]}
-                          labelFormatter={(label) =>
-                            `${t("patientDetailProgress.dateLabel")}: ${label}`
-                          }
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="stage"
-                          stroke="#1e90ff"
-                          strokeWidth={3}
-                          activeDot={{ r: 7 }}
-                          name={t("patientDetailProgress.retinopathyLevel")}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-
-                  <div className="rounded-lg border border-[#d8e0df] bg-white">
-                    <Table>
-                      <TableHeader className="bg-slate-50">
-                        <TableRow>
-                          <TableHead>{t("patientDetailProgress.dateLabel")}</TableHead>
-                          <TableHead>{t("patientDetailProgress.colAiResult")}</TableHead>
-                          <TableHead>{t("patientDetailProgress.colFinalResult")}</TableHead>
-                          <TableHead>{t("patientDetailProgress.colChangeComment")}</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {progressionData.map((item) => (
-                          <TableRow key={item.id}>
-                            <TableCell>{item.dateLabel}</TableCell>
-                            <TableCell>
-                              <Badge>{item.aiResultLabel}</Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Badge>{item.finalDiagnosisLabel}</Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Badge
-                                className={
-                                  item.trendType === "improvement"
-                                    ? "bg-emerald-500 text-white"
-                                    : item.trendType === "worsening"
-                                      ? "bg-red-500 text-white"
-                                      : "bg-slate-500 text-white"
-                                }
-                              >
-                                {item.trend}
-                              </Badge>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </>
-              )}
+            <CardContent className="space-y-4 p-4 md:p-5">
+              <ManualReportCard
+                mode="clinical"
+                patientId={patient.id}
+                patientInfo={{
+                  fullName: patient.fullName,
+                  tcNo: patient.tcNo,
+                  age: patient.age,
+                  gender: patient.gender,
+                  risk: patient.risk,
+                }}
+                doctorName={patient?.doctor?.name}
+              />
             </CardContent>
           </Card>
-        </div>
-      )}
-    </div>
+        ) : activeTab === "ai-analysis" ? (
+          <Card className="border border-[#d8e0df] bg-white shadow-sm">
+            <CardContent className="space-y-4 p-4 md:p-5">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                {t("patientDetail.aiAnalysisInfo")}
+              </div>
+
+              <ManualReportCard
+                mode="radiological"
+                patientId={patient.id}
+                patientInfo={{
+                  fullName: patient.fullName,
+                  tcNo: patient.tcNo,
+                  age: patient.age,
+                  gender: patient.gender,
+                  risk: patient.risk,
+                }}
+                doctorName={patient?.doctor?.name}
+              />
+            </CardContent>
+          </Card>
+        ) : activeTab === "reports" ? (
+          <Card className="border border-[#d8e0df] bg-white shadow-sm">
+            <CardHeader className="border-b border-slate-100 bg-[#f8faf9]">
+              <CardTitle>{t("patientDetail.tabPastReports")}</CardTitle>
+              <CardDescription>
+                {t("patientDetailReports.foundRecords", {
+                  count: clinicalReports.length,
+                })}
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent className="min-w-0 space-y-4 overflow-x-hidden pt-4">
+              {[...clinicalReports]
+                .sort(
+                  (a: any, b: any) =>
+                    new Date(b.createdAt).getTime() -
+                    new Date(a.createdAt).getTime(),
+                )
+                .map((r: any, idx: number) => {
+                  const structuredR = parseStructuredReport(r.doctorNote);
+                  const reportTitleLine =
+                    (typeof r.reportTitle === "string" &&
+                      r.reportTitle.trim()) ||
+                    (typeof structuredR?.reportTitle === "string" &&
+                      String(structuredR.reportTitle).trim()) ||
+                    t("patientDetailReports.defaultReportTitle");
+                  const reportDoctorLine =
+                    (typeof r.reportDoctorDisplayName === "string" &&
+                      r.reportDoctorDisplayName.trim()) ||
+                    (typeof structuredR?.doctorName === "string" &&
+                      String(structuredR.doctorName).trim()) ||
+                    patient?.doctor?.name ||
+                    "—";
+
+                  const resolvedExam = resolveExamAndModalityText(
+                    r.sectionExamFindings,
+                    r.doctorNote,
+                  );
+                  const previewLen = 220;
+                  const doctorNotesDisplay =
+                    (typeof r.sectionDoctorNotes === "string" &&
+                      r.sectionDoctorNotes.trim()) ||
+                    (structuredR &&
+                      typeof structuredR.doctorNotes === "string" &&
+                      structuredR.doctorNotes.trim()) ||
+                    getLegacyFieldValue(r?.doctorNote, "Doktor Notları") ||
+                    "-";
+
+                  return (
+                    <div
+                      key={r.id}
+                      className={`max-w-full min-w-0 overflow-hidden rounded-xl border border-slate-200 border-l-4 p-4 shadow-sm ${getReportAccentClass(idx)}`}
+                    >
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            variant="outline"
+                            className="border-slate-300 bg-white text-slate-700"
+                          >
+                            {t("patientDetailReports.reportNo", {
+                              no: clinicalReports.length - idx,
+                            })}
+                          </Badge>
+                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            {t("patientDetailReports.dateLabel")}
+                          </span>
+                          <Badge className="bg-slate-700 text-white">
+                            {format(new Date(r.createdAt), "dd MMM yyyy", {
+                              locale: locale === "en" ? undefined : tr,
+                            })}
+                          </Badge>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-[#b8ccd6] text-[#355769] transition-colors hover:border-[#91afbd] hover:bg-[#edf6fb] hover:text-[#24485d]"
+                          onClick={() => handlePreviewReportPdf(r, "clinical")}
+                        >
+                          {t("patientDetailReports.viewPdf")}
+                        </Button>
+                      </div>
+
+                      <div className="mb-3 space-y-1">
+                        <p className="text-sm font-semibold text-slate-900">
+                          {t("patientDetailReports.reportTitle")}:{" "}
+                          {reportTitleLine}
+                        </p>
+                        <p className="text-xs text-slate-600">
+                          {t("patientDetailReports.reportingDoctor")}:{" "}
+                          {reportDoctorLine}
+                        </p>
+                      </div>
+
+                      <p className="mb-3 text-xs leading-relaxed text-slate-500">
+                        {t("patientDetailReports.listPreviewNote")}
+                      </p>
+
+                      <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                        <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200/90 bg-white p-3.5 shadow-sm">
+                          <p className="text-xs font-semibold text-slate-500">
+                            {t("patientDetailReports.anamnesis")}
+                          </p>
+                          <p className="mt-1.5 break-words text-sm leading-relaxed text-slate-800 [overflow-wrap:anywhere]">
+                            {clipReportListPreview(
+                              getReportSectionValue(
+                                r,
+                                "anamnesis",
+                                "Klinik Öykü (Anamnez)",
+                              ),
+                              previewLen,
+                            )}
+                          </p>
+                        </div>
+
+                        <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200/90 bg-white p-3.5 shadow-sm">
+                          <p className="text-xs font-semibold text-slate-500">
+                            {t("patientDetailReports.examFindingsCore")}
+                          </p>
+                          <p className="mt-1.5 break-words text-sm leading-relaxed text-slate-800 [overflow-wrap:anywhere]">
+                            {clipReportListPreview(
+                              resolvedExam.clinicalExam,
+                              previewLen,
+                            )}
+                          </p>
+                        </div>
+
+                        <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200/90 bg-white p-3.5 shadow-sm">
+                          <p className="text-xs font-semibold text-slate-500">
+                            {t("patientDetailReports.labResults")}
+                          </p>
+                          <p className="mt-1.5 break-words text-sm leading-relaxed text-slate-800 [overflow-wrap:anywhere]">
+                            {clipReportListPreview(
+                              getReportSectionValue(
+                                r,
+                                "labResults",
+                                "Laboratuvar Sonuçları",
+                              ),
+                              previewLen,
+                            )}
+                          </p>
+                        </div>
+
+                        <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200/90 bg-white p-3.5 shadow-sm">
+                          <p className="text-xs font-semibold text-slate-500">
+                            {t("patientDetailReports.clinicalAssessment")}
+                          </p>
+                          <p className="mt-1.5 break-words text-sm leading-relaxed text-slate-800 [overflow-wrap:anywhere]">
+                            {clipReportListPreview(
+                              getReportSectionValue(
+                                r,
+                                "clinicalAssessment",
+                                "Teşhis / Klinik Değerlendirme",
+                              ),
+                              previewLen,
+                            )}
+                          </p>
+                        </div>
+
+                        <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200/90 bg-white p-3.5 shadow-sm">
+                          <p className="text-xs font-semibold text-slate-500">
+                            {t("patientDetailReports.treatment")}
+                          </p>
+                          <p className="mt-1.5 break-words text-sm leading-relaxed text-slate-800 [overflow-wrap:anywhere]">
+                            {clipReportListPreview(
+                              getTreatmentText(r),
+                              previewLen,
+                            )}
+                          </p>
+                        </div>
+
+                        <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200/90 bg-white p-3.5 shadow-sm">
+                          <p className="text-xs font-semibold text-slate-500">
+                            {t("patientDetailReports.doctorNotesField")}
+                          </p>
+                          <p className="mt-1.5 break-words text-sm leading-relaxed text-slate-800 [overflow-wrap:anywhere]">
+                            {clipReportListPreview(
+                              doctorNotesDisplay,
+                              previewLen,
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+            </CardContent>
+          </Card>
+        ) : activeTab === "radiological-reports" ? (
+          <RadiologicalReportsList
+            reports={radiologicalReports}
+            patient={patient}
+            getReportAccentClass={getReportAccentClass}
+            onPreviewPdf={(report) =>
+              handlePreviewReportPdf(report, "radiological")
+            }
+          />
+        ) : (
+          <div className="space-y-4">
+            <Card className="border border-[#d8e0df] bg-white shadow-sm">
+              <CardHeader className="border-b border-slate-100">
+                <CardTitle>{t("patientDetailProgress.title")}</CardTitle>
+                <CardDescription>
+                  {t("patientDetailProgress.description")}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 pt-6">
+                {progressionData.length < 2 ? (
+                  <p className="text-sm text-slate-600">
+                    {t("patientDetailProgress.minRecords")}
+                  </p>
+                ) : (
+                  <>
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <div className="rounded-lg border border-[#d8e0df] bg-[#f8fbff] p-3">
+                        <p className="text-xs text-slate-500">
+                          {t("patientDetailProgress.latestStatus")}
+                        </p>
+                        <p className="text-base font-semibold text-slate-900">
+                          {
+                            progressionData[progressionData.length - 1]
+                              .finalDiagnosisLabel
+                          }
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-[#d8e0df] bg-[#f8fbff] p-3">
+                        <p className="text-xs text-slate-500">
+                          {t("patientDetailProgress.overallChange")}
+                        </p>
+                        <p className="text-base font-semibold text-slate-900">
+                          {netTrendLabel}
+                        </p>
+                      </div>
+                      <div className="rounded-lg border border-[#d8e0df] bg-[#f8fbff] p-3">
+                        <p className="text-xs text-slate-500">
+                          {t("patientDetailProgress.totalExams")}
+                        </p>
+                        <p className="text-base font-semibold text-slate-900">
+                          {progressionData.length}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="h-[320px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={progressionData}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="dateLabel" />
+                          <YAxis
+                            domain={[0, 4]}
+                            ticks={[0, 1, 2, 3, 4]}
+                            tickFormatter={(value) =>
+                              severityLabel(Number(value))
+                            }
+                          />
+                          <Tooltip
+                            formatter={(value: number, _name, payload: any) => [
+                              payload?.payload?.finalDiagnosisLabel ||
+                                `${severityLabel(Number(value))}`,
+                              payload?.payload?.trend ||
+                                t("patientDetailProgress.statusLabel"),
+                            ]}
+                            labelFormatter={(label) =>
+                              `${t("patientDetailProgress.dateLabel")}: ${label}`
+                            }
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="stage"
+                            stroke="#1e90ff"
+                            strokeWidth={3}
+                            activeDot={{ r: 7 }}
+                            name={t("patientDetailProgress.retinopathyLevel")}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    <div className="rounded-lg border border-[#d8e0df] bg-white">
+                      <Table>
+                        <TableHeader className="bg-slate-50">
+                          <TableRow>
+                            <TableHead>
+                              {t("patientDetailProgress.dateLabel")}
+                            </TableHead>
+                            <TableHead>
+                              {t("patientDetailProgress.colAiResult")}
+                            </TableHead>
+                            <TableHead>
+                              {t("patientDetailProgress.colFinalResult")}
+                            </TableHead>
+                            <TableHead>
+                              {t("patientDetailProgress.colChangeComment")}
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {progressionData.map((item) => (
+                            <TableRow key={item.id}>
+                              <TableCell>{item.dateLabel}</TableCell>
+                              <TableCell>
+                                <Badge>{item.aiResultLabel}</Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Badge>{item.finalDiagnosisLabel}</Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Badge
+                                  className={
+                                    item.trendType === "improvement"
+                                      ? "bg-emerald-500 text-white"
+                                      : item.trendType === "worsening"
+                                        ? "bg-red-500 text-white"
+                                        : "bg-slate-500 text-white"
+                                  }
+                                >
+                                  {item.trend}
+                                </Badge>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+      </div>
     </>
   );
 }

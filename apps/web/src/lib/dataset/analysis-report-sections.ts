@@ -3,6 +3,8 @@ import type { Prisma } from "@prisma/client";
 export const REPORT_FORMAT_VERSION = "manual_report_v2" as const;
 /** Manuel rapor metin alanlari (OCT/AI ciktisi icin yeterli ust sinir) */
 export const REPORT_SECTION_MAX_LEN = 8000;
+/** AI analiz kartları — opsiyonel hekim notu */
+export const ANALYSIS_NOTES_MAX_LEN = 1500;
 /** Legacy `Analysis.ilaclar` sütunu; tam tedavi metni `sectionTreatmentRecommendations` içinde kalir */
 export const ILACLAR_COLUMN_MAX_LEN = 1500;
 
@@ -18,6 +20,11 @@ export type AnalysisReportSectionsInput = {
   doctorNotes: string;
 };
 
+/** Prisma enum ile uyumlu; JSON ve meta için ortak isim */
+export type AnalysisReportKindValue =
+  | "clinical_manual"
+  | "radiological_ai";
+
 export type AnalysisReportMetaInput = {
   aiIncluded: boolean;
   patientInfo: {
@@ -27,6 +34,11 @@ export type AnalysisReportMetaInput = {
     gender: string | null;
   };
   aiSummary: string;
+  /** Kayıt türü; klinik form vs AI/radyoloji sekmesi */
+  reportKind?: AnalysisReportKindValue;
+  /** OCT/FFA rapor metninin muayene alanına karışmaması için ayrı JSON alanları */
+  modalityAppendixOct?: string;
+  modalityAppendixFfa?: string;
 };
 
 const MAX_COMORBIDITY_JSON = 24_000;
@@ -54,6 +66,7 @@ export function buildManualReportV2DoctorNoteJson(
 ): string {
   return JSON.stringify({
     version: REPORT_FORMAT_VERSION,
+    reportKind: meta.reportKind,
     reportTitle: sections.reportTitle,
     reportDate: sections.reportDate,
     aiIncluded: meta.aiIncluded,
@@ -68,6 +81,8 @@ export function buildManualReportV2DoctorNoteJson(
     },
     doctorNotes: sections.doctorNotes,
     aiSummary: meta.aiSummary,
+    modalityAppendixOct: meta.modalityAppendixOct?.trim() ?? "",
+    modalityAppendixFfa: meta.modalityAppendixFfa?.trim() ?? "",
   });
 }
 

@@ -9,11 +9,12 @@ const BACKUPS_DIR = path.join(STORAGE_ROOT, "backups");
 type SaveObjectInput = {
   doctorId: string;
   patientId?: string | null;
-  category: "original" | "heatmap";
+  category: "original" | "heatmap" | "oct" | "ffa";
   dataUrlOrBase64: string;
 };
 
-function sanitizeSegment(value: string) {
+/** Kayıt anahtarı ilk dizini — storage GET yetkilendirmesi için dışa verilir. */
+export function sanitizeSegment(value: string) {
   return value.replace(/[^a-zA-Z0-9_-]/g, "_");
 }
 

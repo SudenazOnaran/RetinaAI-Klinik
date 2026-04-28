@@ -3,6 +3,10 @@ import { getCurrentDoctorSession } from "@/lib/auth-session";
 import { prisma } from "@/lib/prisma";
 import ReportsClient from "./reports-client";
 import {
+  isClinicalReport,
+  isRadiologicalReport,
+} from "@/lib/report-kind";
+import {
   Card,
   CardContent,
   CardHeader,
@@ -12,6 +16,21 @@ import {
 import { FileText } from "lucide-react";
 import { getRequestMessages } from "@/lib/i18n/server";
 
+type PatientReportRows = Array<{
+  id: string;
+  fullName: string;
+  tcNo: string;
+  _count: { analyses: number };
+  analyses: Array<{
+    doctorNote: string | null;
+    originalImage: string | null;
+    heatmapUrl: string | null;
+    octImageUrl: string | null;
+    ffaImageUrl: string | null;
+    createdAt: Date;
+  }>;
+}>;
+
 export default async function ReportsPage() {
   const messages = await getRequestMessages();
   const t = messages.dashboardReportsPage;
@@ -20,7 +39,7 @@ export default async function ReportsPage() {
     redirect("/login");
   }
 
-  const patientsWithReports = await prisma.patient.findMany({
+  const patientsWithReports = (await prisma.patient.findMany({
     where: {
       doctorId: doctor.id,
       analyses: { some: {} },
@@ -35,9 +54,12 @@ export default async function ReportsPage() {
         },
       },
       analyses: {
-        orderBy: { createdAt: "desc" },
-        take: 1,
         select: {
+          doctorNote: true,
+          originalImage: true,
+          heatmapUrl: true,
+          octImageUrl: true,
+          ffaImageUrl: true,
           createdAt: true,
         },
       },
@@ -45,17 +67,45 @@ export default async function ReportsPage() {
     orderBy: {
       fullName: "asc",
     },
-  });
+  })) as unknown as PatientReportRows;
 
-  const serializedReports = patientsWithReports.map((row) => ({
-    patientId: row.id,
-    fullName: row.fullName,
-    tcNo: row.tcNo,
-    reportCount: row._count.analyses,
-    lastReportAt: row.analyses[0]?.createdAt
-      ? row.analyses[0].createdAt.toISOString()
-      : null,
-  }));
+  const serializedReports = patientsWithReports.map((row) => {
+    let clinicalReportCount = 0;
+    let radiologicalReportCount = 0;
+    let lastClinicalMs = 0;
+    let lastRadMs = 0;
+
+    for (const a of row.analyses) {
+      const payload = {
+        doctorNote: a.doctorNote,
+        originalImage: a.originalImage,
+        heatmapUrl: a.heatmapUrl,
+        octImageUrl: a.octImageUrl,
+        ffaImageUrl: a.ffaImageUrl,
+      };
+      if (isClinicalReport(payload)) {
+        clinicalReportCount++;
+        lastClinicalMs = Math.max(lastClinicalMs, a.createdAt.getTime());
+      }
+      if (isRadiologicalReport(payload)) {
+        radiologicalReportCount++;
+        lastRadMs = Math.max(lastRadMs, a.createdAt.getTime());
+      }
+    }
+
+    const lastReportMs = Math.max(lastClinicalMs, lastRadMs);
+
+    return {
+      patientId: row.id,
+      fullName: row.fullName,
+      tcNo: row.tcNo,
+      reportCount: row._count.analyses,
+      clinicalReportCount,
+      radiologicalReportCount,
+      lastReportAt:
+        lastReportMs > 0 ? new Date(lastReportMs).toISOString() : null,
+    };
+  });
 
   return (
     <div className="clinic-app-bg min-h-screen p-4 md:p-6">

@@ -14,7 +14,7 @@ export function buildOctTextForReport(
     clinicalSummary: string;
     recommendations: string[];
   },
-  doctorFeedback: string,
+  analysisNotes: string,
   t: ReportT,
 ) {
   const likLabel = (k: string) => {
@@ -26,11 +26,9 @@ export function buildOctTextForReport(
   const lines: string[] = [
     "━━ " + t("aiAnalysisPanel.octBlockHeader") + " ━━",
   ];
-  if (doctorFeedback.trim()) {
+  if (analysisNotes.trim()) {
     lines.push(
-      t("aiAnalysisPanel.doctorFeedbackLine", {
-        text: doctorFeedback.trim(),
-      }),
+      `${t("radiologicalReport.analysisNotesHeading")}\n${analysisNotes.trim()}`,
     );
   }
   lines.push(
@@ -78,6 +76,11 @@ export function buildFfaTextForReport(
       supportingFindings: string[];
       contradictingFindings: string[];
     }[];
+    diabeticRetinopathyFfa?: {
+      stage: string;
+      confidenceTier: string;
+      rationale: string;
+    } | null;
     activity: {
       activeDisease: string;
       neovascularization: string;
@@ -86,7 +89,7 @@ export function buildFfaTextForReport(
     clinicalSummary: string;
     recommendations: string[];
   },
-  doctorFeedback: string,
+  analysisNotes: string,
   t: ReportT,
 ) {
   const likLabel = (k: string) => {
@@ -98,11 +101,9 @@ export function buildFfaTextForReport(
   const lines: string[] = [
     "━━ " + t("aiAnalysisPanel.ffaBlockHeader") + " ━━",
   ];
-  if (doctorFeedback.trim()) {
+  if (analysisNotes.trim()) {
     lines.push(
-      t("aiAnalysisPanel.doctorFeedbackLine", {
-        text: doctorFeedback.trim(),
-      }),
+      `${t("radiologicalReport.analysisNotesHeading")}\n${analysisNotes.trim()}`,
     );
   }
   lines.push(
@@ -130,6 +131,21 @@ export function buildFfaTextForReport(
         );
       }
     }
+  }
+  const drf = ffa.diabeticRetinopathyFfa;
+  if (
+    drf &&
+    (drf.stage?.trim() ||
+      drf.confidenceTier?.trim() ||
+      drf.rationale?.trim())
+  ) {
+    lines.push(
+      "",
+      t("ffaAnalysis.drStagingTitle"),
+      `${t("ffaAnalysis.drStagingStage")}: ${drf.stage?.trim() || "—"}`,
+      `${t("ffaAnalysis.drStagingConfidence")}: ${drf.confidenceTier?.trim() || "—"}`,
+      `${t("ffaAnalysis.drStagingRationale")}: ${drf.rationale?.trim() || "—"}`,
+    );
   }
   lines.push(
     "",

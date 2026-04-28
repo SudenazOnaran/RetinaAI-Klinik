@@ -216,7 +216,6 @@
     },
     "critical": {
       "title": "Critical Risk Monitoring",
-      "rate": "High risk ratio: %{{rate}}",
       "empty": "There are currently no critical cases."
     }
   },
@@ -299,7 +298,12 @@
     "colLastAnalysis": "Last Analysis Date",
     "colConfidence": "Last Confidence Score",
     "colEmergency": "Emergency Tag",
+    "colDiseaseRisk": "Risk",
+    "badgeDiseaseUrgent": "Urgent",
+    "badgeDiseaseRoutine": "Routine",
+    "badgeDiseasePending": "Pending",
     "colDrRisk": "Doctor Risk Level",
+    "modalityFeedbackAgreesAi": "AI summary agreed",
     "colActions": "Action",
     "emergencyAssessment": "ASSESSMENT",
     "emergencyUrgent": "URGENT",
@@ -336,7 +340,7 @@
     "a11yBulkDeleteSelected": "Delete selected patients",
     "a11ySelectAllOnPage": "Select all records on this page",
     "a11yPatientsTable": "Patient list table",
-    "a11yPatientsTableCaption": "Patient list with last analysis date, confidence score, and emergency tag",
+    "a11yPatientsTableCaption": "Patient list with last analysis date, confidence score, emergency tag, and disease risk summary",
     "a11yPageSize": "Page size selection"
   },
   "newPatientPage": {
@@ -409,9 +413,12 @@
     "diabetesDurationLabel": "Diabetes Duration:",
     "updateInfoButton": "Update Information",
     "tabCreateReport": "Create Report",
+    "tabAiAnalysis": "AI & Image Analysis",
     "tabPastReports": "Past Reports",
+    "tabRadiologicalReports": "Radiological reports",
     "tabDrProgression": "DR Progression Analysis",
-    "reportCreateInfo": "Left: report editor. Right: AI analysis panel (fundus, OCT, FFA). Append OCT/FFA text to examination findings with “Add to report”. Triage only—not a definitive diagnosis."
+
+    "aiAnalysisInfo": "Use fundus, OCT, and FFA AI workflows; saving stores an entry under «Radiological reports»."
   },
   "octAnalysis": {
     "title": "AI macular OCT image analysis",
@@ -459,11 +466,15 @@
     "likelihoodModerate": "Moderate",
     "likelihoodHigh": "High",
     "analysisFail": "FFA analysis could not be completed.",
-    "parseFail": "Could not parse the server response."
+    "parseFail": "Could not parse the server response.",
+    "drStagingTitle": "Diabetic retinopathy — estimated stage from FFA (ICDR-aligned)",
+    "drStagingStage": "Estimated stage",
+    "drStagingConfidence": "Confidence tier",
+    "drStagingRationale": "Brief rationale"
   },
   "aiAnalysisPanel": {
     "title": "AI analysis panel",
-    "subtitle": "Fundus, OCT, and FFA: add a short comment and use “Add to report” to insert text into Examination findings. The fundus run saves with images and heatmap.",
+    "subtitle": "Fundus, OCT, and FFA: fundus and images are saved with the record.",
     "fundusShort": "Fundus",
     "fundusHint": "Correction and “add to form” are at the bottom of the fundus card.",
     "octShort": "OCT",
@@ -477,12 +488,47 @@
     "addToReport": "Add to report",
     "clearModality": "Clear",
     "appendSuccessTitle": "Text added",
-    "appendSuccessDesc": "Content was appended to “Examination findings”; you can edit it.",
+    "appendSuccessDesc": "Text was added to the separate OCT/FFA field; the clinical exam field is unchanged.",
+    "appendModalityDesc": "OCT/FFA appendix may be at most {{max}} characters. Shorten the text and try again.",
     "appendLimitTitle": "Character limit",
-    "appendLimitDesc": "Examination findings may be at most {{max}} characters. Shorten the text and try again."
+    "appendLimitDesc": "Examination findings may be at most {{max}} characters. Shorten the text and try again.",
+    "octDoctorFeedbackLabel": "Doctor review (OCT) — saved from the AI condition list",
+    "ffaDoctorFeedbackLabel": "Doctor review (FFA) — saved from the AI diagnosis list",
+    "modalityDoctorFeedbackPlaceholder": "Approval, correction, or short clinical note (your assessment overrides the AI summary when present).",
+    "modalityAgreeQuestion": "Is the AI result correct?",
+    "modalityPickOctCondition": "If not, pick the condition that best matches your judgment from the list above:",
+    "modalityPickFfaCondition": "If not, pick the diagnosis that best matches your judgment from the list above:",
+    "modalityNoAiListForPickOct": "No condition list in this run; you can only confirm with «Yes».",
+    "modalityNoAiListForPickFfa": "No diagnosis list in this run; you can only confirm with «Yes».",
+    "octAiSummaryTitle": "AI result summary",
+    "octClinicalDetailTitle": "Clinical detail (findings, conditions, recommendations)",
+    "ffaAiSummaryTitle": "AI result summary",
+    "ffaClinicalDetailTitle": "Clinical detail (phase, findings, diagnoses)",
+    "modalityPanelToggle": "Expand / collapse panel",
+    "modalityPickOctDisagreeStatic": "If not, record your view using the OCT-priority diagnoses below (or healthy macula):"
+  },
+  "modalityDisagree": {
+    "oct": {
+      "oct_dme": "DME",
+      "oct_amd": "AMD",
+      "oct_macular_hole": "Macular hole",
+      "oct_erm": "ERM / VMT",
+      "oct_saglikli_makula": "Healthy / normal macula"
+    },
+    "ffa": {
+      "ffa_healthy": "Healthy / no significant pathology",
+      "ffa_dr": "Diabetic retinopathy (DR)",
+      "ffa_rvo": "Retinal vein occlusion (RVO)",
+      "ffa_amd_cnv": "AMD (choroidal neovascularization - CNV)",
+      "ffa_csr": "Central serous chorioretinopathy (CSR)",
+      "ffa_uveitis": "Uveitis / retinal vasculitis"
+    },
+    "ffaDrStageTitle": "DR stage (ICDR: healthy → mild → moderate → severe → proliferative)",
+    "ffaDrStageHint": "FFA alone may be insufficient for full staging; pick an ICDR stage aligned with your exam — labels below mirror healthy/mild/moderate/severe/proliferative."
   },
   "patientDetailReports": {
     "foundRecords": "{{count}} records found",
+    "foundRadiologicalRecords": "{{count}} radiology records",
     "reportNo": "Report #{{no}}",
     "dateLabel": "Date",
     "viewPdf": "View PDF",
@@ -495,7 +541,36 @@
     "doctorFeedback": "Doctor feedback",
     "aiOtherRiskConfidence": "AI Other Disease Risk Prediction - Confidence",
     "fundusImage": "Fundus Image",
-    "heatmap": "Heatmap"
+    "heatmap": "Heatmap",
+    "octImage": "OCT image",
+    "ffaImage": "FFA image",
+    "defaultReportTitle": "Retina physician report",
+    "reportTitle": "Report title",
+    "reportingDoctor": "Reporting physician",
+    "listPreviewNote": "Long text is truncated in this list; full text appears in the PDF preview.",
+    "examFindingsCore": "Examination findings (clinical)",
+    "doctorNotesField": "Doctor notes",
+    "aiAssessments": "AI assessments (summary)",
+    "aiFundusBlock": "Fundus analysis",
+    "aiFundusRisk": "AI risk",
+    "doctorFeedbackShort": "Doctor feedback",
+    "aiFundusMissing": "No fundus AI in this record",
+    "aiOctBlock": "OCT (text appended to report)",
+    "aiOctMissing": "No OCT text appended",
+    "aiFfaBlock": "FFA (text appended to report)",
+    "aiFfaMissing": "No FFA text appended",
+    "odirShort": "ODIR",
+    "radiologicalAiTabOnly": "{{count}} records. Only entries saved from «AI & image analysis»; fundus, OCT, and FFA .",
+    "generalDoctorNotes": "General doctor notes (report)",
+    "modalityFundusSection": "Fundus",
+    "modalityOctSection": "OCT",
+    "modalityFfaSection": "FFA",
+    "aiResultConfidenceRow": "AI result and confidence",
+    "aiNarrativeShort": "AI narrative (short)",
+    "doctorFeedbackEmphasis": "Doctor feedback",
+    "radiologyEmptyModalities": "No modality content to display for this record.",
+    "imageLightboxClose": "Close",
+    "imageLightboxTitle": "Image preview"
   },
   "patientDetailProgress": {
     "title": "Clinical Outcome Change Chart",
@@ -540,9 +615,13 @@
     "colTc": "ID",
     "colLastReport": "Last Report Date",
     "colReportCount": "Report Count",
+    "colClinicalCount": "Clinical reports",
+    "colRadiologicalCount": "Radiological",
     "colAction": "Action",
     "emptyRow": "No patient reports found for the selected filters.",
-    "detail": "Detail"
+    "detail": "Detail",
+    "openClinical": "Past reports",
+    "openRadiological": "Radiology"
   },
   "history": {
     "placeholderSearch": "Search patient, ID, diagnosis or note",
@@ -813,6 +892,7 @@
     "noUpper": "NO",
     "correctionTitle": "Correction Selection",
     "correctionPlaceholder": "Select correction label...",
+    "correctionMultiHint": "Select one or more DR stages that better reflect your assessment when you disagree with the AI.",
     "pushToForm": "Add to report",
     "clear": "Clear",
     "detailTitle": "Clinical detail (AI-assisted)",
@@ -899,8 +979,10 @@
     "title": "Create Report",
     "description": "Image upload is not required. You can directly create a report by filling standard ophthalmology report fields.",
     "editorTitle": "Report editor",
-    "editorDescription": "Fill in the clinical fields. Use the AI panel on the right for fundus, OCT, and FFA on the same page.",
-    "aiOptionalHintEditor": "Fundus AI is stored with the record (image and heatmap). Append OCT/FFA text summaries to examination findings from the right panel with “Add to report”.",
+    "editorDescription": "Fill in the clinical fields. The right-hand panel provides access to fundus, OCT, and FFA tools.",
+    "editorDescriptionClinical": "Fill in the clinical fields. Fundus, OCT, and FFA AI tools are on the «AI & Image Analysis» tab.",
+
+    "aiOptionalHintEditor": "Fundus AI is stored with the record (image and heatmap). Examination findings are only the text you enter in the clinical field below.",
     "aiWillInclude": "AI analysis will be included in report",
     "resultPrefix": "Result:",
     "confidencePrefix": "Confidence:",
@@ -913,7 +995,8 @@
     "anamnesis": "Clinical History (Anamnesis)",
     "anamnesisPlaceholder": "Patient complaint, symptom duration, previous treatment history",
     "examFindings": "Examination Findings",
-    "examFindingsPlaceholder": "Visual acuity, biomicroscopy, fundus examination findings",
+
+    "examFindingsPlaceholder": "Visual acuity, biomicroscopy, fundus findings; clinical observations only",
     "labResults": "Laboratory Results",
     "labResultsPlaceholder": "Laboratory information such as HbA1c, glucose, lipid profile",
     "clinicalAssessment": "Diagnosis / Clinical Assessment",
@@ -926,5 +1009,35 @@
     "saving": "Saving...",
     "saveWithAi": "Save Report + AI Result",
     "save": "Save Report"
+  },
+  "radiologicalReport": {
+    "defaultTitle": "Radiological AI report",
+    "panelTitle": "AI analysis (Fundus / OCT / FFA)",
+    "panelDescription": "Upload or analyze images; the entry appears under «Radiological reports».",
+    "workflowBelowPanel": "After completing your review and appending the summary with «Add to report», finalize the record using «Save radiological report» at the bottom of the page.",
+    "saveButton": "Save radiological report",
+    "toastSavedDesc": "Radiological AI report saved.",
+    "validationTitle": "Image required",
+    "validationBody": "Add at least one modality image (fundus, OCT, or FFA) or a completed analysis.",
+    "summaryFundusSkipped": "No fundus AI summary",
+    "summaryOctYes": "OCT image included",
+    "summaryFfaYes": "FFA image included",
+    "medicalDisclaimerExact": "These results cannot be used as a definitive diagnosis; they are intended solely to assist the physician’s clinical judgment. Final assessment and responsibility rest with the physician.",
+    "aiSummaryLabel": "AI summary",
+    "confidenceApproxShort": "approx. confidence",
+    "clinicalDetailTitle": "Clinical detail",
+    "readyBannerTitle": "Analysis ready.",
+    "readyBannerBody": "Use «Add to report» to append to your radiological reports list, then complete the record with «Save radiological report» at the bottom of the page.",
+    "readyBannerAddedBody": "The summary was appended to the report text. You can complete the record using «Save radiological report» at the bottom of the page.",
+    "analysisCompletedAt": "Analysis time",
+    "appendToReport": "Add to report",
+    "clearModality": "Clear",
+    "expandSection": "Show details",
+    "collapseSection": "Hide details",
+    "optionalTag": "optional",
+    "analysisNotesLabel": "Analysis notes",
+    "analysisNotesPlaceholder": "Short clinical or operational notes for this modality…",
+    "analysisNotesHeading": "Analysis notes",
+    "analysisNotesSummaryTag": "Analysis notes"
   }
 }

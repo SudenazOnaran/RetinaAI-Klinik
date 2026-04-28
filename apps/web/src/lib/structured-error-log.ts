@@ -27,6 +27,8 @@ export function summarizeSaveAnalysisPayload(input: {
   ilaclarLen: number;
   hasHeatmap: boolean;
   hasOriginalImage: boolean;
+  hasOctImage?: boolean;
+  hasFfaImage?: boolean;
   aiResultLen: number;
   labelsCount: number;
 }): string {
@@ -35,6 +37,8 @@ export function summarizeSaveAnalysisPayload(input: {
     ilaclarLen: input.ilaclarLen,
     hasHeatmap: input.hasHeatmap,
     hasOriginalImage: input.hasOriginalImage,
+    hasOctImage: input.hasOctImage,
+    hasFfaImage: input.hasFfaImage,
     aiResultLen: input.aiResultLen,
     labelsCount: input.labelsCount,
   });

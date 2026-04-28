@@ -13,6 +13,14 @@ describe("risk-alerts", () => {
     expect(isHighRiskLabel("moderate")).toBe(false);
   });
 
+  it("treats stored disease triage URGENT as high-priority follow-up", () => {
+    const settings = getDefaultRetinaSettings();
+    settings.triage.highRiskFollowupDays = 2;
+    expect(getFollowupDaysForRisk("__DTG__:URGENT|Fundus: x", settings)).toBe(
+      2,
+    );
+  });
+
   it("uses dynamic followup days by risk bucket", () => {
     const settings = getDefaultRetinaSettings();
     settings.triage.highRiskFollowupDays = 2;

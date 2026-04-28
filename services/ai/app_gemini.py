@@ -1395,6 +1395,10 @@ Her hastalık için:
 - Ek tetkikler (OCT, tekrar FFA vb.)
 - Tedavi gerekliliği (genel ifade)
 
+6. Diyabetik Retinopati (DR) için FFA üzerinden ICDR ile uyumlu TAHMİNİ evre belirt (tek FFA ve faz belirsizliği nedeniyle güveni genelde düşük tut).
+Evre için şu etiketlerden birini kullan: Yok veya minimal bulgu | Hafif (Mild NPDR) | Orta (Moderate NPDR) | Şiddetli NPDR | Proliferatif DR | Belirsiz.
+Bu bilgiyi kökteki `diyabetik_retinopati_ffa` nesnesinde ver (DR ile ilgili görüş yoksa yine de Belirsiz/Yok diyebilirsin).
+
 ÇIKTI FORMATI (SADECE JSON, aciklama yok):
 
 {
@@ -1415,6 +1419,11 @@ Her hastalık için:
     "aktif_hastalik": "Var / Yok / Belirsiz",
     "neovaskularizasyon": "Var / Yok / Şüpheli",
     "sizinti": "Var / Yok / Şüpheli"
+  },
+  "diyabetik_retinopati_ffa": {
+    "evre": "Belirsiz",
+    "guven": "Düşük",
+    "gerekce": "FFA tek görüntü; kesin evre için geniş alan fundus ve OCT ile uyumludur."
   },
   "klinik_ozet": "...",
   "oneriler": [
@@ -1452,6 +1461,10 @@ TASKS:
 4) 3-5 sentence clinical summary for a physician.
 5) Recommendations: follow-up, additional tests (OCT, repeat FFA, etc.), and general need for treatment discussion.
 
+6) For diabetic retinopathy, give an ICDR-aligned ESTIMATED stage based on FFA alone (usually lower confidence). Use one label:
+None or minimal | Mild NPDR | Moderate NPDR | Severe NPDR | Proliferative DR | Uncertain.
+Provide this under root key `diabetic_retinopathy_ffa` with stage, confidence_tier (Low | Moderate | High), and a brief rationale.
+
 Output ONLY valid JSON (no markdown) using exactly these English keys and shapes:
 
 {
@@ -1470,6 +1483,11 @@ Output ONLY valid JSON (no markdown) using exactly these English keys and shapes
     "active_disease": "Present / Absent / Uncertain",
     "neovascularization": "Present / Absent / Suspected",
     "leakage": "Present / Absent / Suspected"
+  },
+  "diabetic_retinopathy_ffa": {
+    "stage": "Uncertain",
+    "confidence_tier": "Low",
+    "rationale": "Single-field FFA; staging should be confirmed with wide-field fundus/OCT."
   },
   "clinical_summary": "...",
   "recommendations": ["..."],
@@ -1619,7 +1637,30 @@ def _normalize_ffa_assessment(data: object, source_locale: str) -> dict:
             _dict_get(d, "confidence_score", "guven_skoru")
         )
 
-    return {
+    raw_drffa = _dict_get(
+        d,
+        "diyabetik_retinopati_ffa",
+        "diabetic_retinopathy_ffa",
+    )
+    diabetic_ffa: dict | None = None
+    if isinstance(raw_drffa, dict):
+        rr = raw_drffa
+        if is_tr:
+            st = str(_dict_get(rr, "evre", "stage") or "").strip()
+            tier = str(_dict_get(rr, "guven", "confidence_tier") or "").strip()
+            rationale = str(_dict_get(rr, "gerekce", "rationale") or "").strip()
+        else:
+            st = str(_dict_get(rr, "stage", "evre") or "").strip()
+            tier = str(_dict_get(rr, "confidence_tier", "guven") or "").strip()
+            rationale = str(_dict_get(rr, "rationale", "gerekce") or "").strip()
+        if st or tier or rationale:
+            diabetic_ffa = {
+                "stage": st or "—",
+                "confidenceTier": tier or "—",
+                "rationale": rationale[:4000],
+            }
+
+    out = {
         "imageQuality": img_q,
         "phaseAssessment": phase,
         "findings": findings,
@@ -1633,6 +1674,9 @@ def _normalize_ffa_assessment(data: object, source_locale: str) -> dict:
         "recommendations": recs,
         "confidenceScore": conf,
     }
+    if diabetic_ffa:
+        out["diabeticRetinopathyFfa"] = diabetic_ffa
+    return out
 
 
 def _ffa_locale_to_tr_prompt(locale_raw: str) -> tuple[str, str]:

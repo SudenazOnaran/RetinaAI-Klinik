@@ -13,8 +13,67 @@ const DOCTOR_APPROVAL_KEYS = new Set([
   "correct",
 ]);
 
+/** AI ile uyum kaydı: ham token yerine `mai:<görünen etiket>` saklanır (geri bildirim metni). */
+export const MODALITY_AI_ALIGNED_PREFIX = "mai:";
+
+export function encodeModalityAiAlignedLabel(label: string): string {
+  const s = String(label ?? "").trim();
+  if (!s) return "ai_sonucu_dogru";
+  return `${MODALITY_AI_ALIGNED_PREFIX}${s}`;
+}
+
+export function decodeModalityAiAlignedLabel(
+  raw: string | null | undefined,
+): string | null {
+  const t = String(raw ?? "").trim();
+  if (!t.startsWith(MODALITY_AI_ALIGNED_PREFIX)) return null;
+  const rest = t.slice(MODALITY_AI_ALIGNED_PREFIX.length).trim();
+  return rest || null;
+}
+
+export function isModalityAiAlignedFeedback(
+  raw: string | null | undefined,
+): boolean {
+  return String(raw ?? "").trim().startsWith(MODALITY_AI_ALIGNED_PREFIX);
+}
+
 export function isDoctorApprovalToken(value: string | null | undefined): boolean {
   const trimmed = String(value ?? "").trim();
   if (!trimmed) return false;
+  if (isModalityAiAlignedFeedback(trimmed)) return true;
   return DOCTOR_APPROVAL_KEYS.has(normalizeRiskKey(trimmed));
+}
+
+/**
+ * «Hayır» veya (FFA’da) DR evresi seçilmeden önce — üst state boş iken
+ * onChange("") ile eşzamanlı halkayı kırmamak için. Kayıtta saklanmaz.
+ */
+export const MODALITY_DISAGREE_PENDING = "__m_df_pending__";
+
+export function isModalityDisagreePending(
+  value: string | null | undefined,
+): boolean {
+  return String(value ?? "").trim() === MODALITY_DISAGREE_PENDING;
+}
+
+/** Rapor kaydına gidecek OCT/FFA geri bildirimi; bekleyen «Hayır» token’ını eler. */
+export function modalityDrFeedbackForStorage(
+  value: string | null | undefined,
+): string | undefined {
+  const t = String(value ?? "").trim();
+  if (!t || isModalityDisagreePending(t)) return undefined;
+  return t;
+}
+
+/**
+ * Özet metindeki `mai:<etiket>` parçalarını okunaklı etikete çevirir (liste/PDF UI).
+ */
+export function humanizeEmbeddedMaiPrefixes(text: string): string {
+  if (!text.includes(MODALITY_AI_ALIGNED_PREFIX)) return text;
+  return text.replace(/mai:([^·]+)/g, (_full, inner: string) => {
+    const decoded = decodeModalityAiAlignedLabel(
+      `${MODALITY_AI_ALIGNED_PREFIX}${String(inner).trim()}`,
+    );
+    return decoded ?? `${MODALITY_AI_ALIGNED_PREFIX}${String(inner).trim()}`;
+  });
 }

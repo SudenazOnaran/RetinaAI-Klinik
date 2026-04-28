@@ -14,23 +14,36 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "@/components/providers/i18n-provider";
 
-type PatientReportSummary = {
+export type PatientReportSummary = {
   patientId: string;
   fullName: string;
   tcNo: string;
+  /** Toplam analiz (klinik + radyolojik) */
   reportCount: number;
+  clinicalReportCount: number;
+  radiologicalReportCount: number;
   lastReportAt: string | null;
 };
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
 
 function toCsv(rows: PatientReportSummary[]) {
-  const header = ["patientId", "hasta", "tc", "raporSayisi", "sonRaporTarihi"];
+  const header = [
+    "patientId",
+    "hasta",
+    "tc",
+    "toplamRapor",
+    "klinik",
+    "radyolojik",
+    "sonRaporTarihi",
+  ];
   const lines = rows.map((r) => [
     r.patientId,
     r.fullName,
     r.tcNo,
     String(r.reportCount),
+    String(r.clinicalReportCount),
+    String(r.radiologicalReportCount),
     r.lastReportAt ? new Date(r.lastReportAt).toISOString() : "",
   ]);
 
@@ -46,7 +59,7 @@ export default function ReportsClient({
 }: {
   reports: PatientReportSummary[];
 }) {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
   const { toast } = useToast();
 
   const [search, setSearch] = useState("");
@@ -229,65 +242,97 @@ export default function ReportsClient({
           <span>{t("reportsFull.totalResults", { count: filtered.length })}</span>
         </div>
 
-        <table className="w-full text-sm">
-          <thead className="bg-white border-b border-slate-200">
-            <tr>
-              <th className="p-3 text-left">{t("reportsFull.colPatient")}</th>
-              <th className="p-3 text-left">{t("reportsFull.colTc")}</th>
-              <th className="p-3 text-left">{t("reportsFull.colLastReport")}</th>
-              <th className="p-3 text-left">{t("reportsFull.colReportCount")}</th>
-              <th className="p-3 text-left">{t("reportsFull.colAction")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {paged.length === 0 ? (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[920px] text-sm">
+            <thead className="bg-white border-b border-slate-200">
               <tr>
-                <td colSpan={5} className="p-8 text-center text-slate-500">
-                  {t("reportsFull.emptyRow")}
-                </td>
+                <th className="p-3 text-left">{t("reportsFull.colPatient")}</th>
+                <th className="p-3 text-left">{t("reportsFull.colTc")}</th>
+                <th className="p-3 text-left">{t("reportsFull.colLastReport")}</th>
+                <th className="p-3 text-left">{t("reportsFull.colReportCount")}</th>
+                <th className="p-3 text-left">
+                  {t("reportsFull.colClinicalCount")}
+                </th>
+                <th className="p-3 text-left">
+                  {t("reportsFull.colRadiologicalCount")}
+                </th>
+                <th className="p-3 text-left">{t("reportsFull.colAction")}</th>
               </tr>
-            ) : (
-              paged.map((row) => {
-                return (
-                  <tr
-                    key={row.patientId}
-                    className="border-b border-slate-100 hover:bg-slate-50"
-                  >
-                    <td className="p-3 font-medium text-slate-800">
-                      <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-slate-400" />
-                        {row.fullName}
-                      </div>
-                    </td>
-                    <td className="p-3 text-slate-600">{row.tcNo}</td>
-                    <td className="p-3 text-slate-600">
-                      {row.lastReportAt
-                        ? new Date(row.lastReportAt).toLocaleDateString("tr-TR")
-                        : "-"}
-                    </td>
-                    <td className="p-3 text-slate-700 font-semibold">
-                      {row.reportCount}
-                    </td>
-                    <td className="p-3">
-                      <Button
-                        asChild
-                        variant="outline"
-                        size="sm"
-                        className={detailButtonClassName}
-                      >
-                        <Link
-                          href={`/dashboard/hastalar/${row.patientId}?tab=reports`}
-                        >
-                          {t("reportsFull.detail")} <ChevronRight className="ml-1 h-4 w-4" />
-                        </Link>
-                      </Button>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {paged.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="p-8 text-center text-slate-500">
+                    {t("reportsFull.emptyRow")}
+                  </td>
+                </tr>
+              ) : (
+                paged.map((row) => {
+                  return (
+                    <tr
+                      key={row.patientId}
+                      className="border-b border-slate-100 hover:bg-slate-50"
+                    >
+                      <td className="p-3 font-medium text-slate-800">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-slate-400" />
+                          {row.fullName}
+                        </div>
+                      </td>
+                      <td className="p-3 text-slate-600">{row.tcNo}</td>
+                      <td className="p-3 text-slate-600">
+                        {row.lastReportAt
+                          ? new Date(row.lastReportAt).toLocaleDateString(
+                              locale === "en" ? "en-US" : "tr-TR",
+                            )
+                          : "-"}
+                      </td>
+                      <td className="p-3 font-semibold text-slate-700">
+                        {row.reportCount}
+                      </td>
+                      <td className="p-3 text-slate-700">
+                        {row.clinicalReportCount}
+                      </td>
+                      <td className="p-3 text-slate-700">
+                        {row.radiologicalReportCount}
+                      </td>
+                      <td className="p-3">
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            asChild
+                            variant="outline"
+                            size="sm"
+                            className={detailButtonClassName}
+                          >
+                            <Link
+                              href={`/dashboard/hastalar/${row.patientId}?tab=reports`}
+                            >
+                              {t("reportsFull.openClinical")}{" "}
+                              <ChevronRight className="ml-1 inline h-4 w-4" />
+                            </Link>
+                          </Button>
+                          <Button
+                            asChild
+                            variant="outline"
+                            size="sm"
+                            className={detailButtonClassName}
+                          >
+                            <Link
+                              href={`/dashboard/hastalar/${row.patientId}?tab=radiological-reports`}
+                            >
+                              {t("reportsFull.openRadiological")}{" "}
+                              <ChevronRight className="ml-1 inline h-4 w-4" />
+                            </Link>
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 md:flex-row md:items-center md:justify-between">

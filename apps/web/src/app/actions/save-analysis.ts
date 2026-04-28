@@ -14,6 +14,13 @@ import {
 import { getRequestLocale } from "@/lib/i18n/server";
 import { resolveDrLabelToStoredForm } from "@/lib/dr-stage-labels";
 import {
+  isDoctorApprovalToken,
+  isModalityDisagreePending,
+} from "@/lib/doctor-feedback";
+import {
+  tryParseFfaDoctorFeedbackAny,
+} from "@/lib/ffa-doctor-feedback-json";
+import {
   DATASET_SCHEMA_VERSION,
   parseClientInferenceSnapshot,
   parseDoctorStructuredReviewForStorage,
@@ -39,6 +46,37 @@ import {
   type AnalysisReportMetaInput,
   type AnalysisReportSectionsInput,
 } from "@/lib/dataset/analysis-report-sections";
+import {
+  computeDiseaseTriageFromAnalysisFields,
+  serializePatientDiseaseTriageForDb,
+} from "@/lib/patient-disease-triage";
+import {
+  FFA_DISEASE_KEYS,
+  FFA_HEALTHY_VALUE,
+} from "@/lib/modality-risk-surface";
+
+const MODALITY_DR_FEEDBACK_MAX = 4000;
+/** OCT/FFAda hastalık adı; serbest kısa metin (AI satırı dışı). */
+const MODALITY_DISEASE_STR_MAX = 512;
+
+function prismaReportKindFromMeta(
+  meta: AnalysisReportMetaInput | null | undefined,
+): AnalysisReportMetaInput["reportKind"] | undefined {
+  return meta?.reportKind;
+}
+
+function sanitizeModalityDiseaseFeedbackInput(
+  raw: string,
+): string | null {
+  const x = raw.replace(/\s+/g, " ").trim();
+  if (!x) return null;
+  if (x.length > MODALITY_DISEASE_STR_MAX) return null;
+  return x;
+}
+
+const ALLOWED_FFA_FEEDBACK_CODES = new Set<string>(
+  FFA_DISEASE_KEYS.map((k) => k.value),
+);
 
 /** Prisma $transaction icinde delegate tipleri bazen eslesmez; create imzasi yeterli. */
 type PrismaTxTrainingDatasetEntry = {
@@ -53,6 +91,8 @@ export async function saveAnalysisAction({
   confidence,
   heatmapUrl,
   originalImage,
+  octImage,
+  ffaImage,
   doctorNote,
   reportSections,
   reportMeta,
@@ -60,6 +100,8 @@ export async function saveAnalysisAction({
   aiOdriLabels,
   aiOdriConfidences,
   drFeedback,
+  octDrFeedback,
+  ffaDrFeedback,
   aiInferenceSnapshot,
   doctorStructuredReview,
   physicianClinicalReasoning,
@@ -70,6 +112,8 @@ export async function saveAnalysisAction({
   confidence: number;
   heatmapUrl?: string;
   originalImage?: string;
+  octImage?: string;
+  ffaImage?: string;
   /** Geriye dönük: ham JSON string (reportSections yoksa) */
   doctorNote?: string;
   /** Yapılandırılmış rapor; doluysa ayrı sütunlar + doctorNote üretilir */
@@ -79,6 +123,8 @@ export async function saveAnalysisAction({
   aiOdriLabels?: string[];
   aiOdriConfidences?: number[];
   drFeedback?: string; // Bu değer varsa DOKTOR DÜZELTMİŞTİR, yoksa AI DOĞRUDUR.
+  octDrFeedback?: string;
+  ffaDrFeedback?: string;
   /** LLM/yerel /predict yapısal çıktısı (heatmap hariç); veri seti için */
   aiInferenceSnapshot?: AiInferenceSnapshot | null;
   /** Doktor yapısal düzeltmeleri (fundus, DME, karar vb.) */
@@ -166,6 +212,154 @@ export async function saveAnalysisAction({
       .trim()
       .slice(0, ILACLAR_COLUMN_MAX_LEN);
 
+    const rawOctFb = String(octDrFeedback || "").trim();
+    const rawFfaFb = String(ffaDrFeedback || "").trim();
+    if (rawOctFb.length > MODALITY_DR_FEEDBACK_MAX) {
+      return {
+        ok: false as const,
+        error: `OCT doktor değerlendirmesi en fazla ${MODALITY_DR_FEEDBACK_MAX} karakter olabilir (${rawOctFb.length}).`,
+      };
+    }
+    if (rawFfaFb.length > MODALITY_DR_FEEDBACK_MAX) {
+      return {
+        ok: false as const,
+        error: `FFA doktor değerlendirmesi en fazla ${MODALITY_DR_FEEDBACK_MAX} karakter olabilir (${rawFfaFb.length}).`,
+      };
+    }
+    let sanitizedOctFb: string | undefined;
+    if (rawOctFb && !isModalityDisagreePending(rawOctFb)) {
+      if (isDoctorApprovalToken(rawOctFb)) {
+        sanitizedOctFb = rawOctFb;
+      } else {
+        const rDr = resolveDrLabelToStoredForm(rawOctFb, locale);
+        if (rDr) {
+          sanitizedOctFb = rDr;
+        } else if (/^oct_[a-z0-9_]+$/.test(rawOctFb) && rawOctFb.length <= 160) {
+          sanitizedOctFb = rawOctFb;
+        } else {
+          const d = sanitizeModalityDiseaseFeedbackInput(rawOctFb);
+          if (!d) {
+            return {
+              ok: false as const,
+              error:
+                "Geçersiz OCT doktor değerlendirmesi. Evet (AI onayı) veya listeden bir seçenek kullanın.",
+            };
+          }
+          sanitizedOctFb = d;
+        }
+      }
+    }
+    let sanitizedFfaFb: string | undefined;
+    if (rawFfaFb && !isModalityDisagreePending(rawFfaFb)) {
+      if (isDoctorApprovalToken(rawFfaFb)) {
+        sanitizedFfaFb = rawFfaFb;
+      } else if (rawFfaFb.startsWith("ffa_json:")) {
+        const p = tryParseFfaDoctorFeedbackAny(rawFfaFb);
+        if (!p) {
+          return {
+            ok: false as const,
+            error: "Geçersiz FFA kaydı (yapılandırma). Lütfen tekrar seçin.",
+          };
+        }
+        if (p.v === 2) {
+          if (!ALLOWED_FFA_FEEDBACK_CODES.has(p.diagnosis)) {
+            return {
+              ok: false as const,
+              error:
+                "Geçersiz FFA teşhis kodu. Listeden seçilen kodları kullanın.",
+            };
+          }
+          if (
+            p.diagnosis === "ffa_dr" &&
+            !String(p.drStage || "").trim()
+          ) {
+            return {
+              ok: false as const,
+              error:
+                "Diyabetik retinopati seçtiyseniz bir DR evresi de seçmelisiniz.",
+            };
+          }
+          const st = String(p.drStage || "").trim();
+          if (st) {
+            const rSt = resolveDrLabelToStoredForm(st, locale);
+            if (!rSt) {
+              return {
+                ok: false as const,
+                error: "Geçersiz FFA DR evresi. Listeden bir evre seçin.",
+              };
+            }
+          }
+        } else {
+          const dx = [
+            ...new Set(
+              p.diagnoses
+                .map((x) => String(x || "").trim())
+                .filter(Boolean),
+            ),
+          ];
+          if (!dx.length) {
+            return {
+              ok: false as const,
+              error:
+                "FFA düzeltmede en az bir tanı seçmelisiniz.",
+            };
+          }
+          if (
+            dx.includes(FFA_HEALTHY_VALUE) &&
+            dx.length > 1
+          ) {
+            return {
+              ok: false as const,
+              error:
+                "«Sağlıklı» seçildiğinde başka tanı birlikte seçilemez.",
+            };
+          }
+          for (const c of dx) {
+            if (!ALLOWED_FFA_FEEDBACK_CODES.has(c)) {
+              return {
+                ok: false as const,
+                error:
+                  "Geçersiz FFA teşhis kodu. Listeden seçilen kodları kullanın.",
+              };
+            }
+          }
+          if (dx.includes("ffa_dr")) {
+            const st = String(p.drStage || "").trim();
+            if (!st) {
+              return {
+                ok: false as const,
+                error:
+                  "Diyabetik retinopati seçtiyseniz bir DR evresi de seçmelisiniz.",
+              };
+            }
+            const rSt = resolveDrLabelToStoredForm(st, locale);
+            if (!rSt) {
+              return {
+                ok: false as const,
+                error: "Geçersiz FFA DR evresi. Listeden bir evre seçin.",
+              };
+            }
+          }
+        }
+        sanitizedFfaFb = rawFfaFb.slice(0, MODALITY_DR_FEEDBACK_MAX);
+      } else {
+        const rDr = resolveDrLabelToStoredForm(rawFfaFb, locale);
+        if (rDr) {
+          sanitizedFfaFb = rDr;
+        } else {
+          const d = sanitizeModalityDiseaseFeedbackInput(rawFfaFb);
+          if (!d) {
+            return {
+              ok: false as const,
+              error:
+                "Geçersiz FFA doktor değerlendirmesi. Evet (AI onayı) veya yeni teşhis/DR formunu tamamlayın.",
+            };
+          }
+          sanitizedFfaFb = d;
+        }
+      }
+    }
+
     const rawDoctorNote = String(doctorNote || "");
 
     const sectionLabelsTr: Record<keyof AnalysisReportSectionsInput, string> = {
@@ -194,6 +388,20 @@ export async function saveAnalysisAction({
         return {
           ok: false as const,
           error: `${secExceed.label} alanında maksimum karakter sınırı aşıldı (${secExceed.length}/${REPORT_SECTION_MAX_LEN}).`,
+        };
+      }
+      const octN = String(reportMeta.modalityAppendixOct || "").length;
+      const ffaN = String(reportMeta.modalityAppendixFfa || "").length;
+      if (octN > REPORT_SECTION_MAX_LEN) {
+        return {
+          ok: false as const,
+          error: `OCT (yapay zeka) eki maksimum karakter sınırını aştı (${octN}/${REPORT_SECTION_MAX_LEN}).`,
+        };
+      }
+      if (ffaN > REPORT_SECTION_MAX_LEN) {
+        return {
+          ok: false as const,
+          error: `FFA (yapay zeka) eki maksimum karakter sınırını aşdı (${ffaN}/${REPORT_SECTION_MAX_LEN}).`,
         };
       }
       resolvedDoctorNote = buildManualReportV2DoctorNoteJson(
@@ -244,6 +452,24 @@ export async function saveAnalysisAction({
         })
       : null;
 
+    const storedOctImage = octImage
+      ? await saveDataObject({
+          doctorId: doctor.id,
+          patientId,
+          category: "oct",
+          dataUrlOrBase64: octImage,
+        })
+      : null;
+
+    const storedFfaImage = ffaImage
+      ? await saveDataObject({
+          doctorId: doctor.id,
+          patientId,
+          category: "ffa",
+          dataUrlOrBase64: ffaImage,
+        })
+      : null;
+
     const parsedInference = aiInferenceSnapshot
       ? parseClientInferenceSnapshot(aiInferenceSnapshot)
       : null;
@@ -278,10 +504,13 @@ export async function saveAnalysisAction({
     const secs = structuredForAnalysis?.sections;
     const analysisRow = {
       patientId,
+      reportKind: prismaReportKindFromMeta(reportMeta),
       aiResult: resolvedAi,
       confidence,
       heatmapUrl: storedHeatmapImage?.url,
       originalImage: storedOriginalImage?.url,
+      octImageUrl: storedOctImage?.url,
+      ffaImageUrl: storedFfaImage?.url,
       doctorNote: resolvedDoctorNote || undefined,
       reportTitle: secs?.reportTitle || undefined,
       reportDateKey: secs?.reportDate || undefined,
@@ -300,6 +529,8 @@ export async function saveAnalysisAction({
         ? JSON.stringify(aiOdriConfidences)
         : null,
       drFeedback: sanitizedFeedback,
+      octDrFeedback: sanitizedOctFb,
+      ffaDrFeedback: sanitizedFfaFb,
       doctorStructuredReview: parsedDoctorReview,
       physicianClinicalReasoning: sanitizedPhysicianReasoning,
       aiInferenceJson: parsedInference
@@ -307,11 +538,14 @@ export async function saveAnalysisAction({
         : undefined,
       drGradeInt: goldDrGradeInt,
       datasetSchemaVersion: DATASET_SCHEMA_VERSION,
-    } as Prisma.AnalysisUncheckedCreateInput;
+    } as unknown as Prisma.AnalysisUncheckedCreateInput;
 
-    const finalRiskStatus = sanitizedFeedback
-      ? sanitizedFeedback
-      : resolvedAi;
+    const diseaseTriage = computeDiseaseTriageFromAnalysisFields({
+      drFeedback: sanitizedFeedback ?? null,
+      octDrFeedback: sanitizedOctFb ?? null,
+      ffaDrFeedback: sanitizedFfaFb ?? null,
+    });
+    const finalRiskStatus = serializePatientDiseaseTriageForDb(diseaseTriage);
 
     const combinedDoctorNotesText = buildCombinedDoctorNotesText(
       structuredForAnalysis?.sections,
@@ -402,11 +636,14 @@ export async function saveAnalysisAction({
       metadata: {
         patientId,
         finalRiskStatus,
+        diseaseTriage: diseaseTriage.triage,
         aiResult: resolvedAi,
         confidence,
         objectStorage: {
           original: storedOriginalImage?.url ?? null,
           heatmap: storedHeatmapImage?.url ?? null,
+          oct: storedOctImage?.url ?? null,
+          ffa: storedFfaImage?.url ?? null,
         },
       },
     });
@@ -435,6 +672,8 @@ export async function saveAnalysisAction({
         ilaclarLen: String(ilaclar || "").length,
         hasHeatmap: Boolean(heatmapUrl),
         hasOriginalImage: Boolean(originalImage),
+        hasOctImage: Boolean(octImage),
+        hasFfaImage: Boolean(ffaImage),
         aiResultLen: String(aiResult || "").length,
         labelsCount: Array.isArray(aiOdriLabels) ? aiOdriLabels.length : 0,
       }),

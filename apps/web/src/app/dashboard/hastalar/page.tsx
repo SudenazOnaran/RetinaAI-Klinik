@@ -171,14 +171,16 @@ export default async function HastalarPage({
         la."createdAt" AS "latestAnalysisAt",
         la."drFeedback" AS "latestDrFeedback",
         la."aiResult" AS "latestAiResult",
-        la."confidence" AS "latestConfidence"
+        la."octDrFeedback" AS "latestOctDrFeedback",
+        la."ffaDrFeedback" AS "latestFfaDrFeedback"
       FROM "Patient" p
       LEFT JOIN LATERAL (
         SELECT
           a."drFeedback",
           a."aiResult",
-          a."confidence",
-          a."createdAt"
+          a."createdAt",
+          a."octDrFeedback",
+          a."ffaDrFeedback"
         FROM "Analysis" a
         WHERE a."patientId" = p."id"
         ORDER BY a."createdAt" DESC
@@ -218,8 +220,18 @@ export default async function HastalarPage({
         pn."latestAnalysisAt",
         pn."latestDrFeedback",
         pn."latestAiResult",
-        pn."latestConfidence",
+        pn."latestOctDrFeedback",
+        pn."latestFfaDrFeedback",
         COALESCE(
+          CASE
+            WHEN pn."risk" LIKE '__DTG__:%'
+              AND POSITION('|' IN pn."risk") > 0
+            THEN NULLIF(
+              TRIM(SUBSTRING(pn."risk" FROM POSITION('|' IN pn."risk") + 1)),
+              ''
+            )
+            ELSE NULL
+          END,
           NULLIF(pn."latestDrFeedback", 'null'),
           NULLIF(pn."latestAiResult", 'null'),
           NULLIF(pn."risk", ''),
@@ -228,6 +240,9 @@ export default async function HastalarPage({
         pn."nr" AS "normalizedRisk",
         CASE
           WHEN pn."analysisCount" = 0 THEN 'none'
+          WHEN pn."risk" LIKE '__DTG__:URGENT%' THEN 'high'
+          WHEN pn."risk" LIKE '__DTG__:ROUTINE%' THEN 'low'
+          WHEN pn."risk" LIKE '__DTG__:PENDING%' THEN 'none'
           WHEN pn."nr" IN ('', 'yok') THEN 'none'
           WHEN pn."nr" LIKE '%evre_4%' OR pn."nr" LIKE '%stage_4%'
             OR pn."nr" IN (
@@ -290,9 +305,10 @@ export default async function HastalarPage({
           createdAt: Date;
           analysisCount: number;
           latestAnalysisAt: Date | null;
-          latestConfidence: number | null;
           latestDrFeedback: string | null;
           latestAiResult: string | null;
+          latestOctDrFeedback: string | null;
+          latestFfaDrFeedback: string | null;
           risk: string | null;
           effectiveRisk: string;
         }>
@@ -305,9 +321,10 @@ export default async function HastalarPage({
           pb."createdAt",
           pb."analysisCount",
           pb."latestAnalysisAt",
-          pb."latestConfidence",
           pb."latestDrFeedback",
           pb."latestAiResult",
+          pb."latestOctDrFeedback",
+          pb."latestFfaDrFeedback",
           pb."risk",
           pb."effectiveRisk"
         FROM patient_enriched pb
@@ -323,7 +340,11 @@ export default async function HastalarPage({
   const safePage = Math.min(page, totalPages);
 
   // Ortak risk sınıflandırıcısı ile hesaplanır (Severe, Proliferative_DR, Ağır Evre, Çok İleri Evre vb.)
-  const highRiskCount = riskRows.filter((p) => isHighRiskLabel(p.risk)).length;
+  const highRiskCount = riskRows.filter((p) => {
+    const r = String(p.risk ?? "").trim();
+    if (r.startsWith("__DTG__:") && r.includes("URGENT")) return true;
+    return isHighRiskLabel(r);
+  }).length;
 
   const serializedPatients = patients.map((patient) => ({
     id: patient.id,
@@ -331,14 +352,12 @@ export default async function HastalarPage({
     tcNo: patient.tcNo,
     createdAt: patient.createdAt.toISOString(),
     latestAnalysisAt: patient.latestAnalysisAt?.toISOString() ?? null,
-    latestConfidence:
-      patient.latestConfidence === null
-        ? null
-        : Number(patient.latestConfidence),
     _count: { analyses: Number(patient.analysisCount || 0) },
     aiResult: patient.latestAiResult ?? undefined,
     drFeedback: patient.latestDrFeedback ?? undefined,
     risk: patient.risk ?? "",
+    latestOctDrFeedback: patient.latestOctDrFeedback ?? null,
+    latestFfaDrFeedback: patient.latestFfaDrFeedback ?? null,
   }));
 
   return (
