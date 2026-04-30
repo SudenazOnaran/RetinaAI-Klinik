@@ -119,6 +119,8 @@ function urgencyMessageKey(u: string | undefined): string {
   return "analysisCard.urgencyRoutine";
 }
 
+const FUNDUS_CONFIDENCE_UNCERTAIN_THRESHOLD = 0.75;
+
 /** Backend ODIR etiketleri (app.py ODIR_LABELS + Kararsiz) → analysisCard çeviri soneki */
 const ODIR_LABEL_I18N_SUFFIX: Record<string, string> = {
   "Normal / Sağlıklı": "odirDisplay_normalHealthy",
@@ -158,6 +160,11 @@ export type AiAnalysisDraft = {
   correctionLabel?: string;
   /** Birden fazla evre/hastalık düzeltmesi */
   correctionLabels?: string[];
+  /** Fundus doktor geri bildirimi: NVD/NVE seçimi */
+  fundusNvd?: boolean;
+  fundusNve?: boolean;
+  /** Doktorun yapılandırılmış fundus düzeltmesi */
+  doctorStructuredReview?: Record<string, unknown>;
   /** Opsiyonel fundus analiz notları (radyolojik özet) */
   analysisNotes?: string;
   /** Veri seti: /predict yapısal çıktısı (heatmap base64 hariç) */
@@ -193,8 +200,10 @@ export function ImageAnalysisCard({
   const [result, setResult] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
-  /** «Hayır» dalında birden çok evre seçimi */
-  const [correctionSelections, setCorrectionSelections] = useState<string[]>([]);
+  /** «Hayır» dalında tek fundus evre seçimi */
+  const [correctionSelection, setCorrectionSelection] = useState<string>("");
+  const [fundusNvd, setFundusNvd] = useState(false);
+  const [fundusNve, setFundusNve] = useState(false);
   const [isAddedToForm, setIsAddedToForm] = useState(false);
   const [analysisCompletedAt, setAnalysisCompletedAt] = useState<Date | null>(
     null,
@@ -202,6 +211,9 @@ export function ImageAnalysisCard({
   const [analysisNotes, setAnalysisNotes] = useState("");
 
   const { toast } = useToast();
+  const isLowConfidenceResult =
+    Number(result?.pytorch?.confidence ?? 0) <
+    FUNDUS_CONFIDENCE_UNCERTAIN_THRESHOLD;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -210,7 +222,9 @@ export function ImageAnalysisCard({
     setPreviewUrl(URL.createObjectURL(f));
     setResult(null);
     setIsCorrect(null);
-    setCorrectionSelections([]);
+    setCorrectionSelection("");
+    setFundusNvd(false);
+    setFundusNve(false);
     setIsAddedToForm(false);
     setAnalysisCompletedAt(null);
     setAnalysisNotes("");
@@ -294,7 +308,9 @@ export function ImageAnalysisCard({
     setBase64Image(null);
     setResult(null);
     setIsCorrect(null);
-    setCorrectionSelections([]);
+    setCorrectionSelection("");
+    setFundusNvd(false);
+    setFundusNve(false);
     setIsAddedToForm(false);
     setAnalysisCompletedAt(null);
     setAnalysisNotes("");
@@ -303,11 +319,28 @@ export function ImageAnalysisCard({
 
   const publishDraft = () => {
     if (!result) return;
-    const aiResultStored =
-      resolveDrLabelToStoredForm(result.pytorch?.label, locale) ??
-      getStorageDrLabel(0, locale);
+    const confidence = Number(result.pytorch?.confidence ?? 0);
+    const lowConfidenceUncertain =
+      Number.isFinite(confidence) &&
+      confidence < FUNDUS_CONFIDENCE_UNCERTAIN_THRESHOLD;
+    const uncertainLabel = locale === "tr" ? "Belirsiz" : "Uncertain";
+    const resolvedStored = resolveDrLabelToStoredForm(result.pytorch?.label, locale);
+    const aiResultStored = lowConfidenceUncertain
+      ? uncertainLabel
+      : resolvedStored ?? String(result.pytorch?.label || uncertainLabel).trim();
     const odirVisible = visibleOdirResultRows(result.odir?.results);
     const aiInferenceSnapshot = stripPredictResponseForStorage(result);
+    const structuredReview =
+      isCorrect === false
+        ? {
+            fundusAssessment: {
+              neovascularization: {
+                nvd: fundusNvd,
+                nve: fundusNve,
+              },
+            },
+          }
+        : undefined;
     const draft: AiAnalysisDraft = {
       aiResult: aiResultStored,
       confidence: Number(result.pytorch?.confidence ?? 0),
@@ -316,9 +349,12 @@ export function ImageAnalysisCard({
       aiOdriLabels: odirVisible.map((r) => String(r.label ?? "")),
       aiOdriConfidences: odirVisible.map((r) => Number(r.confidence ?? 0)),
       correctionLabels:
-        isCorrect === false && correctionSelections.length > 0
-          ? correctionSelections
+        isCorrect === false && correctionSelection
+          ? [correctionSelection]
           : undefined,
+      fundusNvd: isCorrect === false ? fundusNvd : undefined,
+      fundusNve: isCorrect === false ? fundusNve : undefined,
+      doctorStructuredReview: structuredReview,
       analysisNotes: analysisNotes.trim() || undefined,
       aiInferenceSnapshot: aiInferenceSnapshot ?? undefined,
     };
@@ -466,10 +502,18 @@ export function ImageAnalysisCard({
 
             <div className="space-y-4">
               <RadiologicalAiSummaryOneLine
-                diseaseLabel={drLabelTr(
-                  result.pytorch?.label || getStorageDrLabel(0, locale),
-                  locale,
-                )}
+                diseaseLabel={
+                  Number(result.pytorch?.confidence ?? 0) <
+                  FUNDUS_CONFIDENCE_UNCERTAIN_THRESHOLD
+                    ? locale === "tr"
+                      ? "Belirsiz"
+                      : "Uncertain"
+                    : drLabelTr(
+                        result.pytorch?.label ||
+                          (locale === "tr" ? "Belirsiz" : "Uncertain"),
+                        locale,
+                      )
+                }
                 confidencePct={Number(result.pytorch?.confidence || 0) * 100}
               />
 
@@ -515,7 +559,11 @@ export function ImageAnalysisCard({
                       {t("analysisCard.modelLabelEn")}
                     </p>
                     <p className="mt-1 text-sm text-slate-800">
-                      {String(result.drLabel)}
+                      {isLowConfidenceResult
+                        ? locale === "tr"
+                          ? "Belirsiz"
+                          : "Uncertain"
+                        : String(result.drLabel)}
                     </p>
                   </div>
                 ) : null}
@@ -526,10 +574,15 @@ export function ImageAnalysisCard({
                       {t("analysisCard.dmeBlockTitle")}
                     </p>
                     <p className="mt-1 text-sm text-slate-800">
-                      {result.dmeSuspected
-                        ? t("analysisCard.dmeSuspectedYes")
-                        : t("analysisCard.dmeSuspectedNo")}
-                      {typeof result.dmeConfidence === "number"
+                      {isLowConfidenceResult
+                        ? locale === "tr"
+                          ? "Model guveni dusuk oldugu icin DME bulgusu belirsiz/supheli duzeyde yorumlanmalidir."
+                          : "Because model confidence is low, DME finding should be interpreted as uncertain/suspected."
+                        : result.dmeSuspected
+                          ? t("analysisCard.dmeSuspectedYes")
+                          : t("analysisCard.dmeSuspectedNo")}
+                      {!isLowConfidenceResult &&
+                      typeof result.dmeConfidence === "number"
                         ? ` — ${t("analysisCard.dmeConfidenceLabel")} ${(Number(result.dmeConfidence) * 100).toFixed(0)}%`
                         : null}
                     </p>
@@ -724,7 +777,9 @@ export function ImageAnalysisCard({
                   }`}
                   onClick={() => {
                     setIsCorrect(true);
-                    setCorrectionSelections([]);
+                    setCorrectionSelection("");
+                    setFundusNvd(false);
+                    setFundusNve(false);
                     setIsAddedToForm(false);
                   }}
                 >
@@ -738,6 +793,9 @@ export function ImageAnalysisCard({
                   }`}
                   onClick={() => {
                     setIsCorrect(false);
+                    setCorrectionSelection("");
+                    setFundusNvd(false);
+                    setFundusNve(false);
                     setIsAddedToForm(false);
                   }}
                 >
@@ -752,13 +810,13 @@ export function ImageAnalysisCard({
                   {t("analysisCard.correctionTitle")}
                 </span>
                 <p className="mb-3 text-xs text-rose-800/90">
-                  {t("analysisCard.correctionMultiHint")}
+                  {t("analysisCard.correctionSingleHint")}
                 </p>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {(locale === "tr" ? DR_STAGE_LABELS_TR : DR_STAGE_LABELS_EN).map(
                     (label) => {
                       const v = label.trim();
-                      const checked = correctionSelections.includes(v);
+                      const checked = correctionSelection === v;
                       return (
                         <label
                           key={v}
@@ -769,15 +827,12 @@ export function ImageAnalysisCard({
                           }`}
                         >
                           <input
-                            type="checkbox"
+                            type="radio"
+                            name="fundus-correction"
                             checked={checked}
                             className="h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500"
                             onChange={() => {
-                              setCorrectionSelections((prev) =>
-                                prev.includes(v)
-                                  ? prev.filter((x) => x !== v)
-                                  : [...prev, v],
-                              );
+                              setCorrectionSelection(v);
                               setIsAddedToForm(false);
                             }}
                           />
@@ -786,6 +841,37 @@ export function ImageAnalysisCard({
                       );
                     },
                   )}
+                </div>
+                <div className="mt-3 rounded-xl border border-rose-200/70 bg-white/70 p-3">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-rose-700">
+                    {t("analysisCard.neovascularizationSelectionTitle")}
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-rose-100 bg-white px-3 py-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={fundusNvd}
+                        className="h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+                        onChange={(e) => {
+                          setFundusNvd(e.target.checked);
+                          setIsAddedToForm(false);
+                        }}
+                      />
+                      <span>{t("analysisCard.nvdLabel")}</span>
+                    </label>
+                    <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-rose-100 bg-white px-3 py-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={fundusNve}
+                        className="h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+                        onChange={(e) => {
+                          setFundusNve(e.target.checked);
+                          setIsAddedToForm(false);
+                        }}
+                      />
+                      <span>{t("analysisCard.nveLabel")}</span>
+                    </label>
+                  </div>
                 </div>
               </div>
             )}
@@ -819,7 +905,7 @@ export function ImageAnalysisCard({
                 onClick={() => publishDraft()}
                 disabled={
                   isCorrect === null ||
-                  (isCorrect === false && correctionSelections.length === 0)
+                  (isCorrect === false && !correctionSelection)
                 }
               >
                 <CheckCircle2 className="mr-2 h-4 w-4" />

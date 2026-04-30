@@ -3,7 +3,7 @@
  * Kayıt şeması: `Patient.risk` için `__DTG__:` önekli string (bkz. `serializePatientDiseaseTriageForDb`).
  */
 
-import { decodeModalityAiAlignedLabel, isDoctorApprovalToken, isModalityDisagreePending } from "@/lib/doctor-feedback";
+import { decodeModalityAiAlignedLabel, decodeOctMultiSelection, isDoctorApprovalToken, isModalityDisagreePending } from "@/lib/doctor-feedback";
 import { getDrStageIndexFromLabel } from "@/lib/dr-stage-labels";
 import {
   humanizeEmbeddedFfaJsonInText,
@@ -140,6 +140,16 @@ function classifyOct(raw: string): ModalitySlice {
   const maiDecoded = decodeModalityAiAlignedLabel(s);
   if (maiDecoded) {
     return classifyOctEffectivePlain(maiDecoded);
+  }
+  const octMulti = decodeOctMultiSelection(s);
+  if (octMulti.length > 0) {
+    if (
+      octMulti.length === 1 &&
+      octMulti[0].toLowerCase() === OCT_HEALTHY_VALUE.toLowerCase()
+    ) {
+      return "routine";
+    }
+    return "urgent";
   }
 
   if (isDoctorApprovalToken(s)) return "routine";

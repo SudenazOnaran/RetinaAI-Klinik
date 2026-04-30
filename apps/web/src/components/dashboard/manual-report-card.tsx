@@ -148,6 +148,32 @@ export function ManualReportCard({
           setBusy(false);
           return;
         }
+        if (octImageDataUrl && !modalityDrFeedbackForStorage(octDoctorFeedback)) {
+          toast({
+            variant: "destructive",
+            title: t("radiologicalReport.validationTitle"),
+            description:
+              locale === "tr"
+                ? "OCT için doktor geri bildirimi zorunlu. Lütfen bir tanı seçin."
+                : "Doctor feedback is required for OCT. Please select at least one diagnosis.",
+            duration: 7000,
+          });
+          setBusy(false);
+          return;
+        }
+        if (ffaImageDataUrl && !modalityDrFeedbackForStorage(ffaDoctorFeedback)) {
+          toast({
+            variant: "destructive",
+            title: t("radiologicalReport.validationTitle"),
+            description:
+              locale === "tr"
+                ? "FFA için doktor geri bildirimi zorunlu. Lütfen tanı/evre seçimini tamamlayın."
+                : "Doctor feedback is required for FFA. Please complete diagnosis/stage selection.",
+            duration: 7000,
+          });
+          setBusy(false);
+          return;
+        }
       }
 
       const exceededField = [
@@ -188,6 +214,19 @@ export function ManualReportCard({
               String(aiDraft.correctionLabel).trim() !== ""
             ? [String(aiDraft.correctionLabel).trim()]
             : [];
+      if (mode === "radiological" && correctionLabelSources.length > 1) {
+        toast({
+          variant: "destructive",
+          title: t("radiologicalReport.validationTitle"),
+          description:
+            locale === "tr"
+              ? "Eğitim etiketi için fundus doktor kararı tek bir DR evresi olmalıdır."
+              : "For training labels, fundus doctor feedback must include exactly one DR stage.",
+          duration: 7000,
+        });
+        setBusy(false);
+        return;
+      }
       const resolvedCorrection =
         correctionLabelSources.length > 0
           ? correctionLabelSources
@@ -197,6 +236,23 @@ export function ManualReportCard({
               .filter(Boolean)
               .join("\n")
           : null;
+      if (mode === "radiological" && aiDraft?.originalImage?.trim()) {
+        const hasFundusDoctorDecision =
+          Boolean(resolvedCorrection) || Boolean(resolvedAiOnly);
+        if (!hasFundusDoctorDecision) {
+          toast({
+            variant: "destructive",
+            title: t("radiologicalReport.validationTitle"),
+            description:
+              locale === "tr"
+                ? "Fundus için doktor kararı zorunlu. Lütfen DR etiketini onaylayın veya düzeltin."
+                : "Doctor decision is required for fundus. Please approve or correct the DR stage.",
+            duration: 7000,
+          });
+          setBusy(false);
+          return;
+        }
+      }
       const finalConfidence =
         typeof aiDraft?.confidence === "number" ? aiDraft.confidence : 0;
 
@@ -209,7 +265,6 @@ export function ManualReportCard({
           : aiDraft
             ? [
                 `${t("manualReport.aiResult")}: ${formatDrLabelForDisplay(aiDraft.aiResult, locale)}`,
-                `${t("manualReport.aiConfidence")}: %${Math.round((aiDraft.confidence || 0) * 100)}`,
                 `${t("manualReport.aiCorrection")}: ${correctionLabelSources.length > 0 ? correctionLabelSources.map((lbl) => formatDrLabelForDisplay(String(lbl).trim(), locale)).join(" · ") : t("manualReport.none")}`,
                 ...(aiDraft.analysisNotes?.trim()
                   ? [
@@ -290,7 +345,7 @@ export function ManualReportCard({
         },
         ilaclar:
           mode === "radiological" ? "-" : treatmentRecommendations.trim(),
-        drFeedback: resolvedCorrection ?? undefined,
+        drFeedback: resolvedCorrection ?? resolvedAiOnly ?? undefined,
         octDrFeedback:
           mode === "radiological"
             ? modalityDrFeedbackForStorage(octDoctorFeedback)
@@ -302,6 +357,10 @@ export function ManualReportCard({
         aiInferenceSnapshot:
           mode === "radiological"
             ? (aiDraft?.aiInferenceSnapshot ?? undefined)
+            : undefined,
+        doctorStructuredReview:
+          mode === "radiological"
+            ? (aiDraft?.doctorStructuredReview ?? undefined)
             : undefined,
       });
 

@@ -43,7 +43,7 @@ Bu adim sonunda su ciktilar hazirlandi:
 - Mevcut kanit:
   - Teknik backlog ve adim bazli ilerleme: son kontroller.md
   - CI/release gate: .github/workflows/ci.yml ve package.json release:check
-  - Test artefaktlari: e2e/_.spec.ts, src/lib/_.test.ts
+  - Test artefaktlari: e2e/*.spec.ts, src/lib/*.test.ts
 - Durum: KISMEN VAR
 - Kritik eksik:
   - Formal SDLC policy dokumani yok
@@ -87,15 +87,15 @@ Bu adim sonunda su ciktilar hazirlandi:
 
 Adim 2 ilerleme (2026-03-24):
 
-- [x] docs/compliance/iso-14971-risk-management-plan.md (sablon olusturuldu)
-- [x] docs/compliance/iso-14971-risk-register.csv (sablon olusturuldu)
-- [x] docs/compliance/iec-62304-software-development-plan.md (sablon olusturuldu)
-- [x] docs/compliance/iec-62304-traceability-matrix.csv (sablon olusturuldu)
-- [x] docs/compliance/iso-13485-qms-scope-and-procedures.md (sablon olusturuldu)
-- [x] docs/compliance/clinical-validation-protocol.md (sablon olusturuldu)
-- [x] Iceriklerin proje-gercek gereksinimler ile ilk taslak doldurmasi yapildi (v0.2-draft).
-- [ ] Dokuman onaylari (Product/Clinical + Security/Compliance + Operations) tamamlanmadi.
-- [ ] Klinik validasyon raporunun veri ile calistirilmis ilk resmi cikti paketi hazir degil.
+- docs/compliance/iso-14971-risk-management-plan.md (sablon olusturuldu)
+- docs/compliance/iso-14971-risk-register.csv (sablon olusturuldu)
+- docs/compliance/iec-62304-software-development-plan.md (sablon olusturuldu)
+- docs/compliance/iec-62304-traceability-matrix.csv (sablon olusturuldu)
+- docs/compliance/iso-13485-qms-scope-and-procedures.md (sablon olusturuldu)
+- docs/compliance/clinical-validation-protocol.md (sablon olusturuldu)
+- Iceriklerin proje-gercek gereksinimler ile ilk taslak doldurmasi yapildi (v0.2-draft).
+- Dokuman onaylari (Product/Clinical + Security/Compliance + Operations) tamamlanmadi.
+- Klinik validasyon raporunun veri ile calistirilmis ilk resmi cikti paketi hazir degil.
 
 ## 5) RACI (Ilk Taslak)
 
@@ -112,7 +112,7 @@ Adim 2 ilerleme (2026-03-24):
 
 ## 6) Adim 1 Tamamlanma Kriteri (Bu teslimde saglandi)
 
-- [x] Standart bazli artefakt envanteri olusturuldu.
-- [x] Mevcut/eksik durum netlestirildi.
-- [x] Adim 2 dokuman backlog'u yazildi.
-- [x] Sorumluluk dagilimi ilk taslak olarak belirlendi.
+- Standart bazli artefakt envanteri olusturuldu.
+- Mevcut/eksik durum netlestirildi.
+- Adim 2 dokuman backlog'u yazildi.
+- Sorumluluk dagilimi ilk taslak olarak belirlendi.

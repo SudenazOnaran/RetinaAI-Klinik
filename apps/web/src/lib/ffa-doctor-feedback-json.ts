@@ -8,6 +8,9 @@ export type FfaDoctorFeedbackV2 = {
   diagnosis: string;
   /** Diyabetik retinopati seçildiğinde fundus ile aynı evre etiketi */
   drStage?: string | null;
+  /** DR seciminde neovaskularizasyon bulgusu */
+  nvd?: boolean | null;
+  nve?: boolean | null;
 };
 
 export type FfaDoctorFeedbackV3 = {
@@ -15,6 +18,9 @@ export type FfaDoctorFeedbackV3 = {
   diagnoses: string[];
   /** `ffa_dr` seçiliyse zorunlu */
   drStage?: string | null;
+  /** `ffa_dr` seciminde istege bagli neovaskularizasyon bayraklari */
+  nvd?: boolean | null;
+  nve?: boolean | null;
 };
 
 export type FfaDoctorFeedbackParsed = FfaDoctorFeedbackV2 | FfaDoctorFeedbackV3;

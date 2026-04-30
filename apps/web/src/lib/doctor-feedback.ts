@@ -15,6 +15,7 @@ const DOCTOR_APPROVAL_KEYS = new Set([
 
 /** AI ile uyum kaydı: ham token yerine `mai:<görünen etiket>` saklanır (geri bildirim metni). */
 export const MODALITY_AI_ALIGNED_PREFIX = "mai:";
+export const OCT_MULTI_PREFIX = "oct_multi:";
 
 export function encodeModalityAiAlignedLabel(label: string): string {
   const s = String(label ?? "").trim();
@@ -63,6 +64,22 @@ export function modalityDrFeedbackForStorage(
   const t = String(value ?? "").trim();
   if (!t || isModalityDisagreePending(t)) return undefined;
   return t;
+}
+
+export function encodeOctMultiSelection(values: string[]): string {
+  const uniq = [...new Set(values.map((v) => String(v).trim()).filter(Boolean))];
+  if (uniq.length === 0) return "";
+  return `${OCT_MULTI_PREFIX}${uniq.join(",")}`;
+}
+
+export function decodeOctMultiSelection(
+  raw: string | null | undefined,
+): string[] {
+  const t = String(raw ?? "").trim();
+  if (!t.startsWith(OCT_MULTI_PREFIX)) return [];
+  const rest = t.slice(OCT_MULTI_PREFIX.length).trim();
+  if (!rest) return [];
+  return [...new Set(rest.split(",").map((x) => x.trim()).filter(Boolean))];
 }
 
 /**

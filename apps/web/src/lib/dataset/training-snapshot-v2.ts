@@ -60,19 +60,6 @@ export type TrainingInferenceSnapshotV2 = {
   };
 };
 
-function clamp01(x: number): number {
-  return Math.max(0, Math.min(1, x));
-}
-
-function teacherConfidenceFromPytorch(
-  pytorch: Record<string, unknown> | undefined,
-): number | null {
-  if (!pytorch) return null;
-  const c = Number(pytorch.confidence);
-  if (!Number.isFinite(c)) return null;
-  return clamp01(c);
-}
-
 /**
  * Kayıt anında: istemci AI snapshot + çözülmüş altın evre → eğitim JSON’u.
  */
@@ -81,7 +68,6 @@ export function buildTrainingInferenceSnapshotV2(params: {
   resolvedAi: string;
   goldDrGradeInt: number | null;
   labelQuality: TrainingLabelQuality;
-  confidence: number;
 }): Prisma.InputJsonValue {
   const teacherIdx =
     params.parsed?.drGrade ?? getDrStageIndexFromLabel(params.resolvedAi);
@@ -121,7 +107,7 @@ export function buildTrainingInferenceSnapshotV2(params: {
         teacher_index: fallbackTeacher,
         label_tr: String(labelTr),
         label_en: String(labelEn),
-        teacher_confidence: teacherConfidenceFromPytorch(params.parsed?.pytorch),
+        teacher_confidence: null,
       },
       dme: {
         suspected:
@@ -145,9 +131,7 @@ export function buildTrainingInferenceSnapshotV2(params: {
       ...(params.parsed?.pytorch ? { pytorch: params.parsed.pytorch } : {}),
       ...(params.parsed?.inference ? { llm: params.parsed.inference } : {}),
       label_quality: params.labelQuality,
-      ai_confidence_at_save: Number.isFinite(params.confidence)
-        ? clamp01(params.confidence)
-        : null,
+      ai_confidence_at_save: null,
       legacy_snapshot_schema: DATASET_SCHEMA_VERSION,
     },
   };

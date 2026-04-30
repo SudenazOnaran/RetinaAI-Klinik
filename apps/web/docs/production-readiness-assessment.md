@@ -66,7 +66,7 @@ Dogrulama sonucu:
 
 Yorum:
 
-- 2. adim teknik olarak tamamlandi.
+- 1. adim teknik olarak tamamlandi.
 - Kalite kapilari artik aktif; ancak Windows'taki `.next/trace` kilidi cozulmeden build sonuna kadar ilerleyemiyor.
 
 ## Uygulama Guncellemesi - Adim 3 (Tamamlandi)
@@ -92,7 +92,7 @@ Dogrulama sonucu:
 
 Yorum:
 
-- 3. adim teknik olarak tamamlandi.
+- 1. adim teknik olarak tamamlandi.
 - Guvenlik seviyesi artti; ancak deploy ortamlari artik zorunlu olarak bu secret'lari tanimlamalidir.
 
 ## Uygulama Guncellemesi - Adim 4 (Tamamlandi)
@@ -118,7 +118,7 @@ Dogrulama sonucu:
 
 Yorum:
 
-- 4. adim teknik olarak tamamlandi.
+- 1. adim teknik olarak tamamlandi.
 - Self-signup riski varsayilan olarak kapatildi; kontrollu acilis yalnizca env flag ile mumkun.
 
 ## Uygulama Guncellemesi - Adim 5 (Tamamlandi)
@@ -147,7 +147,7 @@ Dogrulama sonucu:
 
 Yorum:
 
-- 5. adim teknik olarak tamamlandi.
+- 1. adim teknik olarak tamamlandi.
 - Brute-force riski anlamli sekilde azaldi.
 - Not: Bu koruma in-memory oldugu icin multi-instance dagitik ortamda merkezi (Redis vb.) rate limit ile tamamlanmalidir.
 
@@ -173,7 +173,7 @@ Dogrulama sonucu:
 
 Yorum:
 
-- 6. adim teknik olarak tamamlandi.
+- 1. adim teknik olarak tamamlandi.
 - Login lockout davranisi artik instance restartindan etkilenmeyen, ortak DB uzerinden paylasilan bir yapiya tasindi.
 - Not: Daha buyuk olcekte Redis tabanli distributed rate limiter hala performans/latency acisindan tercih edilebilir.
 
@@ -205,7 +205,7 @@ Dogrulama sonucu:
 
 Yorum:
 
-- 7. adim teknik olarak tamamlandi.
+- 1. adim teknik olarak tamamlandi.
 - E2E altyapisi artik devreye alinabilir durumda; bir sonraki adimda auth + patient/report + pdf + kvkk akislari detayli senaryolarla genisletilmeli.
 
 ## Uygulama Guncellemesi - Adim 8 (Tamamlandi)
@@ -278,7 +278,7 @@ Dogrulama sonucu:
 
 Yorum:
 
-- 9. adim teknik olarak tamamlandi.
+- 1. adim teknik olarak tamamlandi.
 - Pipeline artik yayin oncesi temel kalite kapilarini uca uca calistiriyor.
 
 ## Skor Karti (10 uzerinden)
@@ -310,21 +310,21 @@ Yorum:
 - `.next/trace` EPERM kilidi temizlenerek build akisi stabil hale getirildi.
 - Son durum: Windows ortaminda production build basarili.
 
-2. Build-time kalite kapilari devre disi
+1. Build-time kalite kapilari devre disi
 
 - Bu madde Adim 2 ile cozuldu: kalite kapilari tekrar aktif.
 
-3. Varsayilan (fallback) gizli anahtarlar kodda sabit
+1. Varsayilan (fallback) gizli anahtarlar kodda sabit
 
 - Bu madde Adim 3 ile cozuldu: fallback secret'lar kaldirildi ve fail-fast aktif edildi.
 - Yeni operasyonel gereksinim: deploy ortamina `SESSION_SECRET` (veya `NEXTAUTH_SECRET`) ve `AI_GATEWAY_SHARED_SECRET` zorunlu olarak tanimlanmali.
 
-4. Kayit endpointi acik (self-signup)
+1. Kayit endpointi acik (self-signup)
 
 - Bu madde Adim 4 ile cozuldu: varsayilan politika manager-onayli kayit.
 - Operasyonel not: `ALLOW_PUBLIC_REGISTRATION=1` yalnizca kurulum/gecis senaryolarinda gecici kullanilmali.
 
-5. Medikal regülasyon seviyesi yetersiz
+1. Medikal regülasyon seviyesi yetersiz
 
 - CE/FDA/MDR kapsaminda beklenen formal klinik validasyon, risk yonetimi (ISO 14971), yazilim yasam dongusu (IEC 62304), kalite yonetim sistemi (ISO 13485) kanitlari yok.
 - Sonuc: klinik satis/kurumsal satin alma sureclerinde gecememe riski cok yuksek.
@@ -335,21 +335,21 @@ Yorum:
 
 - Storage object erisiminde session var, ancak object key bazli sahiplik dogrulamasi ve ayrintili policy katmani guclendirilmeli.
 
-2. Test kapsamı dar
+1. Test kapsamı dar
 
 - Unit testler mevcut, E2E altyapisi ve auth/register smoke testleri aktif.
 - Hala genisletilmesi gereken alanlar: hasta/rapor olusturma, PDF olusturma, API authz, KVKK detay akislari.
 
-3. Runtime DDL kullanimi
+1. Runtime DDL kullanimi
 
 - Kod tabanindaki runtime DDL kullanimi Adim 8 ile kaldirildi.
 - Kalan operasyonel risk: mevcut veritabaninda migration gecmisi drift/failure oldugu icin `migrate deploy` once migration resolve/senkronizasyon islemi gerektiriyor.
 
-4. Model yonetimi ve performans izleme eksik
+1. Model yonetimi ve performans izleme eksik
 
 - Model versiyonlama, drift izleme, dataset lineage, threshold governance ve rollback playbooklari eksik.
 
-5. Guvenlik sertlestirmeleri eksik
+1. Guvenlik sertlestirmeleri eksik
 
 - Login rate limit + gecici lockout + DB tabanli merkezi deneme takibi Adim 5-6 ile eklendi.
 - Kalanlar: WAF stratejisi, anahtar rotasyonu, ileri seviye hesap kilitleme/politika setleri.

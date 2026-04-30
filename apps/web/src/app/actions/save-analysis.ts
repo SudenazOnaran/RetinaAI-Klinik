@@ -12,8 +12,10 @@ import {
   summarizeSaveAnalysisPayload,
 } from "@/lib/structured-error-log";
 import { getRequestLocale } from "@/lib/i18n/server";
-import { resolveDrLabelToStoredForm } from "@/lib/dr-stage-labels";
+import { getDrStageIndexFromLabel, resolveDrLabelToStoredForm } from "@/lib/dr-stage-labels";
 import {
+  decodeOctMultiSelection,
+  decodeModalityAiAlignedLabel,
   isDoctorApprovalToken,
   isModalityDisagreePending,
 } from "@/lib/doctor-feedback";
@@ -29,13 +31,10 @@ import {
   type AiInferenceSnapshot,
 } from "@/lib/dataset/snapshot";
 import {
-  computeTrainingLabelQuality,
-  resolveGoldDrGradeInt,
+  resolveGoldDrGradeIntFromDoctorFeedback,
 } from "@/lib/dataset/training-labels";
-import { buildTrainingInferenceSnapshotV2 } from "@/lib/dataset/training-snapshot-v2";
 import {
   buildCombinedDoctorNotesText,
-  computeTrainingDatasetEntryFeatureColumns,
 } from "@/lib/dataset/training-entry-features";
 import {
   buildManualReportV2DoctorNoteJson,
@@ -83,7 +82,125 @@ type PrismaTxTrainingDatasetEntry = {
   trainingDatasetEntry: {
     create: (args: { data: Record<string, unknown> }) => Promise<{ id: string }>;
   };
+  trainingDatasetEntryOct: {
+    create: (args: { data: Record<string, unknown> }) => Promise<{ id: string }>;
+  };
+  trainingDatasetEntryFfa: {
+    create: (args: { data: Record<string, unknown> }) => Promise<{ id: string }>;
+  };
 };
+
+function extractFundusNvdNve(
+  doctorReview: Record<string, unknown> | null | undefined,
+): { fundusNvd: number | null; fundusNve: number | null } {
+  const fa = doctorReview
+    ? doctorReview["fundusAssessment"] ?? doctorReview["fundus_assessment"]
+    : null;
+  if (!fa || typeof fa !== "object" || Array.isArray(fa)) {
+    return { fundusNvd: null, fundusNve: null };
+  }
+  const nv = (fa as Record<string, unknown>)["neovascularization"];
+  if (!nv || typeof nv !== "object" || Array.isArray(nv)) {
+    return { fundusNvd: null, fundusNve: null };
+  }
+  const nvd = (nv as Record<string, unknown>)["nvd"];
+  const nve = (nv as Record<string, unknown>)["nve"];
+  return {
+    fundusNvd: nvd === true ? 1 : nvd === false ? 0 : null,
+    fundusNve: nve === true ? 1 : nve === false ? 0 : null,
+  };
+}
+
+function extractOctTargets(
+  octDecision: string | undefined,
+): {
+  octHealthy: number | null;
+  octDme: number | null;
+  octAmd: number | null;
+  octMacularHole: number | null;
+  octErmVmt: number | null;
+} {
+  const raw = String(octDecision || "").trim();
+  if (!raw) {
+    return {
+      octHealthy: null,
+      octDme: null,
+      octAmd: null,
+      octMacularHole: null,
+      octErmVmt: null,
+    };
+  }
+  const multi = decodeOctMultiSelection(raw);
+  const labels = multi.length > 0 ? multi : [raw];
+  const has = (code: string) => labels.includes(code);
+  const healthy = has("oct_saglikli_makula");
+  return {
+    octHealthy: healthy ? 1 : 0,
+    octDme: !healthy && has("oct_dme") ? 1 : 0,
+    octAmd: !healthy && has("oct_amd") ? 1 : 0,
+    octMacularHole: !healthy && has("oct_macular_hole") ? 1 : 0,
+    octErmVmt: !healthy && has("oct_erm") ? 1 : 0,
+  };
+}
+
+function extractFfaTargets(
+  ffaDecision: string | undefined,
+): {
+  ffaHealthy: number | null;
+  ffaDr: number | null;
+  ffaRvo: number | null;
+  ffaAmdCnv: number | null;
+  ffaCsr: number | null;
+  ffaUveitis: number | null;
+  ffaNvd: number | null;
+  ffaNve: number | null;
+  ffaDrStage: number | null;
+} {
+  const raw = String(ffaDecision || "").trim();
+  if (!raw) {
+    return {
+      ffaHealthy: null,
+      ffaDr: null,
+      ffaRvo: null,
+      ffaAmdCnv: null,
+      ffaCsr: null,
+      ffaUveitis: null,
+      ffaNvd: null,
+      ffaNve: null,
+      ffaDrStage: null,
+    };
+  }
+  const parsed = tryParseFfaDoctorFeedbackAny(raw);
+  const diags: string[] =
+    parsed?.v === 3
+      ? parsed.diagnoses.map((x) => String(x || "").trim()).filter(Boolean)
+      : parsed?.v === 2
+        ? [String(parsed.diagnosis || "").trim()].filter(Boolean)
+        : [];
+  const has = (code: string) => diags.includes(code);
+  const healthy = has("ffa_healthy");
+  const drStageRaw =
+    parsed?.v === 3
+      ? String(parsed.drStage || "").trim()
+      : parsed?.v === 2
+        ? String(parsed.drStage || "").trim()
+        : "";
+  const drStageIdx = drStageRaw ? getDrStageIndexFromLabel(drStageRaw) : null;
+  const nvd = parsed && "nvd" in parsed ? parsed.nvd === true : false;
+  const nve = parsed && "nve" in parsed ? parsed.nve === true : false;
+  const hasDr = !healthy && has("ffa_dr");
+  return {
+    ffaHealthy: healthy ? 1 : 0,
+    ffaDr: hasDr ? 1 : 0,
+    ffaRvo: !healthy && has("ffa_rvo") ? 1 : 0,
+    ffaAmdCnv: !healthy && has("ffa_amd_cnv") ? 1 : 0,
+    ffaCsr: !healthy && has("ffa_csr") ? 1 : 0,
+    ffaUveitis: !healthy && has("ffa_uveitis") ? 1 : 0,
+    ffaNvd: hasDr && nvd ? 1 : 0,
+    ffaNve: hasDr && nve ? 1 : 0,
+    ffaDrStage: hasDr && drStageIdx != null ? drStageIdx : null,
+  };
+}
 
 export async function saveAnalysisAction({
   patientId,
@@ -122,7 +239,7 @@ export async function saveAnalysisAction({
   ilaclar?: string;
   aiOdriLabels?: string[];
   aiOdriConfidences?: number[];
-  drFeedback?: string; // Bu değer varsa DOKTOR DÜZELTMİŞTİR, yoksa AI DOĞRUDUR.
+  drFeedback?: string; // Eğitim etiketi için her zaman doktor kararı.
   octDrFeedback?: string;
   ffaDrFeedback?: string;
   /** LLM/yerel /predict yapısal çıktısı (heatmap hariç); veri seti için */
@@ -229,8 +346,46 @@ export async function saveAnalysisAction({
     let sanitizedOctFb: string | undefined;
     if (rawOctFb && !isModalityDisagreePending(rawOctFb)) {
       if (isDoctorApprovalToken(rawOctFb)) {
-        sanitizedOctFb = rawOctFb;
+        const aligned = decodeModalityAiAlignedLabel(rawOctFb);
+        if (!aligned) {
+          return {
+            ok: false as const,
+            error:
+              "OCT için «Evet» seçimi açık etiket içermiyor. Lütfen doktor kararını listeden net olarak seçin.",
+          };
+        }
+        sanitizedOctFb = aligned;
       } else {
+        const octMulti = decodeOctMultiSelection(rawOctFb);
+        if (octMulti.length > 0) {
+          const allowedOct = new Set([
+            "oct_dme",
+            "oct_amd",
+            "oct_macular_hole",
+            "oct_erm",
+            "oct_saglikli_makula",
+          ]);
+          for (const code of octMulti) {
+            if (!allowedOct.has(code)) {
+              return {
+                ok: false as const,
+                error: "Geçersiz OCT çoklu seçim kodu.",
+              };
+            }
+          }
+          if (
+            octMulti.includes("oct_saglikli_makula") &&
+            octMulti.length > 1
+          ) {
+            return {
+              ok: false as const,
+              error:
+                "OCT'de «sağlıklı/normal makula» seçildiğinde başka seçenek birlikte seçilemez.",
+            };
+          }
+          sanitizedOctFb = rawOctFb;
+          // multi kayıt tamam
+        } else {
         const rDr = resolveDrLabelToStoredForm(rawOctFb, locale);
         if (rDr) {
           sanitizedOctFb = rDr;
@@ -247,12 +402,21 @@ export async function saveAnalysisAction({
           }
           sanitizedOctFb = d;
         }
+        }
       }
     }
     let sanitizedFfaFb: string | undefined;
     if (rawFfaFb && !isModalityDisagreePending(rawFfaFb)) {
       if (isDoctorApprovalToken(rawFfaFb)) {
-        sanitizedFfaFb = rawFfaFb;
+        const aligned = decodeModalityAiAlignedLabel(rawFfaFb);
+        if (!aligned) {
+          return {
+            ok: false as const,
+            error:
+              "FFA için «Evet» seçimi açık etiket içermiyor. Lütfen doktor kararını listeden net olarak seçin.",
+          };
+        }
+        sanitizedFfaFb = aligned;
       } else if (rawFfaFb.startsWith("ffa_json:")) {
         const p = tryParseFfaDoctorFeedbackAny(rawFfaFb);
         if (!p) {
@@ -486,17 +650,9 @@ export async function saveAnalysisAction({
         ? (parsedDoctorReview as Record<string, unknown>)
         : null;
 
-    const goldDrGradeInt = resolveGoldDrGradeInt({
-      feedbackStored: sanitizedFeedback,
-      inferenceDrGrade: parsedInference?.drGrade ?? null,
-      aiResultStored: resolvedAi,
-    });
-
-    const labelQuality = computeTrainingLabelQuality({
-      hasDrFeedback: Boolean(sanitizedFeedback),
-      physicianReasoning: sanitizedPhysicianReasoning,
-      doctorStructuredReview: doctorReviewRecord ?? undefined,
-    });
+    const goldDrGradeInt = resolveGoldDrGradeIntFromDoctorFeedback(
+      sanitizedFeedback,
+    );
 
     const parsedComorbidity = parseComorbidityJsonForStorage(comorbidity);
     const uncertaintyVal = uncertaintyScoreFromSnapshot(parsedInference);
@@ -551,14 +707,13 @@ export async function saveAnalysisAction({
       structuredForAnalysis?.sections,
       resolvedDoctorNote,
     );
-    const trainingMlColumns = computeTrainingDatasetEntryFeatureColumns({
-      doctorNotesCombinedText: combinedDoctorNotesText,
-      parsedInference,
-      doctorStructuredReview: doctorReviewRecord,
-    });
+    const fundusNvdNve = extractFundusNvdNve(doctorReviewRecord);
 
-    /** Eğitim satırı: doktor düzeltmesi yoksa AI ile aynı onay → AI etiketi (null değil). */
-    const trainingDatasetDrFeedback = sanitizedFeedback ?? resolvedAi;
+    /** Eğitim etiketi: yalnızca doktor kararı (0..4) */
+    const trainingDatasetDrFeedback =
+      goldDrGradeInt != null && goldDrGradeInt >= 0 && goldDrGradeInt <= 4
+        ? goldDrGradeInt
+        : null;
     const TRAINING_DOCTOR_NOTES_MAX = 120_000;
     const TRAINING_DOCTOR_NOTE_JSON_MAX = 500_000;
     const trainingDoctorNotesText =
@@ -569,6 +724,7 @@ export async function saveAnalysisAction({
       resolvedDoctorNote.trim().length > 0
         ? resolvedDoctorNote.trim().slice(0, TRAINING_DOCTOR_NOTE_JSON_MAX)
         : null;
+    const ffaTargets = extractFfaTargets(sanitizedFfaFb);
 
     const savedAnalysis = await prisma.$transaction(async (tx) => {
       const saved = await tx.analysis.create({
@@ -580,13 +736,11 @@ export async function saveAnalysisAction({
       });
 
       if (storedOriginalImage?.url) {
-        const trainingSnapshotJson = buildTrainingInferenceSnapshotV2({
-          parsed: parsedInference,
-          resolvedAi,
-          goldDrGradeInt,
-          labelQuality,
-          confidence,
-        });
+        if (trainingDatasetDrFeedback == null) {
+          throw new Error(
+            "Eğitim kaydı için fundus doktor kararı zorunludur. Lütfen DR etiketini doktor olarak onaylayın/seçin.",
+          );
+        }
         await (
           tx as unknown as PrismaTxTrainingDatasetEntry
         ).trainingDatasetEntry.create(
@@ -594,24 +748,63 @@ export async function saveAnalysisAction({
             data: {
               analysisId: saved.id,
               originalImageUrl: storedOriginalImage.url,
-              inferenceSnapshotJson: trainingSnapshotJson,
               drFeedback: trainingDatasetDrFeedback,
               doctorNotesText: trainingDoctorNotesText,
               doctorNote: trainingDoctorNoteJson,
-              doctorNotesDerivedDrGradeInt:
-                trainingMlColumns.doctorNotesDerivedDrGradeInt,
-              microaneurysmCountLevel:
-                trainingMlColumns.microaneurysmCountLevel,
-              hemorrhageQuadrants: trainingMlColumns.hemorrhageQuadrants,
-              hardExudateMacula: trainingMlColumns.hardExudateMacula,
-              cottonWoolSpots: trainingMlColumns.cottonWoolSpots,
-              venousBeading: trainingMlColumns.venousBeading,
-              irma: trainingMlColumns.irma,
-              neovascularization: trainingMlColumns.neovascularization,
-              trainingDmeSuspected: trainingMlColumns.trainingDmeSuspected,
+              fundusNvd: fundusNvdNve.fundusNvd,
+              fundusNve: fundusNvdNve.fundusNve,
             },
           },
         );
+      }
+
+      if (storedOctImage?.url) {
+        if (!sanitizedOctFb) {
+          throw new Error(
+            "Egitim kaydi icin OCT doktor karari zorunludur. Lutfen OCT tanisini secin.",
+          );
+        }
+        const octTargets = extractOctTargets(sanitizedOctFb);
+        await (
+          tx as unknown as PrismaTxTrainingDatasetEntry
+        ).trainingDatasetEntryOct.create({
+          data: {
+            analysisId: saved.id,
+            octImageUrl: storedOctImage.url,
+            octDoctorDecision: sanitizedOctFb,
+            octHealthy: octTargets.octHealthy,
+            octDme: octTargets.octDme,
+            octAmd: octTargets.octAmd,
+            octMacularHole: octTargets.octMacularHole,
+            octErmVmt: octTargets.octErmVmt,
+          },
+        });
+      }
+
+      if (storedFfaImage?.url) {
+        if (!sanitizedFfaFb) {
+          throw new Error(
+            "Egitim kaydi icin FFA doktor karari zorunludur. Lutfen FFA tani/evre secimini tamamlayin.",
+          );
+        }
+        await (
+          tx as unknown as PrismaTxTrainingDatasetEntry
+        ).trainingDatasetEntryFfa.create({
+          data: {
+            analysisId: saved.id,
+            ffaImageUrl: storedFfaImage.url,
+            ffaDoctorDecision: sanitizedFfaFb,
+            ffaHealthy: ffaTargets.ffaHealthy,
+            ffaDr: ffaTargets.ffaDr,
+            ffaRvo: ffaTargets.ffaRvo,
+            ffaAmdCnv: ffaTargets.ffaAmdCnv,
+            ffaCsr: ffaTargets.ffaCsr,
+            ffaUveitis: ffaTargets.ffaUveitis,
+            ffaNvd: ffaTargets.ffaNvd,
+            ffaNve: ffaTargets.ffaNve,
+            ffaDrStage: ffaTargets.ffaDrStage,
+          },
+        });
       }
 
       await tx.patient.update({

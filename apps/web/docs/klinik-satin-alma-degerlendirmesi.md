@@ -181,7 +181,7 @@ Sonuc: Uretim icin guvenlik seviyesi orta-alt.
 
 Riskler:
 
-- Frontend dogrudan http://localhost:5000/predict endpointine bagli.
+- Frontend dogrudan [http://localhost:5000/predict](http://localhost:5000/predict) endpointine bagli.
 - AI servis yoksa analiz akisi direkt kiriliyor.
 - Retry/queue/circuit breaker yok.
 - Yedekleme/geri donus planina dair uygulama izi yok.

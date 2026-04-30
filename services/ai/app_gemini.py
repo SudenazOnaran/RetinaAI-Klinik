@@ -12,6 +12,7 @@
 # =========================
 
 import io
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -277,6 +278,17 @@ _rate_limit_store = defaultdict(deque)
 _rate_limit_lock = threading.Lock()
 print(f"app_gemini rate limiter backend: {_rate_limit_backend}")
 
+_ANALYSIS_CACHE_TTL_SECONDS = max(
+    60,
+    int(os.environ.get("ANALYSIS_CACHE_TTL_SECONDS", "3600")),
+)
+_ANALYSIS_CACHE_MAX_ITEMS = max(
+    10,
+    int(os.environ.get("ANALYSIS_CACHE_MAX_ITEMS", "2000")),
+)
+_analysis_cache_lock = threading.Lock()
+_analysis_cache: dict[str, tuple[float, dict]] = {}
+
 DR_GRADE_LABELS_TR = [
     "Evre 0 (Sağlıklı - No DR)",
     "Evre 1 (Hafif - Mild NPDR)  ",
@@ -426,6 +438,41 @@ def _resize_pil_for_gemini(img: Image.Image) -> Image.Image:
     return img.resize((int(w * scale), int(h * scale)), Image.Resampling.LANCZOS)
 
 
+def _image_sha256_for_cache(img: Image.Image) -> str:
+    buf = io.BytesIO()
+    # Deterministik byte cikisi icin PNG kullan.
+    img.save(buf, format="PNG")
+    return hashlib.sha256(buf.getvalue()).hexdigest()
+
+
+def _deepcopy_json_dict(payload: dict) -> dict:
+    return json.loads(json.dumps(payload, ensure_ascii=False))
+
+
+def _analysis_cache_get(key: str) -> dict | None:
+    now = time.time()
+    with _analysis_cache_lock:
+        item = _analysis_cache.get(key)
+        if not item:
+            return None
+        expires_at, value = item
+        if expires_at <= now:
+            _analysis_cache.pop(key, None)
+            return None
+        return _deepcopy_json_dict(value)
+
+
+def _analysis_cache_set(key: str, value: dict) -> None:
+    now = time.time()
+    with _analysis_cache_lock:
+        # Basit boyut limiti: doluysa en eski eklenen kaydi cikar.
+        if len(_analysis_cache) >= _ANALYSIS_CACHE_MAX_ITEMS:
+            oldest_key = next(iter(_analysis_cache), None)
+            if oldest_key:
+                _analysis_cache.pop(oldest_key, None)
+        _analysis_cache[key] = (now + _ANALYSIS_CACHE_TTL_SECONDS, _deepcopy_json_dict(value))
+
+
 def _gemini_error_blob(err: BaseException, depth: int = 0) -> str:
     """APIError.details ve __cause__ zincirindeki kota metnini yakalamak icin."""
     if depth > 6:
@@ -494,6 +541,9 @@ _FUNDUS_FINDING_KEYS = (
 # Model asla %100 kesinlik vermesin (UI/triyaj)
 _MODEL_CONFIDENCE_CEILING = 0.95
 _DME_ODIR_CONFIDENCE_CAP = 0.55
+_FFA_MIN_CONFIDENCE_FOR_DEFINITE = 75
+_FUNDUS_MIN_CONFIDENCE_FOR_DEFINITE = 0.75
+_OCT_MIN_CONFIDENCE_FOR_DEFINITE = 75
 
 
 def _clamp_confidence(x: float, ceiling: float = _MODEL_CONFIDENCE_CEILING) -> float:
@@ -575,6 +625,14 @@ def _heatmap_enabled() -> bool:
 
 def _predict_with_gemini_core(image: Image.Image, client: genai.Client) -> dict:
     img_send = _resize_pil_for_gemini(image)
+    image_hash = _image_sha256_for_cache(img_send)
+    cache_key = (
+        f"fundus|{GEMINI_MODEL}|{GEMINI_MAX_IMAGE_SIDE}|"
+        f"{os.environ.get('GEMINI_PROMPT_VERSION', '1').strip() or '1'}|{image_hash}"
+    )
+    cached = _analysis_cache_get(cache_key)
+    if cached is not None:
+        return cached
     prompt = (
         "Sen retina hastalıkları konusunda uzman bir göz hastalıkları uzmanısın. "
         "Amacın fundus + klinik verilerden klinik karar destek raporu üretmektir.\n\n"
@@ -670,7 +728,7 @@ def _predict_with_gemini_core(image: Image.Image, client: genai.Client) -> dict:
         model=GEMINI_MODEL,
         contents=[prompt, img_send],
         config=types.GenerateContentConfig(
-            temperature=0.15,
+            temperature=0.0,
             max_output_tokens=8192,
             response_mime_type="application/json",
         ),
@@ -708,6 +766,19 @@ def _predict_with_gemini_core(image: Image.Image, client: genai.Client) -> dict:
     fundus_findings = _normalize_fundus_findings(data.get("fundus_findings"))
     fundus_assessment = normalize_fundus_assessment(data.get("fundus_assessment"))
     clinical_decision = _normalize_clinical_decision(data.get("clinical_decision"))
+
+    # Dusuk guvende kesin evre/etiket verme; ciktiyi belirsiz/supheli dile cek.
+    grade_out, label, dr_label, clinical_reasoning, uncertainty_note, clinical_decision = (
+        _apply_low_confidence_fundus_policy(
+            grade_i=grade_i,
+            label=label,
+            dr_label=dr_label,
+            conf_f=conf_f,
+            clinical_reasoning=clinical_reasoning,
+            uncertainty_note=uncertainty_note,
+            clinical_decision=clinical_decision,
+        )
+    )
 
     odir_results: list[dict] = []
     if dme_suspected:
@@ -774,9 +845,9 @@ def _predict_with_gemini_core(image: Image.Image, client: genai.Client) -> dict:
             "Grad-CAM sinifi yerel DenseNet argmax; drGrade LLM ciktisi."
         )
 
-    return {
+    result = {
         "success": True,
-        "drGrade": grade_i,
+        "drGrade": grade_out,
         "pytorch": {
             "label": label,
             "confidence": conf_f,
@@ -798,6 +869,8 @@ def _predict_with_gemini_core(image: Image.Image, client: genai.Client) -> dict:
         "localization": None,
         "inference": inference_meta,
     }
+    _analysis_cache_set(cache_key, result)
+    return result
 
 
 def _predict_with_gemini(image: Image.Image) -> dict:
@@ -914,10 +987,12 @@ OUTPUT FORMAT (STRICT JSON only, no markdown fences):
   "recommendations": [
     "...",
     "..."
-  ]
+  ],
+  "confidence_score": 0
 }
 
 Include all six conditions (DME, AMD, Macular Hole, ERM/VMT, CSR, RVO) in "conditions" with the exact name format you judge best, but each must have the four fields above.
+confidence_score is integer 0-100; if confidence_score < 75 use cautious/uncertain wording.
 """
 
 
@@ -964,6 +1039,15 @@ def _normalize_likelihood(raw: str) -> str:
     return "low"
 
 
+def _likelihood_to_score_bucket(likelihood_norm: str) -> int:
+    s = (likelihood_norm or "").strip().lower()
+    if s == "high":
+        return 85
+    if s == "moderate":
+        return 60
+    return 35
+
+
 def _normalize_oct_assessment(data: object) -> dict:
     if not isinstance(data, dict):
         data = {}
@@ -991,12 +1075,37 @@ def _normalize_oct_assessment(data: object) -> dict:
             )
     summary = str(d.get("clinical_summary") or "").strip()[:12_000]
     recs = _coerce_str_list(d.get("recommendations"), 30)
+    raw_confidence_score = _normalize_confidence_0_100(d.get("confidence_score"))
+    inferred_confidence_score = 0
+    if conditions:
+        inferred_confidence_score = max(
+            _likelihood_to_score_bucket(str(c.get("likelihood") or "low")) for c in conditions
+        )
+    confidence_score = raw_confidence_score if raw_confidence_score > 0 else inferred_confidence_score
+
+    # confidence < 75 ise kesin ifade engellenir; belirsiz/supheli yorumlama zorlanir.
+    if confidence_score < _OCT_MIN_CONFIDENCE_FOR_DEFINITE:
+        downgraded_conditions: list[dict] = []
+        for c in conditions:
+            if not isinstance(c, dict):
+                continue
+            c2 = dict(c)
+            c2["likelihood"] = "moderate"
+            downgraded_conditions.append(c2)
+        conditions = downgraded_conditions
+        uncertainty_prefix = (
+            "Genel guven skoru %75 altinda oldugu icin bulgular kesin tani yerine belirsiz/supheli duzeyde yorumlanmalidir."
+        )
+        if uncertainty_prefix not in summary:
+            summary = f"{uncertainty_prefix} {summary}".strip()[:12_000]
+
     return {
         "imageQuality": img_q,
         "findings": findings,
         "conditions": conditions,
         "clinicalSummary": summary,
         "recommendations": recs,
+        "confidenceScore": confidence_score,
     }
 
 
@@ -1004,13 +1113,19 @@ def _predict_oct_with_gemini_core(
     image: Image.Image, client: genai.Client, locale_tag: str
 ) -> dict:
     img_send = _resize_pil_for_gemini(image)
+    locale_norm = "tr" if (locale_tag or "").strip().lower().startswith("tr") else "en"
+    image_hash = _image_sha256_for_cache(img_send)
+    cache_key = f"oct|{GEMINI_MODEL}|{GEMINI_MAX_IMAGE_SIDE}|{locale_norm}|{image_hash}"
+    cached = _analysis_cache_get(cache_key)
+    if cached is not None:
+        return cached
     lang_inst = _oct_locale_to_instruction(locale_tag)
     prompt = OCT_BASE_PROMPT.strip() + "\n\n" + lang_inst
     resp = client.models.generate_content(
         model=GEMINI_MODEL,
         contents=[prompt, img_send],
         config=types.GenerateContentConfig(
-            temperature=0.15,
+            temperature=0.0,
             max_output_tokens=8192,
             response_mime_type="application/json",
         ),
@@ -1024,15 +1139,17 @@ def _predict_oct_with_gemini_core(
     if not data:
         raise ValueError("Gemini OCT ciktisi bos veya gecersiz JSON.")
     normalized = _normalize_oct_assessment(data)
-    return {
+    result = {
         "success": True,
         "oct": normalized,
         "inference": {
             "backend": "gemini-oct",
             "model": GEMINI_MODEL,
-            "locale": "tr" if (locale_tag or "").strip().lower().startswith("tr") else "en",
+            "locale": locale_norm,
         },
     }
+    _analysis_cache_set(cache_key, result)
+    return result
 
 
 def _predict_oct_with_gemini(image: Image.Image, locale_tag: str) -> dict:
@@ -1449,6 +1566,12 @@ Her hastalık için:
 6. Diyabetik Retinopati (DR) için FFA üzerinden ICDR ile uyumlu TAHMİNİ evre belirt (tek FFA ve faz belirsizliği nedeniyle güveni genelde düşük tut).
 Evre için şu etiketlerden birini kullan: Yok veya minimal bulgu | Hafif (Mild NPDR) | Orta (Moderate NPDR) | Şiddetli NPDR | Proliferatif DR | Belirsiz.
 Bu bilgiyi kökteki `diyabetik_retinopati_ffa` nesnesinde ver (DR ile ilgili görüş yoksa yine de Belirsiz/Yok diyebilirsin).
+DR olasılığı "Yüksek" ise `diyabetik_retinopati_ffa.evre` alanı "Belirsiz" kalmamalı; en azından NPDR/PDR yönünde klinik şüpheyi belirt.
+DR sınıflaması net olmalı:
+- ana_sinif: NPDR | PDR | Belirsiz
+- npdr_evresi: Hafif | Orta | Şiddetli | Yok | Belirsiz
+- pdr_tipi: NVD baskın | NVE baskın | NVD+NVE | Yok | Belirsiz
+Neovaskülarizasyon değerlendirmesinde NVD/NVE ayrı belirtilmeli; bu bilgi tedavi planını etkiler.
 
 ÇIKTI FORMATI (SADECE JSON, aciklama yok):
 
@@ -1474,7 +1597,15 @@ Bu bilgiyi kökteki `diyabetik_retinopati_ffa` nesnesinde ver (DR ile ilgili gö
   "diyabetik_retinopati_ffa": {
     "evre": "Belirsiz",
     "guven": "Düşük",
-    "gerekce": "FFA tek görüntü; kesin evre için geniş alan fundus ve OCT ile uyumludur."
+    "gerekce": "FFA tek görüntü; kesin evre için geniş alan fundus ve OCT ile uyumludur.",
+    "ana_sinif": "Belirsiz",
+    "npdr_evresi": "Belirsiz",
+    "pdr_tipi": "Yok",
+    "neovaskularizasyon_detayi": {
+      "nvd": "Var / Yok / Şüpheli / Belirsiz",
+      "nve": "Var / Yok / Şüpheli / Belirsiz"
+    },
+    "tedaviye_etki": "Kısa klinik etki notu"
   },
   "klinik_ozet": "...",
   "oneriler": [
@@ -1515,6 +1646,12 @@ TASKS:
 6) For diabetic retinopathy, give an ICDR-aligned ESTIMATED stage based on FFA alone (usually lower confidence). Use one label:
 None or minimal | Mild NPDR | Moderate NPDR | Severe NPDR | Proliferative DR | Uncertain.
 Provide this under root key `diabetic_retinopathy_ffa` with stage, confidence_tier (Low | Moderate | High), and a brief rationale.
+If DR likelihood is "High", `diabetic_retinopathy_ffa.stage` must not stay "Uncertain"; indicate at least suspected NPDR/PDR direction.
+DR classification must be explicit:
+- main_class: NPDR | PDR | Uncertain
+- npdr_stage: Mild | Moderate | Severe | None | Uncertain
+- pdr_type: NVD-dominant | NVE-dominant | NVD+NVE | None | Uncertain
+Report NVD/NVE separately under neovascularization_detail because it directly impacts treatment decisions.
 
 Output ONLY valid JSON (no markdown) using exactly these English keys and shapes:
 
@@ -1538,7 +1675,15 @@ Output ONLY valid JSON (no markdown) using exactly these English keys and shapes
   "diabetic_retinopathy_ffa": {
     "stage": "Uncertain",
     "confidence_tier": "Low",
-    "rationale": "Single-field FFA; staging should be confirmed with wide-field fundus/OCT."
+    "rationale": "Single-field FFA; staging should be confirmed with wide-field fundus/OCT.",
+    "main_class": "Uncertain",
+    "npdr_stage": "Uncertain",
+    "pdr_type": "None",
+    "neovascularization_detail": {
+      "nvd": "Present / Absent / Suspected / Uncertain",
+      "nve": "Present / Absent / Suspected / Uncertain"
+    },
+    "treatment_impact": "Brief clinical impact note"
   },
   "clinical_summary": "...",
   "recommendations": ["..."],
@@ -1569,6 +1714,94 @@ def _normalize_confidence_0_100(v: object) -> int:
     except (TypeError, ValueError):
         return 0
     return max(0, min(100, i))
+
+
+def _likelihood_rank(likelihood_norm: str) -> int:
+    s = (likelihood_norm or "").strip().lower()
+    if s == "high":
+        return 2
+    if s == "moderate":
+        return 1
+    return 0
+
+
+def _map_likelihood_to_locale(norm: str, is_tr: bool) -> str:
+    s = (norm or "").strip().lower()
+    if is_tr:
+        return {"high": "Yüksek", "moderate": "Orta", "low": "Düşük"}.get(s, "Düşük")
+    return {"high": "High", "moderate": "Moderate", "low": "Low"}.get(s, "Low")
+
+
+def _is_dr_disease_name(name: str) -> bool:
+    s = (name or "").strip().lower()
+    return ("diyabetik retinopati" in s) or ("diabetic retinopathy" in s) or (s == "dr")
+
+
+def _default_dr_stage(is_tr: bool) -> str:
+    return "Belirsiz" if is_tr else "Uncertain"
+
+
+def _stage_to_main_class(stage: str, is_tr: bool) -> str:
+    s = (stage or "").strip().lower()
+    if "pdr" in s or "proliferatif" in s or "proliferative" in s:
+        return "PDR"
+    if "npdr" in s or any(
+        k in s for k in ("mild", "moderate", "severe", "hafif", "orta", "şiddetli", "siddetli")
+    ):
+        return "NPDR"
+    return "Belirsiz" if is_tr else "Uncertain"
+
+
+def _build_dr_consistency_note(
+    dr_name: str,
+    dr_likelihood_norm: str,
+    stage: str,
+    is_tr: bool,
+) -> str:
+    like_local = _map_likelihood_to_locale(dr_likelihood_norm, is_tr)
+    if is_tr:
+        return (
+            f"Tutarlılık notu: '{dr_name}' için olasılık '{like_local}' olduğundan "
+            f"DR evresi/aktivite değerlendirmesi '{stage}' ile uyumlu şekilde raporlanmalıdır."
+        )
+    return (
+        f"Consistency note: Since likelihood for '{dr_name}' is '{like_local}', "
+        f"DR stage/activity should be reported in alignment with '{stage}'."
+    )
+
+
+def _apply_low_confidence_fundus_policy(
+    grade_i: int,
+    label: str,
+    dr_label: str,
+    conf_f: float,
+    clinical_reasoning: str,
+    uncertainty_note: str,
+    clinical_decision: dict,
+) -> tuple[int | None, str, str, str, str, dict]:
+    grade_out: int | None = grade_i
+    if conf_f < _FUNDUS_MIN_CONFIDENCE_FOR_DEFINITE:
+        grade_out = None
+        label = "Belirsiz"
+        dr_label = "Belirsiz (uncertain_dr)"
+        # Dusuk guvende modelin metnindeki kesin evre ifadeleri (mild/moderate vb.) hekime gosterilmesin.
+        clinical_reasoning = (
+            "Goruntu ve model guveni nedeniyle DR evresi kesinlestirilemedi. "
+            "Bulgular klinik olarak supheli/izlem duzeyinde degerlendirilmelidir; "
+            "kesin evreleme icin ek klinik korelasyon ve gerekirse ek goruntuleme onerilir."
+        )
+        if not uncertainty_note:
+            uncertainty_note = (
+                "Model guveni dusuk oldugundan kesin evre yerine belirsiz raporlama uygulanmistir."
+            )
+        clinical_decision["urgency"] = "routine"
+        clinical_decision["referableDr"] = False
+        clinical_decision["recommendedActions"] = [
+            "Klinik muayene ve sistemik risk faktorleri ile birlikte degerlendirme",
+            "Kisa donem izlem ve gerekirse ek goruntuleme (OCT / tekrar fundus)",
+        ]
+        clinical_decision["followUpTr"] = "Klinik duruma gore kisa donem izlem onerilir."
+    return grade_out, label, dr_label, clinical_reasoning, uncertainty_note, clinical_decision
 
 
 def _normalize_ffa_assessment(data: object, source_locale: str) -> dict:
@@ -1700,16 +1933,113 @@ def _normalize_ffa_assessment(data: object, source_locale: str) -> dict:
             st = str(_dict_get(rr, "evre", "stage") or "").strip()
             tier = str(_dict_get(rr, "guven", "confidence_tier") or "").strip()
             rationale = str(_dict_get(rr, "gerekce", "rationale") or "").strip()
+            main_class = str(_dict_get(rr, "ana_sinif", "main_class") or "").strip()
+            npdr_stage = str(_dict_get(rr, "npdr_evresi", "npdr_stage") or "").strip()
+            pdr_type = str(_dict_get(rr, "pdr_tipi", "pdr_type") or "").strip()
+            neo_det = _dict_get(rr, "neovaskularizasyon_detayi", "neovascularization_detail")
         else:
             st = str(_dict_get(rr, "stage", "evre") or "").strip()
             tier = str(_dict_get(rr, "confidence_tier", "guven") or "").strip()
             rationale = str(_dict_get(rr, "rationale", "gerekce") or "").strip()
+            main_class = str(_dict_get(rr, "main_class", "ana_sinif") or "").strip()
+            npdr_stage = str(_dict_get(rr, "npdr_stage", "npdr_evresi") or "").strip()
+            pdr_type = str(_dict_get(rr, "pdr_type", "pdr_tipi") or "").strip()
+            neo_det = _dict_get(rr, "neovascularization_detail", "neovaskularizasyon_detayi")
+        neo_detail = neo_det if isinstance(neo_det, dict) else {}
+        nvd = str(_dict_get(neo_detail, "nvd", "NVD") or "").strip()
+        nve = str(_dict_get(neo_detail, "nve", "NVE") or "").strip()
+        treatment_impact = str(_dict_get(rr, "tedaviye_etki", "treatment_impact") or "").strip()
         if st or tier or rationale:
             diabetic_ffa = {
-                "stage": st or "—",
+                "stage": st or _default_dr_stage(is_tr),
                 "confidenceTier": tier or "—",
                 "rationale": rationale[:4000],
+                "mainClass": main_class or _stage_to_main_class(st, is_tr),
+                "npdrStage": npdr_stage or ("Belirsiz" if is_tr else "Uncertain"),
+                "pdrType": pdr_type or ("Yok/Belirsiz" if is_tr else "None/Uncertain"),
+                "neovascularizationDetail": {
+                    "nvd": nvd or ("Belirsiz" if is_tr else "Uncertain"),
+                    "nve": nve or ("Belirsiz" if is_tr else "Uncertain"),
+                },
+                "treatmentImpact": treatment_impact[:1000],
             }
+
+    dr_likelihood_norm = ""
+    dr_name = "Diyabetik Retinopati" if is_tr else "Diabetic retinopathy"
+    for dis in diseases:
+        if _is_dr_disease_name(str(dis.get("name") or "")):
+            dr_name = str(dis.get("name") or dr_name)
+            dr_likelihood_norm = str(dis.get("likelihood") or "low").strip().lower()
+            break
+
+    if dr_likelihood_norm and diabetic_ffa is None:
+        inferred_stage = _default_dr_stage(is_tr)
+        if _likelihood_rank(dr_likelihood_norm) >= 2:
+            inferred_stage = (
+                "Proliferatif DR / Şiddetli NPDR şüphesi" if is_tr else "Suspected PDR / Severe NPDR"
+            )
+        diabetic_ffa = {
+            "stage": inferred_stage,
+            "confidenceTier": _map_likelihood_to_locale(dr_likelihood_norm, is_tr),
+            "rationale": _build_dr_consistency_note(
+                dr_name=dr_name,
+                dr_likelihood_norm=dr_likelihood_norm,
+                stage=inferred_stage,
+                is_tr=is_tr,
+            )[:4000],
+            "mainClass": "Belirsiz" if is_tr else "Uncertain",
+            "npdrStage": "Belirsiz" if is_tr else "Uncertain",
+            "pdrType": "Yok/Belirsiz" if is_tr else "None/Uncertain",
+            "neovascularizationDetail": {
+                "nvd": "Belirsiz" if is_tr else "Uncertain",
+                "nve": "Belirsiz" if is_tr else "Uncertain",
+            },
+            "treatmentImpact": "",
+        }
+    elif dr_likelihood_norm and diabetic_ffa is not None:
+        stage_now = str(diabetic_ffa.get("stage") or "").strip()
+        if _likelihood_rank(dr_likelihood_norm) >= 2 and stage_now.lower() in {
+            "belirsiz",
+            "uncertain",
+            "—",
+            "",
+        }:
+            diabetic_ffa["stage"] = (
+                "Proliferatif DR / Şiddetli NPDR şüphesi" if is_tr else "Suspected PDR / Severe NPDR"
+            )
+        diabetic_ffa["confidenceTier"] = _map_likelihood_to_locale(dr_likelihood_norm, is_tr)
+        rationale_now = str(diabetic_ffa.get("rationale") or "").strip()
+        consistency_note = _build_dr_consistency_note(
+            dr_name=dr_name,
+            dr_likelihood_norm=dr_likelihood_norm,
+            stage=str(diabetic_ffa.get("stage") or _default_dr_stage(is_tr)),
+            is_tr=is_tr,
+        )
+        if consistency_note not in rationale_now:
+            diabetic_ffa["rationale"] = f"{rationale_now} {consistency_note}".strip()[:4000]
+
+    # Yuksek DR olasiligi + yeterli genel guvende, klinik ozet "belirsiz/uncertain" diliyle celismemeli.
+    if (
+        conf >= _FFA_MIN_CONFIDENCE_FOR_DEFINITE
+        and dr_likelihood_norm
+        and _likelihood_rank(dr_likelihood_norm) >= 2
+        and isinstance(diabetic_ffa, dict)
+    ):
+        stage_now = str(diabetic_ffa.get("stage") or "").strip()
+        if stage_now and stage_now.lower() not in {"belirsiz", "uncertain", "—"}:
+            summary_low = summary.lower()
+            if is_tr:
+                if "belirsiz" in summary_low or "supheli" in summary_low or "şüpheli" in summary_low:
+                    summary = (
+                        f"FFA bulgulari proliferatif DR / siddetli NPDR ile uyumludur; "
+                        f"evreleme: {stage_now}."
+                    )
+            else:
+                if "uncertain" in summary_low or "suspected only" in summary_low:
+                    summary = (
+                        f"FFA findings are compatible with proliferative DR / severe NPDR; "
+                        f"staging: {stage_now}."
+                    )
 
     out = {
         "imageQuality": img_q,
@@ -1727,6 +2057,52 @@ def _normalize_ffa_assessment(data: object, source_locale: str) -> dict:
     }
     if diabetic_ffa:
         out["diabeticRetinopathyFfa"] = diabetic_ffa
+
+    # Dusuk genel guvende (confidenceScore < 75) kesin sonuc dili yerine belirsiz/supheli dil zorlanir.
+    if conf < _FFA_MIN_CONFIDENCE_FOR_DEFINITE:
+        out["activity"] = {
+            "activeDisease": "Belirsiz" if is_tr else "Uncertain",
+            "neovascularization": "Şüpheli" if is_tr else "Suspected",
+            "leakage": "Şüpheli" if is_tr else "Suspected",
+        }
+
+        downgraded_diseases: list[dict] = []
+        for dis in out.get("diseases", []):
+            if not isinstance(dis, dict):
+                continue
+            d2 = dict(dis)
+            d2["likelihood"] = "moderate"
+            downgraded_diseases.append(d2)
+        out["diseases"] = downgraded_diseases
+
+        if "diabeticRetinopathyFfa" in out and isinstance(out["diabeticRetinopathyFfa"], dict):
+            dr_obj = dict(out["diabeticRetinopathyFfa"])
+            dr_obj["stage"] = _default_dr_stage(is_tr)
+            dr_obj["confidenceTier"] = "Düşük" if is_tr else "Low"
+            dr_obj["mainClass"] = "Belirsiz" if is_tr else "Uncertain"
+            dr_obj["npdrStage"] = "Belirsiz" if is_tr else "Uncertain"
+            dr_obj["pdrType"] = "Yok/Belirsiz" if is_tr else "None/Uncertain"
+            dr_obj["neovascularizationDetail"] = {
+                "nvd": "Belirsiz" if is_tr else "Uncertain",
+                "nve": "Belirsiz" if is_tr else "Uncertain",
+            }
+            base_rationale = str(dr_obj.get("rationale") or "").strip()
+            confidence_note = (
+                "Genel güven skoru 75 altında olduğu için DR evrelemesi belirsiz raporlandı."
+                if is_tr
+                else "DR staging is reported as uncertain because overall confidence score is below 75."
+            )
+            dr_obj["rationale"] = f"{base_rationale} {confidence_note}".strip()[:4000]
+            out["diabeticRetinopathyFfa"] = dr_obj
+
+        note = (
+            "Genel güven skoru 75 altında; bulgular yalnızca belirsiz/şüpheli düzeyde yorumlanmalıdır."
+            if is_tr
+            else "Overall confidence score is below 75; findings should be interpreted only as uncertain/suspected."
+        )
+        current_summary = str(out.get("clinicalSummary") or "").strip()
+        if note not in current_summary:
+            out["clinicalSummary"] = f"{current_summary} {note}".strip()[:12_000]
     return out
 
 
@@ -1742,12 +2118,17 @@ def _predict_ffa_with_gemini_core(
 ) -> dict:
     img_send = _resize_pil_for_gemini(image)
     body, out_loc = _ffa_locale_to_tr_prompt(locale_tag)
+    image_hash = _image_sha256_for_cache(img_send)
+    cache_key = f"ffa|{GEMINI_MODEL}|{GEMINI_MAX_IMAGE_SIDE}|{out_loc}|{image_hash}"
+    cached = _analysis_cache_get(cache_key)
+    if cached is not None:
+        return cached
     prompt = body
     resp = client.models.generate_content(
         model=GEMINI_MODEL,
         contents=[prompt, img_send],
         config=types.GenerateContentConfig(
-            temperature=0.15,
+            temperature=0.0,
             max_output_tokens=8192,
             response_mime_type="application/json",
         ),
@@ -1761,7 +2142,7 @@ def _predict_ffa_with_gemini_core(
     if not data:
         raise ValueError("Gemini FFA ciktisi bos veya gecersiz JSON.")
     normalized = _normalize_ffa_assessment(data, out_loc)
-    return {
+    result = {
         "success": True,
         "ffa": normalized,
         "inference": {
@@ -1770,6 +2151,8 @@ def _predict_ffa_with_gemini_core(
             "locale": "tr" if out_loc == "tr" else "en",
         },
     }
+    _analysis_cache_set(cache_key, result)
+    return result
 
 
 def _predict_ffa_with_gemini(image: Image.Image, locale_tag: str) -> dict:

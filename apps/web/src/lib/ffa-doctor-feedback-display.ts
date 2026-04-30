@@ -50,12 +50,17 @@ export function humanizeFfaDoctorFeedbackForSummary(
     let out = parts.join(locale === "tr" ? " · " : "; ");
     if (parsedAny.diagnoses.includes("ffa_dr")) {
       const st = String(parsedAny.drStage ?? "").trim();
+      const nvParts: string[] = [];
+      if (parsedAny.nvd === true) nvParts.push("NVD+");
+      if (parsedAny.nve === true) nvParts.push("NVE+");
       if (st) {
         const stagePretty = drLabelTr(st);
         out +=
           locale === "tr"
-            ? ` — DR evresi: ${stagePretty}`
-            : ` — DR stage: ${stagePretty}`;
+            ? ` — DR evresi: ${stagePretty}${nvParts.length ? ` (${nvParts.join(" · ")})` : ""}`
+            : ` — DR stage: ${stagePretty}${nvParts.length ? ` (${nvParts.join(", ")})` : ""}`;
+      } else if (nvParts.length) {
+        out += locale === "tr" ? ` — ${nvParts.join(" · ")}` : ` — ${nvParts.join(", ")}`;
       }
     }
     return out;
@@ -69,15 +74,18 @@ export function humanizeFfaDoctorFeedbackForSummary(
       (locale === "en" ? parsed.diagnosis : parsed.diagnosis.replace(/_/g, " "));
     if (parsed.diagnosis === "ffa_dr") {
       const st = String(parsed.drStage ?? "").trim();
+      const nvParts: string[] = [];
+      if (parsed.nvd === true) nvParts.push("NVD+");
+      if (parsed.nve === true) nvParts.push("NVE+");
       if (st) {
         const stagePretty = drLabelTr(st);
         return locale === "tr"
-          ? `${dx} — Evre: ${stagePretty}`
-          : `${dx} — Stage: ${stagePretty}`;
+          ? `${dx} — Evre: ${stagePretty}${nvParts.length ? ` (${nvParts.join(" · ")})` : ""}`
+          : `${dx} — Stage: ${stagePretty}${nvParts.length ? ` (${nvParts.join(", ")})` : ""}`;
       }
       return locale === "tr"
-        ? `${dx} (evre seçimi bekleniyor)`
-        : `${dx} (stage pending)`;
+        ? `${dx}${nvParts.length ? ` (${nvParts.join(" · ")})` : ""} (evre seçimi bekleniyor)`
+        : `${dx}${nvParts.length ? ` (${nvParts.join(", ")})` : ""} (stage pending)`;
     }
     return dx;
   }

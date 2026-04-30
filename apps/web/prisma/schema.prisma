@@ -94,6 +94,8 @@ model Analysis {
   reportKind                      AnalysisReportKind?
   patient                         Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
   trainingDatasetEntry            TrainingDatasetEntry?
+  trainingDatasetEntryOct         TrainingDatasetEntryOct?
+  trainingDatasetEntryFfa         TrainingDatasetEntryFfa?
 }
 
 /// Egitim satiri: goruntu URL, efektif DR, doktor notlari ozeti, `training_snapshot_v2` JSON, ML sutunlari.
@@ -102,30 +104,58 @@ model TrainingDatasetEntry {
   id                           String   @id @default(cuid())
   analysisId                   String   @unique
   originalImageUrl             String
-  /// Etkin DR etiketi (TR depo formu): doktor duzeltmesi veya AI onayi ile ayni metin; egitimde null olmamali
-  drFeedback                   String?
+  /// Etkin DR etiketi: yalnizca doktor karari (0: saglikli, 1: mild, 2: moderate, 3: severe, 4: proliferatif)
+  drFeedback                   Int
   updatedAt                    DateTime @updatedAt
-  /// `training_snapshot_v2`: from_image | from_teacher_text | provenance
-  inferenceSnapshotJson        Json?
-  /// Doktor notları / klinik metin parse: sağlıklı→0, mild ile uyumlu→1, moderate→2, severe→3, PDR→4
-  doctorNotesDerivedDrGradeInt Int?
-  /// MA yükü: 0 yok, 1 az/sparse, 2 yaygın (fundus_assessment veya fundus_findings)
-  microaneurysmCountLevel      Int?
-  /// Hemoraji kadran sayısı 0–4
-  hemorrhageQuadrants          Int?
-  /// Maküler sert eksüda / makula yakını eksüda 0/1
-  hardExudateMacula            Int?
-  cottonWoolSpots              Int?
-  venousBeading                Int?
-  irma                         Int?
-  neovascularization           Int?
-  /// DME şüphesi 0/1 (makula+eksüda kuralı, fundus_assessment, API DME)
-  trainingDmeSuspected         Int?
+  /// Doktor geri bildirimine gore fundus NVD varligi 0/1
+  fundusNvd                    Int?
+  /// Doktor geri bildirimine gore fundus NVE varligi 0/1
+  fundusNve                    Int?
   /// Rapor: doktor notlari + klinik/muayene/tedavi metinleri birlesik (parse + egitim metni)
   doctorNotesText              String?
   /// Analysis.doctorNote ile ayni: manual_report_v2 JSON (rapor meta + sections + aiSummary)
   doctorNote                   String?
   analysis                     Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+}
+
+/// OCT egitim satiri: kaydedilen OCT goruntu + doktorun nihai karari.
+model TrainingDatasetEntryOct {
+  id                  String   @id @default(cuid())
+  analysisId          String   @unique
+  octImageUrl         String
+  /// Egitim etiketi: yalnizca doktor karari (ham secim kaydi)
+  octDoctorDecision   String
+  /// Doktor seciminden turetilen 0/1 hedefler
+  octHealthy          Int?
+  octDme              Int?
+  octAmd              Int?
+  octMacularHole      Int?
+  octErmVmt           Int?
+  updatedAt           DateTime @updatedAt
+  analysis            Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
+}
+
+/// FFA egitim satiri: kaydedilen FFA goruntu + doktorun nihai karari.
+model TrainingDatasetEntryFfa {
+  id                  String   @id @default(cuid())
+  analysisId          String   @unique
+  ffaImageUrl         String
+  /// Egitim etiketi: yalnizca doktor karari (zorunlu)
+  ffaDoctorDecision   String
+  /// Doktor seciminden turetilen 0/1 hedefler
+  ffaHealthy          Int?
+  ffaDr               Int?
+  ffaRvo              Int?
+  ffaAmdCnv           Int?
+  ffaCsr              Int?
+  ffaUveitis          Int?
+  /// DR ile iliskili neovaskularizasyon hedefleri (doktor secimi)
+  ffaNvd              Int?
+  ffaNve              Int?
+  /// DR secildiyse doktor evresi 0..4, degilse null
+  ffaDrStage          Int?
+  updatedAt           DateTime @updatedAt
+  analysis            Analysis @relation(fields: [analysisId], references: [id], onDelete: Cascade)
 }
 
 model DoctorSettings {

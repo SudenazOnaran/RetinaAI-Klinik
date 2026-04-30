@@ -1,8 +1,7 @@
 /**
- * TrainingDatasetEntry için tablo sütunları: doktor notlarından DR ifadesi + fundus_assessment (ve doktor override) ile lezyon / DME etiketleri.
- * Glokom / AMD çıktı etiketi olarak kullanılmaz (fundus_assessment.not_assessable_from_fundus bilgi amaçlı kalır).
+ * TrainingDatasetEntry için tablo sütunları: yalnizca doktor kaynakli alanlardan uretilir.
+ * AI ciktilari egitim etiketine kaynak edilmez.
  */
-import type { AiInferenceSnapshot } from "./snapshot";
 import type { AnalysisReportSectionsInput } from "./analysis-report-sections";
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -124,43 +123,16 @@ function mergeLesion(
   }
 }
 
-/** AI fundus_assessment üzerine doktor structured review fundus_assessment yapıştırır. */
-export function mergeFundusAssessments(
-  ai: Record<string, unknown> | null | undefined,
+/** Doktor structured review icindeki fundus_assessment'i dondurur. */
+export function doctorOnlyFundusAssessment(
   doctorReview: Record<string, unknown> | null | undefined,
 ): Record<string, unknown> | null {
   const docFa = doctorReview
     ? doctorReview["fundusAssessment"] ?? doctorReview["fundus_assessment"]
     : undefined;
   const docRec = isRecord(docFa) ? docFa : null;
-
-  if (!ai && !docRec) return null;
-  if (!docRec) return ai ? { ...ai } : null;
-  if (!ai) return { ...docRec };
-
-  const out: Record<string, unknown> = { ...ai };
-  const lesionKeys = [
-    "microaneurysm",
-    "hemorrhage",
-    "hard_exudates",
-    "cotton_wool_spots",
-    "venous_beading",
-    "irma",
-    "neovascularization",
-  ] as const;
-  for (const k of lesionKeys) {
-    mergeLesion(out, k, docRec);
-  }
-  for (const k of [
-    "quadrant_distribution",
-    "rule_4_2_1",
-    "macula",
-    "dme_indirect",
-    "lesion_severity",
-  ] as const) {
-    mergeLesion(out, k, docRec);
-  }
-  return out;
+  if (!docRec) return null;
+  return { ...docRec };
 }
 
 export type TrainingEntryMlColumns = {
@@ -172,6 +144,8 @@ export type TrainingEntryMlColumns = {
   venousBeading: number | null;
   irma: number | null;
   neovascularization: number | null;
+  fundusNvd: number | null;
+  fundusNve: number | null;
   trainingDmeSuspected: number | null;
 };
 
@@ -239,55 +213,10 @@ function lesionPresence01(
   return presence01(sub.presence);
 }
 
-function fundusFindingsFallback(
-  ff: Record<string, boolean> | null | undefined,
-): Partial<{
-  microaneurysmCountLevel: number;
-  cottonWoolSpots: number;
-  venousBeading: number;
-  irma: number;
-  neovascularization: number;
-  hemorrhageQuadrants: number;
-  hardExudateMacula: number;
-  dme: number;
-}> {
-  if (!ff) return {};
-  const o: Partial<{
-    microaneurysmCountLevel: number;
-    cottonWoolSpots: number;
-    venousBeading: number;
-    irma: number;
-    neovascularization: number;
-    hemorrhageQuadrants: number;
-    hardExudateMacula: number;
-    dme: number;
-  }> = {};
-  if (ff.microaneurysm === false) o.microaneurysmCountLevel = 0;
-  else if (ff.microaneurysm === true) o.microaneurysmCountLevel = 1;
-  if (ff.cotton_wool_spots === true) o.cottonWoolSpots = 1;
-  else if (ff.cotton_wool_spots === false) o.cottonWoolSpots = 0;
-  if (ff.venous_beading === true) o.venousBeading = 1;
-  else if (ff.venous_beading === false) o.venousBeading = 0;
-  if (ff.irma === true) o.irma = 1;
-  else if (ff.irma === false) o.irma = 0;
-  if (ff.neovascularization === true) o.neovascularization = 1;
-  else if (ff.neovascularization === false) o.neovascularization = 0;
-  if (ff.hemorrhage === false) o.hemorrhageQuadrants = 0;
-  if (ff.hard_exudates === true && ff.macular_edema_suspected === true) {
-    o.hardExudateMacula = 1;
-  }
-  if (ff.macular_edema_suspected === true) o.dme = 1;
-  return o;
-}
-
 function computeTrainingDmeSuspected(
   fa: Record<string, unknown> | null,
-  fundusFindings: Record<string, boolean> | null | undefined,
-  apiDme: boolean | undefined,
+  doctorReview: Record<string, unknown> | null | undefined,
 ): number | null {
-  const ffFallback = fundusFindingsFallback(fundusFindings);
-  if (typeof ffFallback.dme === "number") return ffFallback.dme;
-
   if (fa) {
     const he = fa.hard_exudates;
     const mac = fa.macula;
@@ -305,48 +234,43 @@ function computeTrainingDmeSuspected(
       return 1;
     }
     if (hePres === 0 && optBool01(isRecord(mac) ? mac.hard_exudates_near_macula : null) === 0) {
-      if (apiDme !== true) return 0;
+      return 0;
     }
   }
-
-  if (apiDme === true) return 1;
-  if (apiDme === false) return 0;
-  if (fundusFindings?.macular_edema_suspected === true) return 1;
+  const doctorDme = doctorReview
+    ? doctorReview["dmeSuspected"] ?? doctorReview["dme_suspected"]
+    : undefined;
+  if (doctorDme === true) return 1;
+  if (doctorDme === false) return 0;
   return null;
 }
 
 export function computeTrainingDatasetEntryFeatureColumns(params: {
   doctorNotesCombinedText: string;
-  parsedInference: AiInferenceSnapshot | null;
   doctorStructuredReview: Record<string, unknown> | null | undefined;
 }): TrainingEntryMlColumns {
   const notesGrade = parseDrGradeFromDoctorNotesText(
     params.doctorNotesCombinedText,
   );
 
-  const mergedFa = mergeFundusAssessments(
-    isRecord(params.parsedInference?.fundusAssessment)
-      ? params.parsedInference!.fundusAssessment!
-      : null,
-    params.doctorStructuredReview ?? null,
-  );
+  const mergedFa = doctorOnlyFundusAssessment(params.doctorStructuredReview ?? null);
 
-  const ff = params.parsedInference?.fundusFindings ?? null;
-  const fb = fundusFindingsFallback(ff);
-
-  const micro =
-    microaneurysmCountLevelFromFa(mergedFa) ?? fb.microaneurysmCountLevel ?? null;
-  const hemo = hemorrhageQuadrantsFromFa(mergedFa) ?? fb.hemorrhageQuadrants ?? null;
-  const hexMac = hardExudateMaculaFromFa(mergedFa) ?? fb.hardExudateMacula ?? null;
-  const cws = lesionPresence01(mergedFa, "cotton_wool_spots") ?? fb.cottonWoolSpots ?? null;
-  const vb = lesionPresence01(mergedFa, "venous_beading") ?? fb.venousBeading ?? null;
-  const ir = lesionPresence01(mergedFa, "irma") ?? fb.irma ?? null;
-  const nv = nvFromFa(mergedFa) ?? fb.neovascularization ?? null;
+  const micro = microaneurysmCountLevelFromFa(mergedFa);
+  const hemo = hemorrhageQuadrantsFromFa(mergedFa);
+  const hexMac = hardExudateMaculaFromFa(mergedFa);
+  const cws = lesionPresence01(mergedFa, "cotton_wool_spots");
+  const vb = lesionPresence01(mergedFa, "venous_beading");
+  const ir = lesionPresence01(mergedFa, "irma");
+  const nv = nvFromFa(mergedFa);
+  const nvRec = mergedFa && isRecord(mergedFa.neovascularization)
+    ? (mergedFa.neovascularization as Record<string, unknown>)
+    : null;
+  const nvd = nvRec ? optBool01(nvRec.nvd) : null;
+  const nve = nvRec ? optBool01(nvRec.nve) : null;
 
   const trainingDme = computeTrainingDmeSuspected(
     mergedFa,
-    ff,
-    params.parsedInference?.dmeSuspected,
+    params.doctorStructuredReview,
   );
 
   return {
@@ -358,6 +282,8 @@ export function computeTrainingDatasetEntryFeatureColumns(params: {
     venousBeading: vb,
     irma: ir,
     neovascularization: nv,
+    fundusNvd: nvd,
+    fundusNve: nve,
     trainingDmeSuspected: trainingDme,
   };
 }

@@ -54,11 +54,18 @@ export function FfaModalityDoctorFeedback({
   const [agree, setAgree] = useState<boolean | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [selStage, setSelStage] = useState<string | null>(null);
+  const [selNvd, setSelNvd] = useState<boolean>(false);
+  const [selNve, setSelNve] = useState<boolean>(false);
 
   const drNeeded = selected.has("ffa_dr");
 
   const persistDiagSelections = useCallback(
-    (nextSel: Set<string>, stageForDr: string | null) => {
+    (
+      nextSel: Set<string>,
+      stageForDr: string | null,
+      nvdForDr: boolean,
+      nveForDr: boolean,
+    ) => {
       const arr = sortDiagStable([...nextSel]).filter(Boolean);
       if (!arr.length) {
         onChange(MODALITY_DISAGREE_PENDING);
@@ -73,6 +80,8 @@ export function FfaModalityDoctorFeedback({
           v: 3,
           diagnoses: [FFA_HEALTHY_VALUE],
           drStage: null,
+          nvd: false,
+          nve: false,
         };
         onChange(encodeFfaDoctorFeedbackV3(payload));
         return;
@@ -87,6 +96,8 @@ export function FfaModalityDoctorFeedback({
           v: 3,
           diagnoses: arr,
           drStage: st,
+          nvd: nvdForDr,
+          nve: nveForDr,
         };
         onChange(encodeFfaDoctorFeedbackV3(payload));
         return;
@@ -95,6 +106,8 @@ export function FfaModalityDoctorFeedback({
         v: 3,
         diagnoses: arr,
         drStage: null,
+        nvd: false,
+        nve: false,
       };
       onChange(encodeFfaDoctorFeedbackV3(payload));
     },
@@ -108,6 +121,8 @@ export function FfaModalityDoctorFeedback({
         setAgree(null);
         setSelected(new Set());
         setSelStage(null);
+        setSelNvd(false);
+        setSelNve(false);
         return;
       }
       if (isModalityDisagreePending(t0)) {
@@ -118,6 +133,8 @@ export function FfaModalityDoctorFeedback({
         setAgree(true);
         setSelected(new Set());
         setSelStage(null);
+        setSelNvd(false);
+        setSelNve(false);
         return;
       }
       if (isDoctorApprovalToken(t0)) {
@@ -135,6 +152,9 @@ export function FfaModalityDoctorFeedback({
             ? String(parsedAny.drStage ?? "").trim() || null
             : null,
         );
+        const hasDr = parsedAny.diagnoses.includes("ffa_dr");
+        setSelNvd(hasDr ? parsedAny.nvd === true : false);
+        setSelNve(hasDr ? parsedAny.nve === true : false);
         return;
       }
       const p2 = tryParseFfaDoctorFeedbackV2(t0);
@@ -145,10 +165,15 @@ export function FfaModalityDoctorFeedback({
             ? String(p2.drStage ?? "").trim() || null
             : null,
         );
+        const hasDr = p2.diagnosis === "ffa_dr";
+        setSelNvd(hasDr ? p2.nvd === true : false);
+        setSelNve(hasDr ? p2.nve === true : false);
         return;
       }
       setSelected(new Set());
       setSelStage(null);
+      setSelNvd(false);
+      setSelNve(false);
     },
     [],
   );
@@ -175,12 +200,18 @@ export function FfaModalityDoctorFeedback({
       }
     }
     let nextStage = selStage;
+    let nextNvd = selNvd;
+    let nextNve = selNve;
     if (!next.has("ffa_dr")) {
       nextStage = null;
+      nextNvd = false;
+      nextNve = false;
     }
     setSelected(next);
     setSelStage(nextStage);
-    persistDiagSelections(next, nextStage);
+    setSelNvd(nextNvd);
+    setSelNve(nextNve);
+    persistDiagSelections(next, nextStage, nextNvd, nextNve);
   };
 
   const itemsForPicker = mergedRows.map((row) => ({
@@ -209,6 +240,8 @@ export function FfaModalityDoctorFeedback({
               setAgree(true);
               setSelected(new Set());
               setSelStage(null);
+              setSelNvd(false);
+              setSelNve(false);
               const fallbackHealthy = t(
                 `modalityDisagree.ffa.${FFA_HEALTHY_VALUE}` as never,
               );
@@ -231,6 +264,8 @@ export function FfaModalityDoctorFeedback({
               setAgree(false);
               setSelected(new Set());
               setSelStage(null);
+              setSelNvd(false);
+              setSelNve(false);
               onChange(MODALITY_DISAGREE_PENDING);
             }}
           >
@@ -290,7 +325,7 @@ export function FfaModalityDoctorFeedback({
                   const raw = e.target.value.trim();
                   const nextStage = raw || null;
                   setSelStage(nextStage);
-                  persistDiagSelections(selected, nextStage);
+                  persistDiagSelections(selected, nextStage, selNvd, selNve);
                 }}
               >
                 <option value="">
@@ -309,6 +344,34 @@ export function FfaModalityDoctorFeedback({
                   );
                 })}
               </select>
+              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <label className="flex items-center gap-2 rounded-lg border border-rose-200/80 bg-white px-3 py-2 text-sm text-slate-900">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-400 text-cyan-600"
+                    checked={selNvd}
+                    onChange={(e) => {
+                      const next = e.target.checked;
+                      setSelNvd(next);
+                      persistDiagSelections(selected, selStage, next, selNve);
+                    }}
+                  />
+                  <span>{t("analysisCard.nvdLabel")}</span>
+                </label>
+                <label className="flex items-center gap-2 rounded-lg border border-rose-200/80 bg-white px-3 py-2 text-sm text-slate-900">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-400 text-cyan-600"
+                    checked={selNve}
+                    onChange={(e) => {
+                      const next = e.target.checked;
+                      setSelNve(next);
+                      persistDiagSelections(selected, selStage, selNvd, next);
+                    }}
+                  />
+                  <span>{t("analysisCard.nveLabel")}</span>
+                </label>
+              </div>
             </div>
           ) : null}
         </div>

@@ -271,6 +271,7 @@ export function FfaAnalysisCard({
   const isGeminiUncertain = useMemo(() => {
     if (!result) return false;
     return (
+      Number(result.confidenceScore ?? 0) < 75 ||
       isUncertainPhase(result.phaseAssessment) ||
       isUncertainText(result.clinicalSummary)
     );

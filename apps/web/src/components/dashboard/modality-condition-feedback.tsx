@@ -5,13 +5,16 @@ import { Button } from "@/components/ui/button";
 import { useTranslation } from "@/components/providers/i18n-provider";
 import { getDrStageIndexFromLabel } from "@/lib/dr-stage-labels";
 import {
+  decodeOctMultiSelection,
   decodeModalityAiAlignedLabel,
+  encodeOctMultiSelection,
   encodeModalityAiAlignedLabel,
   isDoctorApprovalToken,
   isModalityDisagreePending,
   MODALITY_DISAGREE_PENDING,
 } from "@/lib/doctor-feedback";
 import { cn } from "@/lib/utils";
+import { OCT_HEALTHY_VALUE } from "@/lib/modality-risk-surface";
 
 /** Fundus onayı ile aynı anlam; `octDrFeedback` / `ffaDrFeedback` için. */
 export const MODALITY_DOCTOR_APPROVAL_VALUE = "ai_sonucu_dogru";
@@ -64,12 +67,29 @@ export function ModalityConditionFeedback({
 
   const selected = value.trim();
   const canDisagree = allowDisagreeWhenEmpty || items.length > 0;
+  const [selectedSet, setSelectedSet] = useState<Set<string>>(new Set());
 
-  const selectValue = useMemo(() => {
-    if (!selected || isModalityDisagreePending(selected)) return "";
+  useEffect(() => {
+    if (!selected || isModalityDisagreePending(selected)) {
+      setSelectedSet(new Set());
+      return;
+    }
+    const decoded = decodeOctMultiSelection(selected);
+    if (decoded.length > 0) {
+      setSelectedSet(new Set(decoded));
+      return;
+    }
     const hit = items.some((i) => i.value.trim() === selected);
-    return hit ? selected : "";
+    setSelectedSet(hit ? new Set([selected]) : new Set());
   }, [selected, items]);
+
+  const persistSelection = (next: Set<string>) => {
+    if (next.size === 0) {
+      onChange(MODALITY_DISAGREE_PENDING);
+      return;
+    }
+    onChange(encodeOctMultiSelection([...next]));
+  };
 
   return (
     <div className={cn("space-y-3", className)}>
@@ -128,25 +148,47 @@ export function ModalityConditionFeedback({
           <span className="mb-3 block text-sm font-semibold uppercase tracking-[0.08em] text-rose-700">
             {t("analysisCard.correctionTitle")}
           </span>
-          <select
-            className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
-            value={selectValue}
-            onChange={(e) => {
-              const v = e.target.value.trim();
-              if (!v) {
-                onChange(MODALITY_DISAGREE_PENDING);
-                return;
-              }
-              onChange(v);
-            }}
-          >
-            <option value="">{t("analysisCard.correctionPlaceholder")}</option>
-            {items.map((item, idx) => (
-              <option key={`${item.value}::${idx}`} value={item.value.trim()}>
-                {item.label}
-              </option>
-            ))}
-          </select>
+          <div className="space-y-2">
+            {items.map((item, idx) => {
+              const valueKey = item.value.trim();
+              const checked = selectedSet.has(valueKey);
+              const healthySelected = selectedSet.has(OCT_HEALTHY_VALUE);
+              const disabled = healthySelected && valueKey !== OCT_HEALTHY_VALUE;
+              return (
+                <label
+                  key={`${item.value}::${idx}`}
+                  className={cn(
+                    "flex cursor-pointer items-start gap-2 rounded-lg border border-rose-200/80 bg-white px-3 py-2 text-sm text-slate-900",
+                    disabled && "cursor-not-allowed opacity-50",
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 shrink-0 rounded border-slate-400 text-cyan-600"
+                    checked={checked}
+                    disabled={disabled}
+                    onChange={() => {
+                      const next = new Set(selectedSet);
+                      if (valueKey === OCT_HEALTHY_VALUE) {
+                        if (checked) next.delete(valueKey);
+                        else {
+                          next.clear();
+                          next.add(valueKey);
+                        }
+                      } else {
+                        next.delete(OCT_HEALTHY_VALUE);
+                        if (checked) next.delete(valueKey);
+                        else next.add(valueKey);
+                      }
+                      setSelectedSet(next);
+                      persistSelection(next);
+                    }}
+                  />
+                  <span>{item.label}</span>
+                </label>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>

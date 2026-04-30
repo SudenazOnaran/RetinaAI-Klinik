@@ -52,6 +52,7 @@ export type OctPayload = {
   conditions: OctCondition[];
   clinicalSummary: string;
   recommendations: string[];
+  confidenceScore?: number;
 };
 
 const LIKELIHOOD_KEYS = ["low", "moderate", "high"] as const;
@@ -238,6 +239,9 @@ export function MacularOctAnalysisCard({
 
   const octBannerLabel = useMemo(() => {
     if (!result) return "";
+    if (Number(result.confidenceScore ?? 0) < 75) {
+      return t("radiologicalReport.confidenceUndeterminedShort");
+    }
     const healthyLbl = t("modalityDisagree.oct.oct_saglikli_makula");
     if (octPrimaryElevated?.name?.trim()) return octPrimaryElevated.name.trim();
     if (result.conditions?.length) return healthyLbl;
@@ -246,6 +250,9 @@ export function MacularOctAnalysisCard({
 
   const octApprovalAiSummaryLabel = useMemo(() => {
     if (!result) return "";
+    if (Number(result.confidenceScore ?? 0) < 75) {
+      return t("radiologicalReport.confidenceUndeterminedShort");
+    }
     const healthyLbl = t("modalityDisagree.oct.oct_saglikli_makula");
     if (octPrimaryElevated?.name?.trim()) return octPrimaryElevated.name.trim();
     if (result.conditions?.length) return healthyLbl;
