@@ -1,16 +1,14 @@
 /**
- * TrainingDatasetEntry ML sutunlarini Analysis + AI snapshot'tan yeniden hesaplar.
+ * TrainingDatasetEntry doktor-kaynakli sutunlarini yeniden hesaplar.
  *   cd apps/web && npx tsx scripts/backfill-training-entry-features.ts
  */
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
-import { parseClientInferenceSnapshot } from "../src/lib/dataset/snapshot";
 import type { AnalysisReportSectionsInput } from "../src/lib/dataset/analysis-report-sections";
 import {
   buildCombinedDoctorNotesText,
   computeTrainingDatasetEntryFeatureColumns,
 } from "../src/lib/dataset/training-entry-features";
-import { resolveDrLabelToStoredForm } from "../src/lib/dr-stage-labels";
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -62,22 +60,12 @@ async function main() {
       hasAny ? sections : undefined,
       a.doctorNote ?? "",
     );
-    const parsed = parseClientInferenceSnapshot(a.aiInferenceJson);
     const doc = a.doctorStructuredReview;
     const doctorReviewRecord = doc && isRecord(doc) ? doc : null;
     const ml = computeTrainingDatasetEntryFeatureColumns({
       doctorNotesCombinedText: combined,
-      parsedInference: parsed,
       doctorStructuredReview: doctorReviewRecord,
     });
-
-    const resolvedAi =
-      resolveDrLabelToStoredForm(a.aiResult, "tr") ?? String(a.aiResult || "").trim();
-    const trainingDrFeedback =
-      row.drFeedback?.trim() ||
-      a.drFeedback?.trim() ||
-      resolvedAi ||
-      null;
 
     const TRAINING_DOCTOR_NOTES_MAX = 120_000;
     const TRAINING_DOCTOR_NOTE_JSON_MAX = 500_000;
@@ -93,18 +81,10 @@ async function main() {
     await prisma.trainingDatasetEntry.update({
       where: { id: row.id },
       data: {
-        drFeedback: trainingDrFeedback,
         doctorNotesText: notesText,
         doctorNote: noteJson,
-        doctorNotesDerivedDrGradeInt: ml.doctorNotesDerivedDrGradeInt,
-        microaneurysmCountLevel: ml.microaneurysmCountLevel,
-        hemorrhageQuadrants: ml.hemorrhageQuadrants,
-        hardExudateMacula: ml.hardExudateMacula,
-        cottonWoolSpots: ml.cottonWoolSpots,
-        venousBeading: ml.venousBeading,
-        irma: ml.irma,
-        neovascularization: ml.neovascularization,
-        trainingDmeSuspected: ml.trainingDmeSuspected,
+        fundusNvd: ml.fundusNvd,
+        fundusNve: ml.fundusNve,
       },
     });
     updated += 1;
