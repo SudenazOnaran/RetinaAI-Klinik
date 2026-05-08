@@ -87,3 +87,11 @@ export async function getCurrentDoctorSession() {
   const token = cookieStore.get(DOCTOR_SESSION_COOKIE)?.value;
   return verifyDoctorSessionToken(token);
 }
+
+/** Mobile API: Authorization: Bearer <token> header'dan oturumu doğrular. */
+export function getMobileDoctorSession(request: Request) {
+  const authHeader = request.headers.get("authorization");
+  if (!authHeader?.startsWith("Bearer ")) return null;
+  const token = authHeader.slice(7).trim();
+  return verifyDoctorSessionToken(token);
+}

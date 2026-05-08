@@ -11,6 +11,11 @@
     "web:start": "npm --prefix apps/web run start",
     "web:lint": "npm --prefix apps/web run lint",
     "web:test": "npm --prefix apps/web run test",
-    "ai:run": "python services/ai/app.py"
+    "ai:run": "python services/ai/app.py",
+    "mobile:get": "flutter --project-directory=apps/mobile pub get",
+    "mobile:dev": "flutter --project-directory=apps/mobile run",
+    "mobile:build:apk": "flutter --project-directory=apps/mobile build apk --release",
+    "mobile:build:ios": "flutter --project-directory=apps/mobile build ios --release",
+    "mobile:test": "flutter --project-directory=apps/mobile test"
   }
 }

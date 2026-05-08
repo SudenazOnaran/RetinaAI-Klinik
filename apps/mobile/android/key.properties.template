@@ -1,0 +1,11 @@
+# key.properties.template
+# Bu dosyayı kopyalayıp android/key.properties olarak adlandırın.
+# Gerçek keystore bilgilerinizi doldurun. key.properties .gitignore'a eklenmiştir.
+
+storePassword=KEYSTORE_PAROLANIZ
+keyPassword=KEY_PAROLANIZ
+keyAlias=upload
+storeFile=../upload-keystore.jks
+
+# Keystore oluşturmak için (bir kez çalıştırın):
+# keytool -genkey -v -keystore upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload
