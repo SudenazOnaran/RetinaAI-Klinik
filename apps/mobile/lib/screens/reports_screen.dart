@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:go_router/go_router.dart';
 import 'package:retina_ai_app/widgets/clinic_bottom_nav.dart';
 
 class ReportsScreen extends StatefulWidget {
@@ -110,10 +111,10 @@ class _TopBar extends StatelessWidget {
         children: [
           SvgPicture.asset(
             'retina-ai.svg',
-            width: 22 * scale,
-            height: 22 * scale,
+            width: 18 * scale,
+            height: 18 * scale,
             colorFilter: const ColorFilter.mode(
-              Color(0xFF005D90),
+              Color(0xFF00687A),
               BlendMode.srcIn,
             ),
           ),
@@ -121,25 +122,29 @@ class _TopBar extends StatelessWidget {
           Text(
             'RETINA KLİNİK',
             style: GoogleFonts.manrope(
-              fontSize: 15 * scale,
-              fontWeight: FontWeight.w800,
-              color: const Color(0xFF005D90),
-              letterSpacing: 0.2,
+              fontSize: 16 * scale,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF00687A),
+              letterSpacing: -0.2,
             ),
           ),
           const Spacer(),
+          IconButton(
+            onPressed: () => context.push('/notifications'),
+            splashRadius: 18,
+            icon: const Icon(Icons.notifications_none_rounded),
+            color: const Color(0xFF64748B),
+            iconSize: 20 * scale,
+          ),
           Container(
-            width: 38 * scale,
-            height: 38 * scale,
+            width: 36 * scale,
+            height: 36 * scale,
+            clipBehavior: Clip.antiAlias,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(
-                color: const Color(0xFF005D90).withValues(alpha: 0.22),
-                width: 1.4,
-              ),
+              border: Border.all(color: const Color(0x1F00687A), width: 1),
             ),
-            clipBehavior: Clip.antiAlias,
-            child: const Icon(Icons.person, color: Color(0xFF64748B), size: 18),
+            child: const Icon(Icons.person, size: 18, color: Color(0xFF64748B)),
           ),
         ],
       ),

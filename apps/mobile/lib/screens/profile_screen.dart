@@ -1,609 +1,559 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:retina_ai_app/widgets/clinic_bottom_nav.dart';
-import 'package:retina_ai_app/core/providers/auth_provider.dart';
 
-class ProfileScreen extends ConsumerWidget {
-  const ProfileScreen({Key? key}) : super(key: key);
+import 'package:retina_ai_app/core/network/api_client.dart';
+import 'package:retina_ai_app/core/constants/api_constants.dart';
+import 'package:retina_ai_app/core/providers/auth_provider.dart';
+import 'package:retina_ai_app/widgets/clinic_bottom_nav.dart';
+
+class ProfileScreen extends ConsumerStatefulWidget {
+  const ProfileScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  static const _primary = Color(0xFF00687A);
+  static const _bg = Color(0xFFF2F4F7);
+
+  bool? _isActive;
+  String _createdAt = '';
+  String _branch = '';
+  String _licenseNo = '';
+  String _contactPhone = '';
+  String _signatureName = '';
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchProfile();
+  }
+
+  Future<void> _fetchProfile() async {
+    try {
+      final res = await ApiClient.instance.get(ApiConstants.doctorProfile);
+      final data = res.data as Map<String, dynamic>? ?? {};
+      final doctor = data['doctor'] as Map<String, dynamic>? ?? {};
+      final profile = data['profile'] as Map<String, dynamic>? ?? {};
+      if (mounted) {
+        setState(() {
+          _isActive = doctor['isActive'] as bool?;
+          _createdAt = doctor['createdAt'] as String? ?? '';
+          _branch = profile['branch'] as String? ?? '';
+          _licenseNo = profile['licenseNo'] as String? ?? '';
+          _contactPhone = profile['contactPhone'] as String? ?? '';
+          _signatureName = profile['signatureName'] as String? ?? doctor['name'] as String? ?? '';
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final doctor = ref.watch(authProvider).doctor;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final scale = (screenWidth / 390).clamp(0.82, 1.0);
+
+    final email = doctor?.email ?? '';
+    final role = doctor?.role ?? '-';
+    final fullName = doctor?.fullName ?? '';
+    final specialty = _branch.isNotEmpty ? _branch : (doctor?.specialty ?? '');
+    final statusText = _isActive == null ? '-' : (_isActive! ? 'Aktif' : 'Pasif');
+    final statusColor = _isActive == true ? const Color(0xFF006645) : const Color(0xFF93000A);
+
+    String createdAtFormatted = '-';
+    if (_createdAt.isNotEmpty) {
+      try {
+        final dt = DateTime.parse(_createdAt).toLocal();
+        createdAtFormatted =
+            '${dt.day.toString().padLeft(2, '0')}.${dt.month.toString().padLeft(2, '0')}.${dt.year} '
+            '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')}';
+      } catch (_) {
+        createdAtFormatted = _createdAt;
+      }
+    }
+
+    final previewName = _signatureName.isNotEmpty ? _signatureName : (doctor?.name ?? '');
+
     return Scaffold(
+      backgroundColor: _bg,
       body: SafeArea(
         child: Column(
           children: [
-            Expanded(
-              child: SingleChildScrollView(
-        child: Column(
-          children: [
-            // Header with Profile
-            Container(
-              padding: EdgeInsets.fromLTRB(24, 24, 24, 24),
-              decoration: BoxDecoration(color: Color(0xFFF5F7FA)),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            // Header
+            Padding(
+              padding: EdgeInsets.fromLTRB(16 * scale, 10 * scale, 16 * scale, 10 * scale),
+              child: Row(
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
+                  SvgPicture.asset(
+                    'retina-ai.svg',
+                    width: 17 * scale,
+                    height: 17 * scale,
+                    colorFilter: const ColorFilter.mode(_primary, BlendMode.srcIn),
+                  ),
+                  SizedBox(width: 6 * scale),
+                  Text(
+                    'RETINA KLÝNÝK',
+                    style: GoogleFonts.manrope(
+                      fontSize: 16 * scale,
+                      fontWeight: FontWeight.w700,
+                      color: _primary,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: () => context.push('/notifications'),
+                    splashRadius: 18,
+                    icon: const Icon(Icons.notifications_none_rounded),
+                    color: const Color(0xFF64748B),
+                    iconSize: 19 * scale,
+                  ),
+                  _ProfileHeaderAvatar(scale: scale),
+                ],
+              ),
+            ),
+            const Divider(height: 1, thickness: 1, color: Color(0xFFE2E8EE)),
+
+            // Content
+            Expanded(
+              child: _loading
+                  ? const Center(
+                      child: CircularProgressIndicator(color: _primary, strokeWidth: 2.5),
+                    )
+                  : SingleChildScrollView(
+                      padding: EdgeInsets.fromLTRB(16 * scale, 18 * scale, 16 * scale, 110 * scale),
+                      child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'HOÅž GELDÄ°NÄ°Z',
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.grey[600],
-                            ),
+                          _TitleCard(scale: scale),
+                          SizedBox(height: 16 * scale),
+                          _FormCard(
+                            scale: scale,
+                            email: email,
+                            role: role,
+                            statusText: statusText,
+                            statusColor: statusColor,
+                            createdAt: createdAtFormatted,
+                            fullName: fullName,
+                            specialty: specialty,
+                            licenseNo: _licenseNo,
+                            contactPhone: _contactPhone,
+                            signatureName: _signatureName.isNotEmpty ? _signatureName : (doctor?.name ?? ''),
                           ),
-                          Text(
-                            doctor != null ? 'Dr. ${doctor.fullName}' : 'Dr. Doktor',
-                            style: GoogleFonts.manrope(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.black,
-                            ),
-                          ),
-                          SizedBox(height: 4),
-                          Text(
-                            'BugÃ¼n analiz edilmeyi bekleyen 12 yeni fundus gÃ¶rÃ¼ntÃ¼sÃ¼ var.',
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w400,
-                              color: Colors.grey[600],
-                            ),
-                          ),
+                          SizedBox(height: 16 * scale),
+                          _SignaturePreviewCard(scale: scale, previewName: previewName),
+                          SizedBox(height: 14 * scale),
+                          _InfoNote(scale: scale),
                         ],
                       ),
-                      CircleAvatar(
-                        radius: 32,
-                        backgroundColor: Color(0xFF00687a),
-                        child: Icon(
-                          Icons.person,
-                          color: Colors.white,
-                          size: 32,
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 20),
-                  // Action buttons
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () {},
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            foregroundColor: Color(0xFF00687a),
-                            elevation: 0,
-                            padding: EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              side: BorderSide(
-                                color: Colors.grey[300]!,
-                                width: 1,
-                              ),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.history, size: 16),
-                              SizedBox(width: 8),
-                              Text(
-                                'Hasta KayÄ±tlarÄ±',
-                                style: GoogleFonts.manrope(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () {},
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Color(0xFF00687a),
-                            foregroundColor: Colors.white,
-                            elevation: 0,
-                            padding: EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.add_circle_outline, size: 16),
-                              SizedBox(width: 8),
-                              Text(
-                                'Yeni KayÄ±t',
-                                style: GoogleFonts.manrope(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
-            // Stats Section
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                children: [
-                  // Stat grid
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildStatCard(
-                          icon: Icons.people_outline,
-                          iconColor: Color(0xFF00687a),
-                          label: 'Toplam Hasta',
-                          value: '1,284',
-                          bgColor: Color(0xFFE8F4F8),
-                        ),
-                      ),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: _buildStatCard(
-                          icon: Icons.warning_amber_rounded,
-                          iconColor: Color(0xFFE53935),
-                          label: 'YÃ¼ksek Risk',
-                          value: '42',
-                          bgColor: Color(0xFFFFEBEE),
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildStatCard(
-                          icon: Icons.assessment_outlined,
-                          iconColor: Color(0xFFFFA726),
-                          label: 'Toplam Analiz',
-                          value: '456',
-                          bgColor: Color(0xFFFFF3E0),
-                        ),
-                      ),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: _buildStatCard(
-                          icon: Icons.check_circle_outline,
-                          iconColor: Color(0xFF43A047),
-                          label: 'Sistem Durumu',
-                          value: 'Stabil',
-                          bgColor: Color(0xFFE8F5E9),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
-            // Son Kaydedilen Hastalar Section
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Son Kaydedilen Hastalar',
-                        style: GoogleFonts.manrope(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.black,
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () {},
-                        child: Text(
-                          'TÃ¼mÃ¼nÃ¼ GÃ¶r',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF00687a),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 12),
-                  // Patient records table
-                  Container(
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey[200]!),
-                      borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Column(
-                      children: [
-                        // Header
-                        Container(
-                          padding: EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.grey[50],
-                            borderRadius: BorderRadius.only(
-                              topLeft: Radius.circular(8),
-                              topRight: Radius.circular(8),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                flex: 2,
-                                child: Text(
-                                  'AD SOYAD',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.grey[600],
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                flex: 2,
-                                child: Text(
-                                  'T.C. KÄ°MLÄ°K',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.grey[600],
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                flex: 2,
-                                child: Text(
-                                  'TARÄ°H',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.grey[600],
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                flex: 1,
-                                child: Text(
-                                  'SKOR',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.grey[600],
-                                  ),
-                                  textAlign: TextAlign.end,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        // Rows
-                        _buildPatientRow(
-                          'Zeynep Korkmaz',
-                          '283****4210',
-                          '14.05.2',
-                          Color(0xFF00687a),
-                        ),
-                        Divider(height: 1, color: Colors.grey[200]),
-                        _buildPatientRow(
-                          'Mehmet AkÃ§oy',
-                          '411****9822',
-                          '14.05.2',
-                          Color(0xFF00687a),
-                        ),
-                        Divider(height: 1, color: Colors.grey[200]),
-                        _buildPatientRow(
-                          'Fatma Demir',
-                          '109****3345',
-                          '13.05.2',
-                          Color(0xFF00687a),
-                        ),
-                        Divider(height: 1, color: Colors.grey[200]),
-                        _buildPatientRow(
-                          'Caner ÃœnlÃ¼',
-                          '520****1108',
-                          '13.05.2',
-                          Color(0xFF00687a),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            SizedBox(height: 24),
-
-            // Kritik Risk Ä°zleme Section
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Kritik Risk Ä°zleme',
-                    style: GoogleFonts.manrope(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.black,
-                    ),
-                  ),
-                  SizedBox(height: 12),
-                  _buildCriticalRiskCard(
-                    'Hakan YÄ±ldÄ±z',
-                    'Evre 4 Retinopati StÃ¼phesi',
-                    '%92',
-                    Color(0xFFE53935),
-                  ),
-                  SizedBox(height: 12),
-                  _buildCriticalRiskCard(
-                    'Selma GÃ¼neÅŸ',
-                    'Makula Dejenerasyonu',
-                    '%87',
-                    Color(0xFFE53935),
-                  ),
-                  SizedBox(height: 12),
-                  Container(
-                    padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: Color(0xFFFCE4EC),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Color(0xFFE91E63), width: 1),
-                    ),
-                    child: Text(
-                      'HÄ±zlÄ± MÃ¼dahale Gereklendiri GÃ¶r',
-                      style: GoogleFonts.manrope(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFFC2185B),
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            SizedBox(height: 24),
-
-            // Yapay Zeka Ã–ngÃ¶rÃ¼sÃ¼
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Container(
-                padding: EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Color(0xFF00687a),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.lightbulb_outline,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                        SizedBox(width: 8),
-                        Text(
-                          'Yapay Zeka Ã–ngÃ¶rÃ¼sÃ¼',
-                          style: GoogleFonts.manrope(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 12),
-                    Text(
-                      'Bu hafta kaydedilen hastalarÄ±n %14\'Ã¼nde erken evre glokom belirtileri tespit edildi. Tarama siklÄ±ÄŸÄ±nÄ± artÄ±rmanÄ±z Ã¶nerilir.',
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w400,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            SizedBox(height: 40),
-          ],
-        ),
-      ),
             ),
           ],
         ),
       ),
       extendBody: true,
-      bottomNavigationBar: const ClinicBottomNav(
-        selectedTab: ClinicBottomTab.profile,
-      ),
+      bottomNavigationBar: const ClinicBottomNav(selectedTab: ClinicBottomTab.profile),
     );
   }
+}
 
-  Widget _buildStatCard({
-    required IconData icon,
-    required Color iconColor,
-    required String label,
-    required String value,
-    required Color bgColor,
-  }) {
+class _ProfileHeaderAvatar extends StatelessWidget {
+  const _ProfileHeaderAvatar({required this.scale});
+  final double scale;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.all(16),
+      width: 36 * scale,
+      height: 36 * scale,
       decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(12),
+        shape: BoxShape.circle,
+        color: const Color(0xFF00687A).withOpacity(0.12),
+        border: Border.all(color: const Color(0xFF00687A).withOpacity(0.30), width: 1.6),
+      ),
+      child: Icon(Icons.person_rounded, size: 20 * scale, color: const Color(0xFF00687A)),
+    );
+  }
+}
+
+class _TitleCard extends StatelessWidget {
+  const _TitleCard({required this.scale});
+  final double scale;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(20 * scale),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16 * scale),
+        border: Border.all(color: const Color(0xFFE2E8EE)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: iconColor, size: 24),
-          SizedBox(height: 12),
           Text(
-            label,
-            style: GoogleFonts.inter(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: Colors.grey[700],
-            ),
-          ),
-          SizedBox(height: 4),
-          Text(
-            value,
+            'Profil Bilgileri',
             style: GoogleFonts.manrope(
-              fontSize: 20,
+              fontSize: 20 * scale,
               fontWeight: FontWeight.w700,
-              color: Colors.black,
+              color: const Color(0xFF111827),
+              letterSpacing: -0.3,
+            ),
+          ),
+          SizedBox(height: 4 * scale),
+          Text(
+            'Doktor kimlik, uzmanlýk ve imza bilgilerini yönetin.',
+            style: GoogleFonts.inter(
+              fontSize: 13 * scale,
+              fontWeight: FontWeight.w400,
+              color: const Color(0xFF5C6470),
             ),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildPatientRow(
-    String name,
-    String tc,
-    String date,
-    Color scoreColor,
-  ) {
-    return Padding(
-      padding: EdgeInsets.all(12),
-      child: Row(
-        children: [
-          Expanded(
-            flex: 2,
-            child: Text(
-              name,
-              style: GoogleFonts.manrope(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Colors.black,
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              tc,
-              style: GoogleFonts.inter(
-                fontSize: 11,
-                fontWeight: FontWeight.w400,
-                color: Colors.grey[600],
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(
-              date,
-              style: GoogleFonts.inter(
-                fontSize: 11,
-                fontWeight: FontWeight.w400,
-                color: Colors.grey[600],
-              ),
-            ),
-          ),
-          Expanded(
-            flex: 1,
-            child: Text(
-              '98.7',
-              style: GoogleFonts.manrope(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: scoreColor,
-              ),
-              textAlign: TextAlign.end,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+class _FormCard extends StatelessWidget {
+  const _FormCard({
+    required this.scale,
+    required this.email,
+    required this.role,
+    required this.statusText,
+    required this.statusColor,
+    required this.createdAt,
+    required this.fullName,
+    required this.specialty,
+    required this.licenseNo,
+    required this.contactPhone,
+    required this.signatureName,
+  });
 
-  Widget _buildCriticalRiskCard(
-    String name,
-    String condition,
-    String score,
-    Color scoreColor,
-  ) {
+  final double scale;
+  final String email;
+  final String role;
+  final String statusText;
+  final Color statusColor;
+  final String createdAt;
+  final String fullName;
+  final String specialty;
+  final String licenseNo;
+  final String contactPhone;
+  final String signatureName;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.all(12),
+      padding: EdgeInsets.all(20 * scale),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey[200]!),
+        borderRadius: BorderRadius.circular(16 * scale),
+        border: Border.all(color: const Color(0xFFE2E8EE)),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(
-            radius: 24,
-            backgroundColor: Color(0xFFF5F7FA),
-            child: Icon(Icons.person, color: Color(0xFF00687a), size: 24),
+          // Kart baþlýðý
+          Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(8 * scale),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE2EDF8),
+                  borderRadius: BorderRadius.circular(8 * scale),
+                ),
+                child: Icon(Icons.person_outline_rounded, size: 18 * scale, color: const Color(0xFF4C7DA5)),
+              ),
+              SizedBox(width: 12 * scale),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Doktor Profili',
+                      style: GoogleFonts.manrope(
+                        fontSize: 15 * scale,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF111827),
+                      ),
+                    ),
+                    Text(
+                      'Bu bilgiler rapor imzasý ve klinik profilinde kullanýlýr.',
+                      style: GoogleFonts.inter(
+                        fontSize: 11 * scale,
+                        fontWeight: FontWeight.w400,
+                        color: const Color(0xFF5C6470),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: GoogleFonts.manrope(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.black,
-                  ),
+          SizedBox(height: 20 * scale),
+
+          _FieldLabel('Hesap E-postasý', scale: scale),
+          SizedBox(height: 6 * scale),
+          _ReadOnlyField(value: email, hint: 'ornek@klinik.com', scale: scale),
+          SizedBox(height: 14 * scale),
+
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _FieldLabel('Rol', scale: scale),
+                    SizedBox(height: 6 * scale),
+                    _ReadOnlyField(value: role, hint: 'DOCTOR', scale: scale),
+                  ],
                 ),
-                Text(
-                  condition,
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w400,
-                    color: Colors.grey[600],
-                  ),
+              ),
+              SizedBox(width: 12 * scale),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _FieldLabel('Hesap Durumu', scale: scale),
+                    SizedBox(height: 6 * scale),
+                    _ReadOnlyField(
+                      value: statusText,
+                      hint: 'Aktif',
+                      scale: scale,
+                      valueColor: statusText == '-' ? null : statusColor,
+                    ),
+                  ],
                 ),
-              ],
+              ),
+            ],
+          ),
+          SizedBox(height: 14 * scale),
+
+          _FieldLabel('Kayýt Tarihi', scale: scale),
+          SizedBox(height: 6 * scale),
+          _ReadOnlyField(value: createdAt, hint: 'gg.aa.yyyy ss:dd:ss', scale: scale),
+          SizedBox(height: 14 * scale),
+
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _FieldLabel('Doktor Adý Soyadý', scale: scale),
+                    SizedBox(height: 6 * scale),
+                    _ReadOnlyField(value: fullName, hint: 'Ad Soyad', scale: scale),
+                  ],
+                ),
+              ),
+              SizedBox(width: 12 * scale),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _FieldLabel('Uzmanlýk', scale: scale),
+                    SizedBox(height: 6 * scale),
+                    _ReadOnlyField(value: specialty, hint: 'Göz Hastalýklarý', scale: scale),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 14 * scale),
+
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _FieldLabel('Diploma / Sicil No', scale: scale),
+                    SizedBox(height: 6 * scale),
+                    _ReadOnlyField(value: licenseNo, hint: 'TR-123456', scale: scale),
+                  ],
+                ),
+              ),
+              SizedBox(width: 12 * scale),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _FieldLabel('Ýletiþim Telefonu', scale: scale),
+                    SizedBox(height: 6 * scale),
+                    _ReadOnlyField(value: contactPhone, hint: '0 (5__) ___ __ __', scale: scale),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 14 * scale),
+
+          _FieldLabel('Ýmzada Görünecek Ad', scale: scale),
+          SizedBox(height: 6 * scale),
+          _ReadOnlyField(value: signatureName, hint: 'Ad', scale: scale),
+        ],
+      ),
+    );
+  }
+}
+
+class _SignaturePreviewCard extends StatelessWidget {
+  const _SignaturePreviewCard({required this.scale, required this.previewName});
+  final double scale;
+  final String previewName;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(20 * scale),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16 * scale),
+        border: Border.all(color: const Color(0xFFE2E8EE)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Ýmza Önizleme',
+            style: GoogleFonts.manrope(
+              fontSize: 14 * scale,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF111827),
             ),
           ),
+          SizedBox(height: 4 * scale),
+          Text(
+            'PDF raporunun imza alanýnda görünecek ad aþaðýdaki gibidir.',
+            style: GoogleFonts.inter(
+              fontSize: 12 * scale,
+              fontWeight: FontWeight.w400,
+              color: const Color(0xFF00687A),
+            ),
+          ),
+          SizedBox(height: 12 * scale),
           Container(
-            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            width: double.infinity,
+            padding: EdgeInsets.symmetric(horizontal: 14 * scale, vertical: 12 * scale),
             decoration: BoxDecoration(
-              color: scoreColor.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(4),
+              color: const Color(0xFFF5F7FA),
+              borderRadius: BorderRadius.circular(8 * scale),
+              border: Border.all(color: const Color(0xFFE2E8EE)),
             ),
             child: Text(
-              score,
-              style: GoogleFonts.manrope(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: scoreColor,
+              previewName.isNotEmpty ? previewName : '-',
+              style: GoogleFonts.inter(
+                fontSize: 14 * scale,
+                fontWeight: FontWeight.w500,
+                color: const Color(0xFF111827),
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _InfoNote extends StatelessWidget {
+  const _InfoNote({required this.scale});
+  final double scale;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 14 * scale, vertical: 12 * scale),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F7FA),
+        borderRadius: BorderRadius.circular(10 * scale),
+        border: Border.all(color: const Color(0xFFE2E8EE)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.shield_outlined, size: 16 * scale, color: const Color(0xFF5C6470)),
+          SizedBox(width: 8 * scale),
+          Expanded(
+            child: Text(
+              'Profil alanlarý bu ekranda yalnýzca görüntülenebilir.',
+              style: GoogleFonts.inter(
+                fontSize: 12 * scale,
+                fontWeight: FontWeight.w400,
+                color: const Color(0xFF5C6470),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FieldLabel extends StatelessWidget {
+  const _FieldLabel(this.text, {required this.scale});
+  final String text;
+  final double scale;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: GoogleFonts.inter(
+        fontSize: 12 * scale,
+        fontWeight: FontWeight.w600,
+        color: const Color(0xFF00687A),
+      ),
+    );
+  }
+}
+
+class _ReadOnlyField extends StatelessWidget {
+  const _ReadOnlyField({
+    required this.value,
+    required this.hint,
+    required this.scale,
+    this.valueColor,
+  });
+
+  final String value;
+  final String hint;
+  final double scale;
+  final Color? valueColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final isEmpty = value.isEmpty;
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(horizontal: 14 * scale, vertical: 12 * scale),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F7FA),
+        borderRadius: BorderRadius.circular(8 * scale),
+        border: Border.all(color: const Color(0xFFE2E8EE)),
+      ),
+      child: Text(
+        isEmpty ? hint : value,
+        style: GoogleFonts.inter(
+          fontSize: 13 * scale,
+          fontWeight: FontWeight.w500,
+          color: isEmpty ? const Color(0xFF9CA3AF) : (valueColor ?? const Color(0xFF111827)),
+        ),
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }

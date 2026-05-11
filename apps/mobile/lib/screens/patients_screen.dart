@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -79,49 +80,51 @@ class _PatientsScreenState extends ConsumerState<PatientsScreen> {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
               child: Row(
                 children: [
-                  const Icon(
-                    Icons.visibility,
-                    color: Color(0xFF005D90),
-                    size: 22,
+                  SvgPicture.asset(
+                    'retina-ai.svg',
+                    width: 18,
+                    height: 18,
+                    colorFilter: const ColorFilter.mode(
+                      Color(0xFF00687A),
+                      BlendMode.srcIn,
+                    ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 8),
                   Text(
                     'RETINA KLİNİK',
                     style: GoogleFonts.manrope(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFF005D90),
-                      letterSpacing: 0.4,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF00687A),
+                      letterSpacing: -0.2,
                     ),
                   ),
                   const Spacer(),
                   IconButton(
-                    onPressed: () {},
-                    splashRadius: 20,
-                    icon: const Icon(
-                      Icons.search,
-                      size: 23,
-                      color: Color(0xFF5C6470),
-                    ),
+                    onPressed: () => context.push('/notifications'),
+                    splashRadius: 18,
+                    icon: const Icon(Icons.notifications_none_rounded),
+                    color: const Color(0xFF64748B),
+                    iconSize: 20,
                   ),
                   Container(
-                    width: 40,
-                    height: 40,
+                    width: 36,
+                    height: 36,
+                    clipBehavior: Clip.antiAlias,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       border: Border.all(
-                        color: const Color(0xFF005D90).withValues(alpha: 0.22),
-                        width: 1.6,
+                        color: const Color(0x1F00687A),
+                        width: 1,
                       ),
                     ),
-                    clipBehavior: Clip.antiAlias,
                     child: const Icon(
                       Icons.person,
-                      size: 20,
-                      color: Color(0xFF5C6470),
+                      size: 18,
+                      color: Color(0xFF64748B),
                     ),
                   ),
                 ],
@@ -167,7 +170,17 @@ class _PatientsScreenState extends ConsumerState<PatientsScreen> {
                             letterSpacing: -0.2,
                           ),
                         ),
-                        SizedBox(height: 18 * scale),
+                        SizedBox(height: 6 * scale),
+                        Text(
+                          'Hasta portföyünüz ve analiz yükünüzün güncel özetini buradan takip edebilirsiniz.',
+                          style: GoogleFonts.inter(
+                            fontSize: 12 * scale,
+                            fontWeight: FontWeight.w400,
+                            color: const Color(0xFF5C6470),
+                            height: 1.4,
+                          ),
+                        ),
+                        SizedBox(height: 14 * scale),
                         _SearchBox(scale: scale),
                         SizedBox(height: 14 * scale),
                         Row(

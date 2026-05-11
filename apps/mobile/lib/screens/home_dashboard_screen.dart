@@ -101,7 +101,7 @@ class HomeDashboardScreen extends ConsumerWidget {
                     Text(
                       highRiskCount > 0
                           ? '$highRiskCount yüksek riskli hasta takip gerektiriyor.'
-                          : 'Tüm hastalar stabil görünüyor.',
+                          : 'Klinik özet paneli üzerinden hasta sayısı, analiz yoğunluğu ve risk dağılımını tek bakışta görüntüleyebilir ve takip edebilirsiniz.',
                       style: GoogleFonts.inter(
                         fontSize: 12 * scale,
                         fontWeight: FontWeight.w500,
