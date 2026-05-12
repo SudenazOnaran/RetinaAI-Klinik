@@ -1,4 +1,4 @@
-﻿﻿import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -187,7 +187,7 @@ class _TitleCard extends StatelessWidget {
           ),
           SizedBox(height: 4 * scale),
           Text(
-            'Doktor kimlik, uzmanl�k ve imza bilgilerini y�netin.',
+            'Doktor kimlik, uzmanlık ve imza bilgilerini yönetin.',
             style: GoogleFonts.inter(
               fontSize: 13 * scale,
               fontWeight: FontWeight.w400,
@@ -239,7 +239,7 @@ class _FormCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Kart ba�l���
+          // Kart başlığı
           Row(
             children: [
               Container(
@@ -282,7 +282,7 @@ class _FormCard extends StatelessWidget {
           ),
           SizedBox(height: 20 * scale),
 
-          _FieldLabel('Hesap E-postas�', scale: scale),
+          _FieldLabel('Hesap E-postası', scale: scale),
           SizedBox(height: 6 * scale),
           _ReadOnlyField(value: email, hint: 'ornek@klinik.com', scale: scale),
           SizedBox(height: 14 * scale),
@@ -320,7 +320,7 @@ class _FormCard extends StatelessWidget {
           ),
           SizedBox(height: 14 * scale),
 
-          _FieldLabel('Kay�t Tarihi', scale: scale),
+          _FieldLabel('Kayıt Tarihi', scale: scale),
           SizedBox(height: 6 * scale),
           _ReadOnlyField(
             value: createdAt,
@@ -336,7 +336,7 @@ class _FormCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _FieldLabel('Doktor Ad� Soyad�', scale: scale),
+                    _FieldLabel('Doktor Adı Soyadı', scale: scale),
                     SizedBox(height: 6 * scale),
                     _ReadOnlyField(
                       value: fullName,
@@ -351,11 +351,11 @@ class _FormCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _FieldLabel('Uzmanl�k', scale: scale),
+                    _FieldLabel('Uzmanlık', scale: scale),
                     SizedBox(height: 6 * scale),
                     _ReadOnlyField(
                       value: specialty,
-                      hint: 'G�z Hastal�klar�',
+                      hint: 'Göz Hastalıkları',
                       scale: scale,
                     ),
                   ],
@@ -387,7 +387,7 @@ class _FormCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _FieldLabel('�leti�im Telefonu', scale: scale),
+                    _FieldLabel('İletişim Telefonu', scale: scale),
                     SizedBox(height: 6 * scale),
                     _ReadOnlyField(
                       value: contactPhone,
@@ -401,7 +401,7 @@ class _FormCard extends StatelessWidget {
           ),
           SizedBox(height: 14 * scale),
 
-          _FieldLabel('�mzada G�r�necek Ad', scale: scale),
+          _FieldLabel('İmzada Görünecek Ad', scale: scale),
           SizedBox(height: 6 * scale),
           _ReadOnlyField(value: signatureName, hint: 'Ad', scale: scale),
         ],
@@ -429,7 +429,7 @@ class _SignaturePreviewCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '�mza �nizleme',
+            'İmza Önizleme',
             style: GoogleFonts.manrope(
               fontSize: 14 * scale,
               fontWeight: FontWeight.w700,
@@ -438,7 +438,7 @@ class _SignaturePreviewCard extends StatelessWidget {
           ),
           SizedBox(height: 4 * scale),
           Text(
-            'PDF raporunun imza alan�nda g�r�necek ad a�a��daki gibidir.',
+            'PDF raporunun imza alanında görünecek ad aşağıdaki gibidir.',
             style: GoogleFonts.inter(
               fontSize: 12 * scale,
               fontWeight: FontWeight.w400,
