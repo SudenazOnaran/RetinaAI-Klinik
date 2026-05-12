@@ -1,12 +1,12 @@
-import 'package:flutter/material.dart';
+ï»¿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:retina_ai_app/core/network/api_client.dart';
 import 'package:retina_ai_app/core/constants/api_constants.dart';
 import 'package:retina_ai_app/core/providers/auth_provider.dart';
+import 'package:retina_ai_app/widgets/clinic_app_header.dart';
 import 'package:retina_ai_app/widgets/clinic_bottom_nav.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -89,38 +89,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         child: Column(
           children: [
             // Header
-            Padding(
-              padding: EdgeInsets.fromLTRB(16 * scale, 10 * scale, 16 * scale, 10 * scale),
-              child: Row(
-                children: [
-                  SvgPicture.asset(
-                    'retina-ai.svg',
-                    width: 17 * scale,
-                    height: 17 * scale,
-                    colorFilter: const ColorFilter.mode(_primary, BlendMode.srcIn),
-                  ),
-                  SizedBox(width: 6 * scale),
-                  Text(
-                    'RETINA KLÝNÝK',
-                    style: GoogleFonts.manrope(
-                      fontSize: 16 * scale,
-                      fontWeight: FontWeight.w700,
-                      color: _primary,
-                      letterSpacing: -0.2,
-                    ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    onPressed: () => context.push('/notifications'),
-                    splashRadius: 18,
-                    icon: const Icon(Icons.notifications_none_rounded),
-                    color: const Color(0xFF64748B),
-                    iconSize: 19 * scale,
-                  ),
-                  _ProfileHeaderAvatar(scale: scale),
-                ],
-              ),
-            ),
+            const ClinicAppHeader(),
             const Divider(height: 1, thickness: 1, color: Color(0xFFE2E8EE)),
 
             // Content
@@ -166,25 +135,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 }
 
-class _ProfileHeaderAvatar extends StatelessWidget {
-  const _ProfileHeaderAvatar({required this.scale});
-  final double scale;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 36 * scale,
-      height: 36 * scale,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: const Color(0xFF00687A).withOpacity(0.12),
-        border: Border.all(color: const Color(0xFF00687A).withOpacity(0.30), width: 1.6),
-      ),
-      child: Icon(Icons.person_rounded, size: 20 * scale, color: const Color(0xFF00687A)),
-    );
-  }
-}
-
 class _TitleCard extends StatelessWidget {
   const _TitleCard({required this.scale});
   final double scale;
@@ -213,7 +163,7 @@ class _TitleCard extends StatelessWidget {
           ),
           SizedBox(height: 4 * scale),
           Text(
-            'Doktor kimlik, uzmanlýk ve imza bilgilerini yönetin.',
+            'Doktor kimlik, uzmanlï¿½k ve imza bilgilerini yï¿½netin.',
             style: GoogleFonts.inter(
               fontSize: 13 * scale,
               fontWeight: FontWeight.w400,
@@ -265,7 +215,7 @@ class _FormCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Kart baþlýðý
+          // Kart baï¿½lï¿½ï¿½ï¿½
           Row(
             children: [
               Container(
@@ -290,7 +240,7 @@ class _FormCard extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      'Bu bilgiler rapor imzasý ve klinik profilinde kullanýlýr.',
+                      'Bu bilgiler rapor imzasï¿½ ve klinik profilinde kullanï¿½lï¿½r.',
                       style: GoogleFonts.inter(
                         fontSize: 11 * scale,
                         fontWeight: FontWeight.w400,
@@ -304,7 +254,7 @@ class _FormCard extends StatelessWidget {
           ),
           SizedBox(height: 20 * scale),
 
-          _FieldLabel('Hesap E-postasý', scale: scale),
+          _FieldLabel('Hesap E-postasï¿½', scale: scale),
           SizedBox(height: 6 * scale),
           _ReadOnlyField(value: email, hint: 'ornek@klinik.com', scale: scale),
           SizedBox(height: 14 * scale),
@@ -342,7 +292,7 @@ class _FormCard extends StatelessWidget {
           ),
           SizedBox(height: 14 * scale),
 
-          _FieldLabel('Kayýt Tarihi', scale: scale),
+          _FieldLabel('Kayï¿½t Tarihi', scale: scale),
           SizedBox(height: 6 * scale),
           _ReadOnlyField(value: createdAt, hint: 'gg.aa.yyyy ss:dd:ss', scale: scale),
           SizedBox(height: 14 * scale),
@@ -354,7 +304,7 @@ class _FormCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _FieldLabel('Doktor Adý Soyadý', scale: scale),
+                    _FieldLabel('Doktor Adï¿½ Soyadï¿½', scale: scale),
                     SizedBox(height: 6 * scale),
                     _ReadOnlyField(value: fullName, hint: 'Ad Soyad', scale: scale),
                   ],
@@ -365,9 +315,9 @@ class _FormCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _FieldLabel('Uzmanlýk', scale: scale),
+                    _FieldLabel('Uzmanlï¿½k', scale: scale),
                     SizedBox(height: 6 * scale),
-                    _ReadOnlyField(value: specialty, hint: 'Göz Hastalýklarý', scale: scale),
+                    _ReadOnlyField(value: specialty, hint: 'Gï¿½z Hastalï¿½klarï¿½', scale: scale),
                   ],
                 ),
               ),
@@ -393,7 +343,7 @@ class _FormCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _FieldLabel('Ýletiþim Telefonu', scale: scale),
+                    _FieldLabel('ï¿½letiï¿½im Telefonu', scale: scale),
                     SizedBox(height: 6 * scale),
                     _ReadOnlyField(value: contactPhone, hint: '0 (5__) ___ __ __', scale: scale),
                   ],
@@ -403,7 +353,7 @@ class _FormCard extends StatelessWidget {
           ),
           SizedBox(height: 14 * scale),
 
-          _FieldLabel('Ýmzada Görünecek Ad', scale: scale),
+          _FieldLabel('ï¿½mzada Gï¿½rï¿½necek Ad', scale: scale),
           SizedBox(height: 6 * scale),
           _ReadOnlyField(value: signatureName, hint: 'Ad', scale: scale),
         ],
@@ -431,7 +381,7 @@ class _SignaturePreviewCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Ýmza Önizleme',
+            'ï¿½mza ï¿½nizleme',
             style: GoogleFonts.manrope(
               fontSize: 14 * scale,
               fontWeight: FontWeight.w700,
@@ -440,7 +390,7 @@ class _SignaturePreviewCard extends StatelessWidget {
           ),
           SizedBox(height: 4 * scale),
           Text(
-            'PDF raporunun imza alanýnda görünecek ad aþaðýdaki gibidir.',
+            'PDF raporunun imza alanï¿½nda gï¿½rï¿½necek ad aï¿½aï¿½ï¿½daki gibidir.',
             style: GoogleFonts.inter(
               fontSize: 12 * scale,
               fontWeight: FontWeight.w400,
@@ -490,7 +440,7 @@ class _InfoNote extends StatelessWidget {
           SizedBox(width: 8 * scale),
           Expanded(
             child: Text(
-              'Profil alanlarý bu ekranda yalnýzca görüntülenebilir.',
+              'Profil alanlarï¿½ bu ekranda yalnï¿½zca gï¿½rï¿½ntï¿½lenebilir.',
               style: GoogleFonts.inter(
                 fontSize: 12 * scale,
                 fontWeight: FontWeight.w400,

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
+import 'package:retina_ai_app/widgets/clinic_app_header.dart';
 import 'package:retina_ai_app/widgets/clinic_bottom_nav.dart';
 
 class ReportsScreen extends StatefulWidget {
@@ -47,7 +47,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _TopBar(scale: scale),
+            const ClinicAppHeader(),
             const Divider(height: 1, thickness: 1, color: Color(0xFFE2E8F0)),
             Expanded(
               child: SingleChildScrollView(
@@ -60,7 +60,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _HeaderCard(scale: scale),
+                    ClinicPageTitleCard(
+                      title: 'Rapor Yönetimi',
+                      subtitle:
+                          'Tüm hastaların genel rapor özetini görüntüleyebilir, ilgili hastanın rapor geçmişine hızlıca geçebilirsiniz.',
+                    ),
                     SizedBox(height: 16 * scale),
                     _ReportsPanel(
                       scale: scale,
@@ -88,106 +92,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
       extendBody: true,
       bottomNavigationBar: const ClinicBottomNav(
         selectedTab: ClinicBottomTab.reports,
-      ),
-    );
-  }
-}
-
-class _TopBar extends StatelessWidget {
-  const _TopBar({required this.scale});
-
-  final double scale;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        16 * scale,
-        10 * scale,
-        16 * scale,
-        12 * scale,
-      ),
-      child: Row(
-        children: [
-          SvgPicture.asset(
-            'retina-ai.svg',
-            width: 18 * scale,
-            height: 18 * scale,
-            colorFilter: const ColorFilter.mode(
-              Color(0xFF00687A),
-              BlendMode.srcIn,
-            ),
-          ),
-          SizedBox(width: 8 * scale),
-          Text(
-            'RETINA KLİNİK',
-            style: GoogleFonts.manrope(
-              fontSize: 16 * scale,
-              fontWeight: FontWeight.w700,
-              color: const Color(0xFF00687A),
-              letterSpacing: -0.2,
-            ),
-          ),
-          const Spacer(),
-          IconButton(
-            onPressed: () => context.push('/notifications'),
-            splashRadius: 18,
-            icon: const Icon(Icons.notifications_none_rounded),
-            color: const Color(0xFF64748B),
-            iconSize: 20 * scale,
-          ),
-          Container(
-            width: 36 * scale,
-            height: 36 * scale,
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: const Color(0x1F00687A), width: 1),
-            ),
-            child: const Icon(Icons.person, size: 18, color: Color(0xFF64748B)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HeaderCard extends StatelessWidget {
-  const _HeaderCard({required this.scale});
-
-  final double scale;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(16 * scale),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Rapor Yönetimi',
-            style: GoogleFonts.manrope(
-              fontSize: 20 * scale,
-              fontWeight: FontWeight.w800,
-              color: const Color(0xFF0F172A),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Bu sayfada tüm hastaların genel rapor özetini görüntüleyebilir, ilgili hastanın rapor geçmişine hızlıca geçebilirsiniz.',
-            style: GoogleFonts.inter(
-              fontSize: 12.5 * scale,
-              color: const Color(0xFF475569),
-              height: 1.45,
-            ),
-          ),
-        ],
       ),
     );
   }

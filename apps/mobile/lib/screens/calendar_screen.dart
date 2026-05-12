@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:retina_ai_app/widgets/clinic_app_header.dart';
 import 'package:retina_ai_app/widgets/clinic_bottom_nav.dart';
 
 class CalendarScreen extends StatefulWidget {
@@ -24,59 +24,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
         child: Column(
           children: [
             // Standard header
-            Container(
-              color: Colors.white,
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-              child: Row(
-                children: [
-                  SvgPicture.asset(
-                    'retina-ai.svg',
-                    width: 18,
-                    height: 18,
-                    colorFilter: const ColorFilter.mode(
-                      Color(0xFF00687A),
-                      BlendMode.srcIn,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'RETINA KLİNİK',
-                    style: GoogleFonts.manrope(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: const Color(0xFF00687A),
-                      letterSpacing: -0.2,
-                    ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    onPressed: () => context.push('/notifications'),
-                    splashRadius: 18,
-                    icon: const Icon(Icons.notifications_none_rounded),
-                    color: const Color(0xFF64748B),
-                    iconSize: 20,
-                  ),
-                  Container(
-                    width: 36,
-                    height: 36,
-                    clipBehavior: Clip.antiAlias,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: const Color(0x1F00687A),
-                        width: 1,
-                      ),
-                    ),
-                    child: const Icon(
-                      Icons.person,
-                      size: 18,
-                      color: Color(0xFF64748B),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1, thickness: 1, color: Color(0xFFE0E3E5)),
+            const ClinicAppHeader(),
+            const Divider(height: 1, thickness: 1, color: Color(0xFFE2E8F0)),
             Expanded(
               child: SingleChildScrollView(
                 child: Column(

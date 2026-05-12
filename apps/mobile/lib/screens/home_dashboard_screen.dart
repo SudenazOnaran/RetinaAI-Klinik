@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:retina_ai_app/core/providers/auth_provider.dart';
 import 'package:retina_ai_app/core/providers/patient_api_provider.dart';
 import 'package:retina_ai_app/core/utils/risk_display_utils.dart';
+import 'package:retina_ai_app/widgets/clinic_app_header.dart';
 import 'package:retina_ai_app/widgets/clinic_bottom_nav.dart';
 
 class HomeDashboardScreen extends ConsumerWidget {
@@ -19,13 +19,16 @@ class HomeDashboardScreen extends ConsumerWidget {
     final patients = patientState.patients;
     final totalPatients = patients.length;
     final highRiskCount = patients.where((p) => isHighRisk(p.risk)).length;
+    final highRiskPatients = patients
+        .where((p) => isHighRisk(p.risk))
+        .take(2)
+        .toList();
     final totalAnalyses = patients.fold<int>(
       0,
       (sum, p) => sum + (p.analysisCount ?? 0),
     );
     const background = Color(0xFFF2F4F7);
     const primary = Color(0xFF00687A);
-    const accent = Color(0xFF0EA7C7);
     final screenWidth = MediaQuery.of(context).size.width;
     final scale = (screenWidth / 390).clamp(0.82, 1.0);
 
@@ -34,82 +37,26 @@ class HomeDashboardScreen extends ConsumerWidget {
       body: SafeArea(
         child: Column(
           children: [
+            const ClinicAppHeader(),
+            const Divider(height: 1, thickness: 1, color: Color(0xFFE2E8F0)),
             Expanded(
               child: SingleChildScrollView(
                 padding: EdgeInsets.fromLTRB(
                   16 * scale,
-                  8 * scale,
+                  14 * scale,
                   16 * scale,
                   104 * scale,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        SvgPicture.asset(
-                          'retina-ai.svg',
-                          width: 17 * scale,
-                          height: 17 * scale,
-                          colorFilter: ColorFilter.mode(
-                            primary,
-                            BlendMode.srcIn,
-                          ),
-                        ),
-                        SizedBox(width: 6 * scale),
-                        Text(
-                          'RETINA KLİNİK',
-                          style: GoogleFonts.manrope(
-                            fontSize: 16 * scale,
-                            fontWeight: FontWeight.w700,
-                            color: primary,
-                            letterSpacing: -0.2,
-                          ),
-                        ),
-                        const Spacer(),
-                        IconButton(
-                          onPressed: () => context.push('/notifications'),
-                          splashRadius: 18,
-                          icon: const Icon(Icons.notifications_none_rounded),
-                          color: const Color(0xFF64748B),
-                          iconSize: 19 * scale,
-                        ),
-                        const _ProfileAvatar(),
-                      ],
-                    ),
-                    SizedBox(height: 16 * scale),
-                    Text(
-                      'HOŞ GELDİNİZ',
-                      style: GoogleFonts.inter(
-                        fontSize: 10 * scale,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF005D90),
-                        letterSpacing: 1.4,
-                      ),
-                    ),
-                    SizedBox(height: 4 * scale),
-                    Text(
-                      doctorName,
-                      style: GoogleFonts.manrope(
-                        fontSize: 17 * scale,
-                        fontWeight: FontWeight.w800,
-                        color: const Color(0xFF111827),
-                        height: 1.15,
-                      ),
-                    ),
-                    SizedBox(height: 6 * scale),
-                    Text(
-                      highRiskCount > 0
+                    ClinicPageTitleCard(
+                      title: 'Hoş Geldiniz, $doctorName',
+                      subtitle: highRiskCount > 0
                           ? '$highRiskCount yüksek riskli hasta takip gerektiriyor.'
-                          : 'Klinik özet paneli üzerinden hasta sayısı, analiz yoğunluğu ve risk dağılımını tek bakışta görüntüleyebilir ve takip edebilirsiniz.',
-                      style: GoogleFonts.inter(
-                        fontSize: 12 * scale,
-                        fontWeight: FontWeight.w500,
-                        color: const Color(0xFF404850),
-                        height: 1.4,
-                      ),
+                          : 'Klinik özet paneli üzerinden hasta sayısı, analiz yoğunluğu ve risk dağılımını tek bakışta görüntüleyebilirsiniz.',
                     ),
-                    SizedBox(height: 16 * scale),
+                    SizedBox(height: 14 * scale),
                     Row(
                       children: [
                         Expanded(
@@ -210,33 +157,60 @@ class HomeDashboardScreen extends ConsumerWidget {
                       child: Column(
                         children: [
                           _TableHeader(scale: scale),
-                          _PatientRow(
-                            name: 'Zeynep\nKorkmaz',
-                            id: '283****4210',
-                            date: '14.05.2024',
-                            scale: scale,
-                          ),
-                          Divider(height: 1, color: Color(0xFFE8ECF1)),
-                          _PatientRow(
-                            name: 'Mehmet\nAksoy',
-                            id: '411****9822',
-                            date: '14.05.2024',
-                            scale: scale,
-                          ),
-                          Divider(height: 1, color: Color(0xFFE8ECF1)),
-                          _PatientRow(
-                            name: 'Fatma\nDemir',
-                            id: '109****3345',
-                            date: '13.05.2024',
-                            scale: scale,
-                          ),
-                          Divider(height: 1, color: Color(0xFFE8ECF1)),
-                          _PatientRow(
-                            name: 'Caner\nÜnlü',
-                            id: '520****1108',
-                            date: '13.05.2024',
-                            scale: scale,
-                          ),
+                          if (patientState.isLoading)
+                            Padding(
+                              padding: EdgeInsets.all(16 * scale),
+                              child: const Center(
+                                child: CircularProgressIndicator(),
+                              ),
+                            )
+                          else if (patients.isEmpty)
+                            Padding(
+                              padding: EdgeInsets.all(16 * scale),
+                              child: Text(
+                                'Henüz kayıtlı hasta yok.',
+                                style: GoogleFonts.inter(
+                                  fontSize: 13 * scale,
+                                  color: const Color(0xFF6B7280),
+                                ),
+                              ),
+                            )
+                          else
+                            ...(() {
+                              final recent = patients.take(4).toList();
+                              final rows = <Widget>[];
+                              for (int i = 0; i < recent.length; i++) {
+                                final p = recent[i];
+                                if (i > 0) {
+                                  rows.add(
+                                    const Divider(
+                                      height: 1,
+                                      color: Color(0xFFE8ECF1),
+                                    ),
+                                  );
+                                }
+                                final tc = p.tcNo;
+                                final masked = tc.length >= 7
+                                    ? '${tc.substring(0, 3)}****${tc.substring(tc.length - 4)}'
+                                    : tc;
+                                final d = p.createdAt;
+                                final dateStr =
+                                    '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
+                                final nameParts = p.fullName.split(' ');
+                                final displayName = nameParts.length >= 2
+                                    ? '${nameParts.first}\n${nameParts.sublist(1).join(' ')}'
+                                    : p.fullName;
+                                rows.add(
+                                  _PatientRow(
+                                    name: displayName,
+                                    id: masked,
+                                    date: dateStr,
+                                    scale: scale,
+                                  ),
+                                );
+                              }
+                              return rows;
+                            })(),
                         ],
                       ),
                     ),
@@ -269,19 +243,57 @@ class HomeDashboardScreen extends ConsumerWidget {
                       ),
                       child: Column(
                         children: [
-                          _RiskItem(
-                            name: 'Hakan Yıldız',
-                            subtitle: 'Evre 4 Retinopati Şüphesi',
-                            percent: 92,
-                            scale: scale,
-                          ),
-                          SizedBox(height: 10 * scale),
-                          _RiskItem(
-                            name: 'Selma Güneş',
-                            subtitle: 'Makula Dejenerasyonu',
-                            percent: 87,
-                            scale: scale,
-                          ),
+                          if (highRiskPatients.isEmpty)
+                            Padding(
+                              padding: EdgeInsets.symmetric(
+                                vertical: 10 * scale,
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.check_circle_outline_rounded,
+                                    color: const Color(0xFF006645),
+                                    size: 16 * scale,
+                                  ),
+                                  SizedBox(width: 8 * scale),
+                                  Text(
+                                    'Yüksek riskli hasta bulunmuyor.',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 13 * scale,
+                                      color: const Color(0xFF006645),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          else
+                            ...(() {
+                              final items = <Widget>[];
+                              for (
+                                int i = 0;
+                                i < highRiskPatients.length;
+                                i++
+                              ) {
+                                final p = highRiskPatients[i];
+                                if (i > 0) {
+                                  items.add(SizedBox(height: 10 * scale));
+                                }
+                                final confidence =
+                                    p.lastAnalysis?.confidence ?? 0.8;
+                                final percent = (confidence * 100)
+                                    .round()
+                                    .clamp(1, 100);
+                                items.add(
+                                  _RiskItem(
+                                    name: p.fullName,
+                                    subtitle: p.risk,
+                                    percent: percent,
+                                    scale: scale,
+                                  ),
+                                );
+                              }
+                              return items;
+                            })(),
                           SizedBox(height: 12 * scale),
                           SizedBox(
                             width: double.infinity,
@@ -309,52 +321,6 @@ class HomeDashboardScreen extends ConsumerWidget {
                         ],
                       ),
                     ),
-                    SizedBox(height: 12 * scale),
-                    Container(
-                      width: double.infinity,
-                      padding: EdgeInsets.all(14 * scale),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(18),
-                        gradient: const LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [primary, accent],
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(
-                                Icons.psychology_alt_rounded,
-                                color: Colors.white,
-                                size: 19,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Yapay Zeka Öngörüsü',
-                                style: GoogleFonts.manrope(
-                                  fontSize: 16 * scale,
-                                  fontWeight: FontWeight.w800,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ],
-                          ),
-                          SizedBox(height: 8 * scale),
-                          Text(
-                            'Bu hafta kaydedilen hastaların %14\'ünde erken evre glokom belirtileri tespit edildi. Tarama sıklığını artırmanız önerilir.',
-                            style: GoogleFonts.inter(
-                              fontSize: 12 * scale,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.white.withValues(alpha: 0.92),
-                              height: 1.45,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                   ],
                 ),
               ),
@@ -365,29 +331,6 @@ class HomeDashboardScreen extends ConsumerWidget {
       extendBody: true,
       bottomNavigationBar: const ClinicBottomNav(
         selectedTab: ClinicBottomTab.panel,
-      ),
-    );
-  }
-}
-
-class _ProfileAvatar extends StatelessWidget {
-  const _ProfileAvatar();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 36,
-      height: 36,
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: const Color(0x1F00687A), width: 1),
-      ),
-      child: Image.network(
-        'https://lh3.googleusercontent.com/aida-public/AB6AXuBxnTS1lowCW9qeQJP1pgWcyX83MbAr3C1YWOi7w20-sI2Zog_O8U9WnOuCICbwg7-sUaOmRCYHDYoJnH2Mgtw7n_klCyq1B91JSy9UgAQi0COw2mzp8bKIrCOwkl2yK6-kuakFs__E1pqlFSDn76vcfnGmmmWN9sFVNBJBpKOnGJKJGMBJ4x0NjAH7Web2HIusd9dwiOWcvJFausUGt2i1cPyLEwDRySW3cH2R0rT8UpYIfsk60MlcpyD8LmfOsVF9ccrpfD3lScc',
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) =>
-            const Icon(Icons.person, size: 16, color: Color(0xFF64748B)),
       ),
     );
   }
