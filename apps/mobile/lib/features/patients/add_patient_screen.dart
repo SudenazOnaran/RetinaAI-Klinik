@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../widgets/clinic_app_header.dart';
 import '../../data/models/patient_api_model.dart';
 import '../../core/providers/patient_api_provider.dart';
 import '../../core/utils/uuid_generator.dart';
@@ -79,122 +80,47 @@ class _AddPatientScreenState extends ConsumerState<AddPatientScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: background,
-      body: CustomScrollView(
-        slivers: [
-          _buildAppBar(context),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 24.0,
-                vertical: 16.0,
-              ),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildHeader(),
-                    const SizedBox(height: 24),
-                    _buildPersonalInfoSection(),
-                    const SizedBox(height: 24),
-                    _buildClinicalMetricsSection(),
-                    const SizedBox(height: 24),
-                    _buildAiHintCard(),
-                    const SizedBox(height: 32),
-                    _buildSaveButton(),
-                    const SizedBox(height: 100), // Space for bottom nav
-                  ],
+      body: SafeArea(
+        child: Column(
+          children: [
+            const ClinicAppHeader(),
+            const Divider(height: 1, thickness: 1, color: Color(0xFFE2E8F0)),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24.0,
+                  vertical: 16.0,
+                ),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ClinicPageTitleCard(
+                        title: 'Yeni Hasta Kaydı',
+                        subtitle: 'Hasta bilgilerini ve başlangıç metriklerini giriniz.',
+                      ),
+                      const SizedBox(height: 24),
+                      _buildPersonalInfoSection(),
+                      const SizedBox(height: 24),
+                      _buildClinicalMetricsSection(),
+                      const SizedBox(height: 24),
+                      _buildAiHintCard(),
+                      const SizedBox(height: 32),
+                      _buildSaveButton(),
+                      const SizedBox(height: 32),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildAppBar(BuildContext context) {
-    return SliverAppBar(
-      backgroundColor: background,
-      pinned: true,
-      elevation: 0,
-      leadingWidth: 72,
-      leading: Padding(
-        padding: const EdgeInsets.only(left: 24.0),
-        child: Center(
-          child: InkWell(
-            onTap: () => context.pop(),
-            borderRadius: BorderRadius.circular(24),
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: const BoxDecoration(
-                color: Colors.transparent,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.arrow_back, color: primary, size: 24),
-            ),
-          ),
-        ),
-      ),
-      title: Text(
-        'Retina Vitalis',
-        style: GoogleFonts.manrope(
-          fontSize: 20,
-          fontWeight: FontWeight.w800,
-          color: primary,
-          letterSpacing: -0.5,
-        ),
-      ),
-      actions: [
-        Padding(
-          padding: const EdgeInsets.only(right: 24.0),
-          child: Center(
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: primaryContainer, width: 2),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Image.network(
-                'https://lh3.googleusercontent.com/aida-public/AB6AXuDKiCMLv1BxtUI2x3_4AX-8SAi-Qy0zi4Roam8ipuylseMSbvtBnwccAcQMPc6Wvufinzla_CLOfS2rV-2d6CMYJHlpCzcvaZ2O22WTAZaOIcRMIx-qczBRSbsSk_eu_jhhPd-99n2bIZfjrNyyDSuga3eti3hKRQ2ocQSAbjveN_ZJRBihN85saXx7ZNsr-2uBLuU3gocsZRFu01vH_xygdt3x-2Pn9nhlkTta5xKw6b7RqodgrvVEa-1jVBWktkM1jf3Jlg7d7PQ8',
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
 
-  Widget _buildHeader() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Yeni Hasta Kaydı',
-          style: GoogleFonts.manrope(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: onSurface,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Lütfen hasta bilgilerini ve başlangıç metriklerini giriniz.',
-          style: GoogleFonts.inter(fontSize: 14, color: onSurfaceVariant),
-        ),
-      ],
-    );
-  }
 
   Widget _buildPersonalInfoSection() {
     return Container(
@@ -539,7 +465,7 @@ class _AddPatientScreenState extends ConsumerState<AddPatientScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'HbA1c değerlerini girdiğinizde, Retina Vitalis otomatik olarak diyabetik retinopati risk analizini başlatacaktır.',
+                  'HbA1c değerlerini girdiğinizde, Retina Klinik otomatik olarak diyabetik retinopati risk analizini başlatacaktır.',
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     color: onSurfaceVariant,

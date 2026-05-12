@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+﻿﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -47,7 +47,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           _branch = profile['branch'] as String? ?? '';
           _licenseNo = profile['licenseNo'] as String? ?? '';
           _contactPhone = profile['contactPhone'] as String? ?? '';
-          _signatureName = profile['signatureName'] as String? ?? doctor['name'] as String? ?? '';
+          _signatureName =
+              profile['signatureName'] as String? ??
+              doctor['name'] as String? ??
+              '';
           _loading = false;
         });
       }
@@ -66,8 +69,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final role = doctor?.role ?? '-';
     final fullName = doctor?.fullName ?? '';
     final specialty = _branch.isNotEmpty ? _branch : (doctor?.specialty ?? '');
-    final statusText = _isActive == null ? '-' : (_isActive! ? 'Aktif' : 'Pasif');
-    final statusColor = _isActive == true ? const Color(0xFF006645) : const Color(0xFF93000A);
+    final statusText = _isActive == null
+        ? '-'
+        : (_isActive! ? 'Aktif' : 'Pasif');
+    final statusColor = _isActive == true
+        ? const Color(0xFF006645)
+        : const Color(0xFF93000A);
 
     String createdAtFormatted = '-';
     if (_createdAt.isNotEmpty) {
@@ -81,7 +88,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       }
     }
 
-    final previewName = _signatureName.isNotEmpty ? _signatureName : (doctor?.name ?? '');
+    final previewName = _signatureName.isNotEmpty
+        ? _signatureName
+        : (doctor?.name ?? '');
 
     return Scaffold(
       backgroundColor: _bg,
@@ -96,10 +105,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             Expanded(
               child: _loading
                   ? const Center(
-                      child: CircularProgressIndicator(color: _primary, strokeWidth: 2.5),
+                      child: CircularProgressIndicator(
+                        color: _primary,
+                        strokeWidth: 2.5,
+                      ),
                     )
                   : SingleChildScrollView(
-                      padding: EdgeInsets.fromLTRB(16 * scale, 18 * scale, 16 * scale, 110 * scale),
+                      padding: EdgeInsets.fromLTRB(
+                        16 * scale,
+                        18 * scale,
+                        16 * scale,
+                        110 * scale,
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -116,10 +133,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             specialty: specialty,
                             licenseNo: _licenseNo,
                             contactPhone: _contactPhone,
-                            signatureName: _signatureName.isNotEmpty ? _signatureName : (doctor?.name ?? ''),
+                            signatureName: _signatureName.isNotEmpty
+                                ? _signatureName
+                                : (doctor?.name ?? ''),
                           ),
                           SizedBox(height: 16 * scale),
-                          _SignaturePreviewCard(scale: scale, previewName: previewName),
+                          _SignaturePreviewCard(
+                            scale: scale,
+                            previewName: previewName,
+                          ),
                           SizedBox(height: 14 * scale),
                           _InfoNote(scale: scale),
                         ],
@@ -130,7 +152,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ),
       ),
       extendBody: true,
-      bottomNavigationBar: const ClinicBottomNav(selectedTab: ClinicBottomTab.profile),
+      bottomNavigationBar: const ClinicBottomNav(
+        selectedTab: ClinicBottomTab.profile,
+      ),
     );
   }
 }
@@ -224,7 +248,11 @@ class _FormCard extends StatelessWidget {
                   color: const Color(0xFFE2EDF8),
                   borderRadius: BorderRadius.circular(8 * scale),
                 ),
-                child: Icon(Icons.person_outline_rounded, size: 18 * scale, color: const Color(0xFF4C7DA5)),
+                child: Icon(
+                  Icons.person_outline_rounded,
+                  size: 18 * scale,
+                  color: const Color(0xFF4C7DA5),
+                ),
               ),
               SizedBox(width: 12 * scale),
               Expanded(
@@ -240,7 +268,7 @@ class _FormCard extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      'Bu bilgiler rapor imzas� ve klinik profilinde kullan�l�r.',
+                      'Bu bilgiler rapor imzası ve klinik profilinde kullanılır.',
                       style: GoogleFonts.inter(
                         fontSize: 11 * scale,
                         fontWeight: FontWeight.w400,
@@ -294,7 +322,11 @@ class _FormCard extends StatelessWidget {
 
           _FieldLabel('Kay�t Tarihi', scale: scale),
           SizedBox(height: 6 * scale),
-          _ReadOnlyField(value: createdAt, hint: 'gg.aa.yyyy ss:dd:ss', scale: scale),
+          _ReadOnlyField(
+            value: createdAt,
+            hint: 'gg.aa.yyyy ss:dd:ss',
+            scale: scale,
+          ),
           SizedBox(height: 14 * scale),
 
           Row(
@@ -306,7 +338,11 @@ class _FormCard extends StatelessWidget {
                   children: [
                     _FieldLabel('Doktor Ad� Soyad�', scale: scale),
                     SizedBox(height: 6 * scale),
-                    _ReadOnlyField(value: fullName, hint: 'Ad Soyad', scale: scale),
+                    _ReadOnlyField(
+                      value: fullName,
+                      hint: 'Ad Soyad',
+                      scale: scale,
+                    ),
                   ],
                 ),
               ),
@@ -317,7 +353,11 @@ class _FormCard extends StatelessWidget {
                   children: [
                     _FieldLabel('Uzmanl�k', scale: scale),
                     SizedBox(height: 6 * scale),
-                    _ReadOnlyField(value: specialty, hint: 'G�z Hastal�klar�', scale: scale),
+                    _ReadOnlyField(
+                      value: specialty,
+                      hint: 'G�z Hastal�klar�',
+                      scale: scale,
+                    ),
                   ],
                 ),
               ),
@@ -334,7 +374,11 @@ class _FormCard extends StatelessWidget {
                   children: [
                     _FieldLabel('Diploma / Sicil No', scale: scale),
                     SizedBox(height: 6 * scale),
-                    _ReadOnlyField(value: licenseNo, hint: 'TR-123456', scale: scale),
+                    _ReadOnlyField(
+                      value: licenseNo,
+                      hint: 'TR-123456',
+                      scale: scale,
+                    ),
                   ],
                 ),
               ),
@@ -345,7 +389,11 @@ class _FormCard extends StatelessWidget {
                   children: [
                     _FieldLabel('�leti�im Telefonu', scale: scale),
                     SizedBox(height: 6 * scale),
-                    _ReadOnlyField(value: contactPhone, hint: '0 (5__) ___ __ __', scale: scale),
+                    _ReadOnlyField(
+                      value: contactPhone,
+                      hint: '0 (5__) ___ __ __',
+                      scale: scale,
+                    ),
                   ],
                 ),
               ),
@@ -400,7 +448,10 @@ class _SignaturePreviewCard extends StatelessWidget {
           SizedBox(height: 12 * scale),
           Container(
             width: double.infinity,
-            padding: EdgeInsets.symmetric(horizontal: 14 * scale, vertical: 12 * scale),
+            padding: EdgeInsets.symmetric(
+              horizontal: 14 * scale,
+              vertical: 12 * scale,
+            ),
             decoration: BoxDecoration(
               color: const Color(0xFFF5F7FA),
               borderRadius: BorderRadius.circular(8 * scale),
@@ -428,7 +479,10 @@ class _InfoNote extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: 14 * scale, vertical: 12 * scale),
+      padding: EdgeInsets.symmetric(
+        horizontal: 14 * scale,
+        vertical: 12 * scale,
+      ),
       decoration: BoxDecoration(
         color: const Color(0xFFF5F7FA),
         borderRadius: BorderRadius.circular(10 * scale),
@@ -436,11 +490,15 @@ class _InfoNote extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.shield_outlined, size: 16 * scale, color: const Color(0xFF5C6470)),
+          Icon(
+            Icons.shield_outlined,
+            size: 16 * scale,
+            color: const Color(0xFF5C6470),
+          ),
           SizedBox(width: 8 * scale),
           Expanded(
             child: Text(
-              'Profil alanlar� bu ekranda yaln�zca g�r�nt�lenebilir.',
+              'Profil alanları bu ekranda yalnızca görüntülenebilir.',
               style: GoogleFonts.inter(
                 fontSize: 12 * scale,
                 fontWeight: FontWeight.w400,
@@ -490,7 +548,10 @@ class _ReadOnlyField extends StatelessWidget {
     final isEmpty = value.isEmpty;
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.symmetric(horizontal: 14 * scale, vertical: 12 * scale),
+      padding: EdgeInsets.symmetric(
+        horizontal: 14 * scale,
+        vertical: 12 * scale,
+      ),
       decoration: BoxDecoration(
         color: const Color(0xFFF5F7FA),
         borderRadius: BorderRadius.circular(8 * scale),
@@ -501,7 +562,9 @@ class _ReadOnlyField extends StatelessWidget {
         style: GoogleFonts.inter(
           fontSize: 13 * scale,
           fontWeight: FontWeight.w500,
-          color: isEmpty ? const Color(0xFF9CA3AF) : (valueColor ?? const Color(0xFF111827)),
+          color: isEmpty
+              ? const Color(0xFF9CA3AF)
+              : (valueColor ?? const Color(0xFF111827)),
         ),
         overflow: TextOverflow.ellipsis,
       ),
