@@ -108,6 +108,61 @@ Retina AI`;
 }
 
 /**
+ * Bize ulaşın formu gönderildiğinde admin gelen kutusuna bilgi maili gönderir.
+ * SMTP yoksa uyarı loglar ve sessizce döner (kayıt yine de tamamlanır).
+ */
+export async function sendLandingContactNotifyEmail(params: {
+  fullName: string;
+  email: string | null;
+  phone: string | null;
+  message: string | null;
+}): Promise<void> {
+  if (!isDoctorApprovalEmailConfigured()) {
+    console.warn(
+      "[doctor-approval-email] Landing contact bildirimi atlandı: SMTP_HOST / SMTP_USER / SMTP_PASS eksik.",
+    );
+    return;
+  }
+
+  const adminUrl = `${getPublicAppBaseUrl()}/admin`;
+  const safeName = params.fullName.trim() || "Bilinmeyen";
+  const subject = "Retina AI — Yeni iletişim talebi";
+
+  const contactLine = params.email
+    ? `E-posta: ${params.email}`
+    : params.phone
+      ? `Telefon: ${params.phone}`
+      : "İletişim bilgisi yok";
+
+  const msgLine = params.message ? `\nMesaj:\n${params.message}\n` : "";
+
+  const text = `${safeName} adlı kişi iletişim formu doldurdu.\n\n${contactLine}${msgLine}\nAdmin panelinden görüntülemek için: ${adminUrl}\n\nRetina AI`;
+
+  const safeNameHtml = escapeHtml(safeName);
+  const safeContactHtml = escapeHtml(contactLine);
+  const safeAdminUrl = escapeHtml(adminUrl);
+  const safeMsgHtml = params.message
+    ? `<p><strong>Mesaj:</strong><br/>${escapeHtml(params.message).replace(/\n/g, "<br/>")}</p>`
+    : "";
+
+  const html = `<p><strong>${safeNameHtml}</strong> adlı kişi iletişim formu doldurdu.</p>
+<p>${safeContactHtml}</p>
+${safeMsgHtml}
+<p>Admin panelinden görüntülemek için: <a href="${safeAdminUrl}">${safeAdminUrl}</a></p>
+<p>Retina AI</p>`;
+
+  const transporter = createTransporter();
+  await transporter.sendMail({
+    from: getFromAddress(),
+    to: getAdminRegistrationNotifyTo(),
+    subject,
+    text,
+    html,
+  });
+  console.error("[retina-mail] landing contact notify SENT ok");
+}
+
+/**
  * Admin onayı sonrası doktora giriş linki içeren e-posta gönderir.
  * SMTP yapılandırması yoksa uyarı loglar ve sessizce döner.
  */

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { sendLandingContactNotifyEmail } from "@/lib/doctor-approval-email";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -67,6 +68,15 @@ export async function POST(req: Request) {
         phone: contactPref === "phone" ? phone : phone || null,
         message: msg,
       },
+    });
+
+    void sendLandingContactNotifyEmail({
+      fullName,
+      email: contactPref === "email" ? email || null : email || null,
+      phone: contactPref === "phone" ? phone || null : phone || null,
+      message: msg,
+    }).catch((err) => {
+      console.error("[landing-contact] Bildirim e-postası gönderilemedi:", err);
     });
 
     return NextResponse.json(
