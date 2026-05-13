@@ -98,7 +98,8 @@ class _AddPatientScreenState extends ConsumerState<AddPatientScreen> {
                     children: [
                       ClinicPageTitleCard(
                         title: 'Yeni Hasta Kaydı',
-                        subtitle: 'Hasta bilgilerini ve başlangıç metriklerini giriniz.',
+                        subtitle:
+                            'Hasta bilgilerini ve başlangıç metriklerini giriniz.',
                       ),
                       const SizedBox(height: 24),
                       _buildPersonalInfoSection(),
@@ -119,8 +120,6 @@ class _AddPatientScreenState extends ConsumerState<AddPatientScreen> {
       ),
     );
   }
-
-
 
   Widget _buildPersonalInfoSection() {
     return Container(

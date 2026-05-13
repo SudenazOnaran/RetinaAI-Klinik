@@ -78,10 +78,8 @@ class _AuthInterceptor extends Interceptor {
 
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
-    if (err.response?.statusCode == 401) {
-      // Token geçersiz - secure storage temizle
-      SecureStorageService.instance.clearAll();
-    }
+    // 401 geldiğinde token'ı SİLME — bu cascade hataya yol açar.
+    // Kullanıcı hata mesajı görür, tekrar giriş yapabilir.
     handler.next(err);
   }
 }

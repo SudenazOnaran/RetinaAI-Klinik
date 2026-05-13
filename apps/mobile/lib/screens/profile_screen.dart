@@ -43,7 +43,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       if (mounted) {
         setState(() {
           _isActive = doctor['isActive'] as bool?;
-          _createdAt = doctor['createdAt'] as String? ?? '';
+          _createdAt = (doctor['createdAt'] ?? '').toString();
           _branch = profile['branch'] as String? ?? '';
           _licenseNo = profile['licenseNo'] as String? ?? '';
           _contactPhone = profile['contactPhone'] as String? ?? '';
@@ -144,6 +144,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           ),
                           SizedBox(height: 14 * scale),
                           _InfoNote(scale: scale),
+                          SizedBox(height: 14 * scale),
+                          _SettingsCard(scale: scale),
                         ],
                       ),
                     ),
@@ -510,6 +512,85 @@ class _InfoNote extends StatelessWidget {
       ),
     );
   }
+}
+
+class _SettingsCard extends StatelessWidget {
+  const _SettingsCard({required this.scale});
+  final double scale;
+
+  static const List<_SettingItem> _items = [
+    _SettingItem(Icons.settings_outlined, 'Ayarlar', '/settings'),
+    _SettingItem(
+      Icons.lock_outline_rounded,
+      'Şifre Değiştir',
+      '/reset-password',
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14 * scale),
+        border: Border.all(color: const Color(0xFFE2E8EE)),
+      ),
+      child: Column(
+        children: [
+          for (int i = 0; i < _items.length; i++) ...[
+            if (i > 0)
+              const Divider(height: 1, thickness: 1, color: Color(0xFFF0F2F5)),
+            InkWell(
+              borderRadius: i == 0
+                  ? BorderRadius.vertical(top: Radius.circular(14 * scale))
+                  : i == _items.length - 1
+                  ? BorderRadius.vertical(bottom: Radius.circular(14 * scale))
+                  : BorderRadius.zero,
+              onTap: () => context.push(_items[i].route),
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: 16 * scale,
+                  vertical: 14 * scale,
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _items[i].icon,
+                      size: 20,
+                      color: const Color(0xFF00687A),
+                    ),
+                    SizedBox(width: 12 * scale),
+                    Expanded(
+                      child: Text(
+                        _items[i].label,
+                        style: GoogleFonts.inter(
+                          fontSize: 14 * scale,
+                          fontWeight: FontWeight.w500,
+                          color: const Color(0xFF1E293B),
+                        ),
+                      ),
+                    ),
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      size: 18,
+                      color: Color(0xFF9CA3AF),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingItem {
+  final IconData icon;
+  final String label;
+  final String route;
+  const _SettingItem(this.icon, this.label, this.route);
 }
 
 class _FieldLabel extends StatelessWidget {

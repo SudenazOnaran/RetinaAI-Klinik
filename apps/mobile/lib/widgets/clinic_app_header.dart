@@ -18,10 +18,9 @@ class ClinicAppHeader extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final doctor = ref.watch(authProvider).doctor;
-    final initial =
-        doctor != null && doctor.name.isNotEmpty
-            ? doctor.name[0].toUpperCase()
-            : '?';
+    final initial = doctor != null && doctor.name.isNotEmpty
+        ? doctor.name[0].toUpperCase()
+        : '?';
 
     return Container(
       color: Colors.white,
@@ -116,10 +115,7 @@ class ClinicAppHeader extends ConsumerWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: _primary.withOpacity(0.12),
-              border: Border.all(
-                color: _primary.withOpacity(0.30),
-                width: 1.6,
-              ),
+              border: Border.all(color: _primary.withOpacity(0.30), width: 1.6),
             ),
             child: Center(
               child: Text(

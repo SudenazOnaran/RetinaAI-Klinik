@@ -24,15 +24,28 @@ class PatientsScreen extends ConsumerStatefulWidget {
 
 class _PatientsScreenState extends ConsumerState<PatientsScreen> {
   late PatientListFilter _selectedFilter;
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
     _selectedFilter = _parseFilter(widget.initialFilter);
+    _searchController.addListener(
+      () => setState(
+        () => _searchQuery = _searchController.text.toLowerCase().trim(),
+      ),
+    );
     // Trigger API load
     Future.microtask(
       () => ref.read(patientApiProvider.notifier).loadPatients(),
     );
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   PatientListFilter _parseFilter(String? filter) {
@@ -49,22 +62,34 @@ class _PatientsScreenState extends ConsumerState<PatientsScreen> {
   }
 
   List<PatientApiModel> _filteredPatients(List<PatientApiModel> all) {
+    List<PatientApiModel> result;
     switch (_selectedFilter) {
       case PatientListFilter.highRisk:
-        return all.where((p) => isHighRisk(p.risk)).toList();
+        result = all.where((p) => isHighRisk(p.risk)).toList();
+        break;
       case PatientListFilter.mediumRisk:
-        return all
+        result = all
             .where(
               (p) =>
                   toRiskLevel(p.risk) == RiskLevel.medium &&
                   !isHighRisk(p.risk),
             )
             .toList();
+        break;
       case PatientListFilter.recent:
-        return all.take(4).toList();
+        result = all.take(4).toList();
+        break;
       case PatientListFilter.all:
-        return all;
+        result = all;
     }
+    if (_searchQuery.isNotEmpty) {
+      result = result.where((p) {
+        final nameMatch = p.fullName.toLowerCase().contains(_searchQuery);
+        final tcMatch = (p.tcNo ?? '').contains(_searchQuery);
+        return nameMatch || tcMatch;
+      }).toList();
+    }
+    return result;
   }
 
   @override
@@ -117,7 +142,7 @@ class _PatientsScreenState extends ConsumerState<PatientsScreen> {
                               'Hasta portföyünüz ve analiz yükünüzün güncel özetini buradan takip edebilirsiniz.',
                         ),
                         SizedBox(height: 14 * scale),
-                        _SearchBox(scale: scale),
+                        _SearchBox(scale: scale, controller: _searchController),
                         SizedBox(height: 14 * scale),
                         Row(
                           children: [
@@ -252,13 +277,15 @@ class _PatientsScreenState extends ConsumerState<PatientsScreen> {
 }
 
 class _SearchBox extends StatelessWidget {
-  const _SearchBox({required this.scale});
+  const _SearchBox({required this.scale, required this.controller});
 
   final double scale;
+  final TextEditingController controller;
 
   @override
   Widget build(BuildContext context) {
     return TextField(
+      controller: controller,
       decoration: InputDecoration(
         isDense: true,
         hintText: 'Ad veya TC Kimlik No ile ara...',

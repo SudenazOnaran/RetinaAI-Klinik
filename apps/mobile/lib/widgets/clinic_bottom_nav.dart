@@ -6,9 +6,9 @@ import 'package:google_fonts/google_fonts.dart';
 import '../core/providers/auth_provider.dart';
 
 /// Spec §11.2 & §11.4 — role-aware bottom navigation.
-/// DOCTOR/ASSISTANT/MANAGER/AUDITOR: Panel | Hastalar | Analiz | Raporlar | Profil
+/// DOCTOR/ASSISTANT/MANAGER/AUDITOR: Panel | Hastalar | Raporlar | Profil
 /// ADMIN: Admin Panel | Profil
-enum ClinicBottomTab { panel, patients, analysis, reports, profile, admin }
+enum ClinicBottomTab { panel, patients, reports, profile, admin }
 
 class ClinicBottomNav extends ConsumerWidget {
   const ClinicBottomNav({Key? key, required this.selectedTab})
@@ -76,14 +76,6 @@ class ClinicBottomNav extends ConsumerWidget {
           activeIcon: Icons.group_rounded,
           active: selectedTab == ClinicBottomTab.patients,
           onTap: () => _goTo(context, '/patients'),
-        ),
-      if (canAccessPatients)
-        _NavItem(
-          label: 'ANALİZ',
-          icon: Icons.biotech_outlined,
-          activeIcon: Icons.biotech_rounded,
-          active: selectedTab == ClinicBottomTab.analysis,
-          onTap: () => _goTo(context, '/analysis'),
         ),
       _NavItem(
         label: 'RAPORLAR',

@@ -8,7 +8,7 @@ class AppDatabase {
 
   static Database? _db;
 
-  static const int _version = 3;
+  static const int _version = 4;
   static const String _dbName = 'retina_ai.db';
 
   Future<Database> get db async {
@@ -66,6 +66,23 @@ class AppDatabase {
       )
     ''');
 
+    await db.execute('''
+      CREATE TABLE clinical_reports (
+        id TEXT PRIMARY KEY,
+        patient_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        doctor_name TEXT,
+        anamnesis TEXT,
+        exam_findings TEXT,
+        lab_results TEXT,
+        diagnosis TEXT,
+        treatment TEXT,
+        doctor_notes TEXT,
+        ai_notes TEXT,
+        created_at TEXT NOT NULL
+      )
+    ''');
+
     // Sık kullanılan sorgular için index
     await db.execute(
       'CREATE INDEX idx_patients_is_synced ON patients (is_synced)',
@@ -75,6 +92,9 @@ class AppDatabase {
     );
     await db.execute(
       'CREATE INDEX idx_analyses_is_synced ON analyses (is_synced)',
+    );
+    await db.execute(
+      'CREATE INDEX idx_clinical_reports_patient_id ON clinical_reports (patient_id)',
     );
 
     // Sync metadata (last sync time, config, vb.)
@@ -103,6 +123,28 @@ class AppDatabase {
       await db.execute('ALTER TABLE analyses ADD COLUMN dr_grade_int INTEGER');
       await db.execute('ALTER TABLE analyses ADD COLUMN dr_feedback TEXT');
       await db.execute('ALTER TABLE analyses ADD COLUMN ilaclar TEXT');
+    }
+    if (oldVersion < 4) {
+      // v3 → v4: clinical_reports tablosu eklendi
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS clinical_reports (
+          id TEXT PRIMARY KEY,
+          patient_id TEXT NOT NULL,
+          title TEXT NOT NULL,
+          doctor_name TEXT,
+          anamnesis TEXT,
+          exam_findings TEXT,
+          lab_results TEXT,
+          diagnosis TEXT,
+          treatment TEXT,
+          doctor_notes TEXT,
+          ai_notes TEXT,
+          created_at TEXT NOT NULL
+        )
+      ''');
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_clinical_reports_patient_id ON clinical_reports (patient_id)',
+      );
     }
   }
 
@@ -133,6 +175,7 @@ class AppDatabase {
     final database = await db;
     await database.delete('analyses');
     await database.delete('patients');
+    await database.delete('clinical_reports');
     await database.delete('sync_metadata');
   }
 

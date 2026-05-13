@@ -12,3 +12,7 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# Firebase config — contains API keys, do not commit to public repos
+google-services.json
+app/google-services.json

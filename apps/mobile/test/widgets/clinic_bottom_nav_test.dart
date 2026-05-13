@@ -37,19 +37,10 @@ void main() {
           ),
         ),
         GoRoute(
-          path: '/calendar',
-          builder: (context, state) => Scaffold(
-            body: const Text('Calendar Screen'),
-            bottomNavigationBar: ClinicBottomNav(
-              selectedTab: ClinicBottomTab.panel,
-            ),
-          ),
-        ),
-        GoRoute(
-          path: '/settings',
+          path: '/profile',
           builder: (context, state) => Scaffold(
             body: const Text('Settings Screen'),
-            bottomNavigationBar: ClinicBottomNav(
+            bottomNavigationBar: const ClinicBottomNav(
               selectedTab: ClinicBottomTab.profile,
             ),
           ),
@@ -71,8 +62,7 @@ void main() {
       expect(find.text('PANEL'), findsOneWidget);
       expect(find.text('HASTALAR'), findsOneWidget);
       expect(find.text('RAPORLAR'), findsOneWidget);
-      expect(find.text('TAKVIM'), findsOneWidget);
-      expect(find.text('AYARLAR'), findsOneWidget);
+      expect(find.text('PROFİL'), findsOneWidget);
 
       // Check if icons are present
       expect(
@@ -88,13 +78,9 @@ void main() {
         findsOneWidget,
       ); // Inactive icon for Reports
       expect(
-        find.byIcon(Icons.calendar_today_outlined),
+        find.byIcon(Icons.person_outline_rounded),
         findsOneWidget,
-      ); // Inactive icon for Calendar
-      expect(
-        find.byIcon(Icons.settings_outlined),
-        findsOneWidget,
-      ); // Inactive icon for Settings
+      ); // Inactive icon for Profile
     });
 
     testWidgets('navigates to patients screen when HASTALAR is tapped', (
@@ -130,34 +116,19 @@ void main() {
       expect(find.byIcon(Icons.description_rounded), findsOneWidget);
     });
 
-    testWidgets('navigates to calendar screen when TAKVIM is tapped', (
+    testWidgets('navigates to profile screen when PROFİL is tapped', (
       WidgetTester tester,
     ) async {
       await tester.pumpWidget(createTestApp(ClinicBottomTab.panel));
       await tester.pumpAndSettle();
 
-      // Tap on TAKVIM
-      await tester.tap(find.text('TAKVIM'));
+      // Tap on PROFİL
+      await tester.tap(find.text('PROFİL'));
       await tester.pumpAndSettle();
 
-      // Verify navigation to Calendar screen
-      expect(find.text('Calendar Screen'), findsOneWidget);
-      expect(find.byIcon(Icons.calendar_today_rounded), findsOneWidget);
-    });
-
-    testWidgets('navigates to settings screen when AYARLAR is tapped', (
-      WidgetTester tester,
-    ) async {
-      await tester.pumpWidget(createTestApp(ClinicBottomTab.panel));
-      await tester.pumpAndSettle();
-
-      // Tap on AYARLAR
-      await tester.tap(find.text('AYARLAR'));
-      await tester.pumpAndSettle();
-
-      // Verify navigation to Settings screen
+      // Verify navigation to Profile screen
       expect(find.text('Settings Screen'), findsOneWidget);
-      expect(find.byIcon(Icons.settings_rounded), findsOneWidget);
+      expect(find.byIcon(Icons.person_rounded), findsOneWidget);
     });
 
     testWidgets('does not navigate if already on the selected tab', (
@@ -187,8 +158,6 @@ String _getPathForTab(ClinicBottomTab tab) {
       return '/patients';
     case ClinicBottomTab.reports:
       return '/reports';
-    case ClinicBottomTab.analysis:
-      return '/analysis';
     case ClinicBottomTab.profile:
       return '/profile';
     case ClinicBottomTab.admin:

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:retina_ai_app/core/providers/auth_provider.dart';
 import 'package:retina_ai_app/core/providers/sync_provider.dart';
 import 'package:retina_ai_app/widgets/clinic_bottom_nav.dart';
@@ -361,6 +362,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                       SizedBox(height: 24),
 
+                      // Yasal
+                      _buildSectionTitle('Yasal'),
+                      _buildLegalTile(
+                        icon: Icons.privacy_tip_outlined,
+                        title: 'Gizlilik Politikası',
+                        onTap: () => launchUrl(
+                          Uri.parse('https://retina-ai.tech/gizlilik'),
+                          mode: LaunchMode.externalApplication,
+                        ),
+                      ),
+                      _buildLegalTile(
+                        icon: Icons.description_outlined,
+                        title: 'Kullanım Koşulları',
+                        onTap: () => launchUrl(
+                          Uri.parse(
+                            'https://retina-ai.tech/kullanim-kosullari',
+                          ),
+                          mode: LaunchMode.externalApplication,
+                        ),
+                      ),
+                      SizedBox(height: 24),
+
                       // Çıkış Yap
                       OutlinedButton.icon(
                         onPressed: () async {
@@ -434,6 +457,32 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         fontSize: 14,
         fontWeight: FontWeight.w700,
         color: Color(0xFF00687a),
+      ),
+    );
+  }
+
+  Widget _buildLegalTile({
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey[200]!),
+      ),
+      child: ListTile(
+        leading: Icon(icon, color: const Color(0xFF00687A), size: 20),
+        title: Text(
+          title,
+          style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500),
+        ),
+        trailing: const Icon(Icons.open_in_new, size: 16, color: Colors.grey),
+        onTap: onTap,
+        dense: true,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     );
   }

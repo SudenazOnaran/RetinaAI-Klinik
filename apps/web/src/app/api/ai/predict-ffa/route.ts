@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
-import { getCurrentDoctorSession } from "@/lib/auth-session";
+import { getCurrentDoctorSession, getMobileDoctorSession } from "@/lib/auth-session";
 import { enqueueAiRequest, callAiFfaServiceWithRetry } from "@/lib/ai-gateway";
 import { logAuditEvent } from "@/lib/audit-log";
 import { createMonitoringAlert } from "@/lib/monitoring-alerts";
@@ -43,7 +43,8 @@ type FfaSuccess = {
 };
 
 export async function POST(req: Request) {
-  const session = await getCurrentDoctorSession();
+  const session =
+    getMobileDoctorSession(req) ?? (await getCurrentDoctorSession());
   if (!session) {
     return NextResponse.json({ error: "Oturum bulunamadi" }, { status: 401 });
   }
