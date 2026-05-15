@@ -62,6 +62,16 @@ class _AddPatientScreenState extends ConsumerState<AddPatientScreen> {
     ref.read(patientApiProvider.notifier).addPatient(newPatient);
 
     if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Hasta kaydı oluşturuldu: $name',
+            style: GoogleFonts.inter(color: Colors.white),
+          ),
+          backgroundColor: primary,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
       context.pop();
     }
   }

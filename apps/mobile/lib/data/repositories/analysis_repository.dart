@@ -74,7 +74,7 @@ class AnalysisRepository {
     if (existing == null) throw Exception('Analiz bulunamadı: $id');
 
     if (!connected || UuidGenerator.isOfflineId(id)) {
-      final updated = existing.copyWith(isSynced: false);
+      final updated = existing.applyFeedbackPatch(fields);
       await _dao.upsert(updated);
       return updated;
     }

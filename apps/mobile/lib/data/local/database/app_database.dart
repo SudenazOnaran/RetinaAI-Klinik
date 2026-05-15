@@ -8,7 +8,7 @@ class AppDatabase {
 
   static Database? _db;
 
-  static const int _version = 4;
+  static const int _version = 6;
   static const String _dbName = 'retina_ai.db';
 
   Future<Database> get db async {
@@ -62,6 +62,11 @@ class AppDatabase {
         dr_grade_int INTEGER,
         dr_feedback TEXT,
         ilaclar TEXT,
+        report_kind TEXT,
+        ai_inference_json TEXT,
+        oct_dr_feedback TEXT,
+        ffa_dr_feedback TEXT,
+        doctor_structured_review TEXT,
         FOREIGN KEY (patient_id) REFERENCES patients (id)
       )
     ''');
@@ -144,6 +149,17 @@ class AppDatabase {
       ''');
       await db.execute(
         'CREATE INDEX IF NOT EXISTS idx_clinical_reports_patient_id ON clinical_reports (patient_id)',
+      );
+    }
+    if (oldVersion < 6) {
+      await db.execute(
+        'ALTER TABLE analyses ADD COLUMN oct_dr_feedback TEXT',
+      );
+      await db.execute(
+        'ALTER TABLE analyses ADD COLUMN ffa_dr_feedback TEXT',
+      );
+      await db.execute(
+        'ALTER TABLE analyses ADD COLUMN doctor_structured_review TEXT',
       );
     }
   }

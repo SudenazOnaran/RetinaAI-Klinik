@@ -1,3 +1,15 @@
+import 'dart:convert';
+
+String? _jsonDynamicToNullableString(dynamic v) {
+  if (v == null) return null;
+  if (v is String) return v;
+  try {
+    return jsonEncode(v);
+  } catch (_) {
+    return v.toString();
+  }
+}
+
 /// API ve yerel veritabanı için Analiz modeli.
 class AnalysisApiModel {
   final String id;
@@ -24,6 +36,8 @@ class AnalysisApiModel {
   final String? octImageUrl;
   final String? ffaDrFeedback;
   final String? octDrFeedback;
+  /// Fundus NVD/NVE vb. yapısal düzeltme (JSON metni).
+  final String? doctorStructuredReview;
   final String? reportKind;
 
   // Report sections (spec §6.7)
@@ -60,6 +74,7 @@ class AnalysisApiModel {
     this.octImageUrl,
     this.ffaDrFeedback,
     this.octDrFeedback,
+    this.doctorStructuredReview,
     this.reportKind,
     this.reportTitle,
     this.reportDateKey,
@@ -94,13 +109,14 @@ class AnalysisApiModel {
       aiOdriLabels: json['aiOdriLabels'] as String?,
       aiOdriConfidences: json['aiOdriConfidences'] as String?,
       ilaclar: json['ilaclar'] as String?,
-      aiInferenceJson: json['aiInferenceJson'] != null
-          ? json['aiInferenceJson'].toString()
-          : null,
+      aiInferenceJson: json['aiInferenceJson']?.toString(),
       ffaImageUrl: json['ffaImageUrl'] as String?,
       octImageUrl: json['octImageUrl'] as String?,
       ffaDrFeedback: json['ffaDrFeedback'] as String?,
       octDrFeedback: json['octDrFeedback'] as String?,
+      doctorStructuredReview: _jsonDynamicToNullableString(
+        json['doctorStructuredReview'],
+      ),
       reportKind: json['reportKind'] as String?,
       reportTitle: json['reportTitle'] as String?,
       reportDateKey: json['reportDateKey'] as String?,
@@ -135,6 +151,9 @@ class AnalysisApiModel {
       if (octImageUrl != null) 'octImageUrl': octImageUrl,
       if (ffaDrFeedback != null) 'ffaDrFeedback': ffaDrFeedback,
       if (octDrFeedback != null) 'octDrFeedback': octDrFeedback,
+      if (doctorStructuredReview != null)
+        'doctorStructuredReview': doctorStructuredReview,
+      if (aiInferenceJson != null) 'aiInferenceJson': aiInferenceJson,
       if (reportKind != null) 'reportKind': reportKind,
       if (reportTitle != null) 'reportTitle': reportTitle,
       if (reportDateKey != null) 'reportDateKey': reportDateKey,
@@ -174,6 +193,11 @@ class AnalysisApiModel {
       drGradeInt: map['dr_grade_int'] as int?,
       drFeedback: map['dr_feedback'] as String?,
       ilaclar: map['ilaclar'] as String?,
+      aiInferenceJson: map['ai_inference_json'] as String?,
+      octDrFeedback: map['oct_dr_feedback'] as String?,
+      ffaDrFeedback: map['ffa_dr_feedback'] as String?,
+      doctorStructuredReview: map['doctor_structured_review'] as String?,
+      reportKind: map['report_kind'] as String?,
     );
   }
 
@@ -195,7 +219,65 @@ class AnalysisApiModel {
       'dr_grade_int': drGradeInt,
       'dr_feedback': drFeedback,
       'ilaclar': ilaclar,
+      'report_kind': reportKind,
+      'ai_inference_json': aiInferenceJson,
+      'oct_dr_feedback': octDrFeedback,
+      'ffa_dr_feedback': ffaDrFeedback,
+      'doctor_structured_review': doctorStructuredReview,
     };
+  }
+
+  /// PATCH gövdesi: null atamak için `containsKey` kullanılır (copyWith ile mümkün değil).
+  AnalysisApiModel applyFeedbackPatch(Map<String, dynamic> fields) {
+    return AnalysisApiModel(
+      id: id,
+      patientId: patientId,
+      aiResult: aiResult,
+      confidence: confidence,
+      heatmapUrl: heatmapUrl,
+      originalImage: originalImage,
+      doctorNote: fields.containsKey('doctorNote')
+          ? fields['doctorNote'] as String?
+          : doctorNote,
+      isCorrect: fields.containsKey('isCorrect')
+          ? fields['isCorrect'] as bool?
+          : isCorrect,
+      actualResult: fields.containsKey('actualResult')
+          ? fields['actualResult'] as String?
+          : actualResult,
+      createdAt: createdAt,
+      updatedAt: DateTime.now(),
+      isSynced: false,
+      drGradeInt: drGradeInt,
+      drFeedback: fields.containsKey('drFeedback')
+          ? fields['drFeedback'] as String?
+          : drFeedback,
+      aiOdriLabels: aiOdriLabels,
+      aiOdriConfidences: aiOdriConfidences,
+      ilaclar: ilaclar,
+      aiInferenceJson: aiInferenceJson,
+      ffaImageUrl: ffaImageUrl,
+      octImageUrl: octImageUrl,
+      ffaDrFeedback: fields.containsKey('ffaDrFeedback')
+          ? fields['ffaDrFeedback'] as String?
+          : ffaDrFeedback,
+      octDrFeedback: fields.containsKey('octDrFeedback')
+          ? fields['octDrFeedback'] as String?
+          : octDrFeedback,
+      doctorStructuredReview: fields.containsKey('doctorStructuredReview')
+          ? fields['doctorStructuredReview'] as String?
+          : doctorStructuredReview,
+      reportKind: reportKind,
+      reportTitle: reportTitle,
+      reportDateKey: reportDateKey,
+      reportDoctorDisplayName: reportDoctorDisplayName,
+      sectionAnamnesis: sectionAnamnesis,
+      sectionExamFindings: sectionExamFindings,
+      sectionClinicalAssessment: sectionClinicalAssessment,
+      sectionLabResults: sectionLabResults,
+      sectionTreatmentRecommendations: sectionTreatmentRecommendations,
+      sectionDoctorNotes: sectionDoctorNotes,
+    );
   }
 
   AnalysisApiModel copyWith({
@@ -221,6 +303,7 @@ class AnalysisApiModel {
     String? octImageUrl,
     String? ffaDrFeedback,
     String? octDrFeedback,
+    String? doctorStructuredReview,
     String? reportKind,
     String? reportTitle,
     String? reportDateKey,
@@ -255,6 +338,8 @@ class AnalysisApiModel {
       octImageUrl: octImageUrl ?? this.octImageUrl,
       ffaDrFeedback: ffaDrFeedback ?? this.ffaDrFeedback,
       octDrFeedback: octDrFeedback ?? this.octDrFeedback,
+      doctorStructuredReview:
+          doctorStructuredReview ?? this.doctorStructuredReview,
       reportKind: reportKind ?? this.reportKind,
       reportTitle: reportTitle ?? this.reportTitle,
       reportDateKey: reportDateKey ?? this.reportDateKey,

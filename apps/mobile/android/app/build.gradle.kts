@@ -6,8 +6,14 @@ plugins {
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
-    id("com.google.gms.google-services")
-    id("com.google.firebase.crashlytics")
+}
+
+// Firebase: google-services.json yalnızca Firebase Console'dan indirilip android/app/ altına
+// konduğunda uygulanır. Yoksa yerel derleme (CI / yeni geliştirici) çalışmaya devam eder.
+val googleServicesJson = file("google-services.json")
+if (googleServicesJson.exists()) {
+    apply(plugin = "com.google.gms.google-services")
+    apply(plugin = "com.google.firebase.crashlytics")
 }
 
 // key.properties dosyasından imzalama bilgilerini oku (varsa)

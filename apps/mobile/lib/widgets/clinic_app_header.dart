@@ -100,6 +100,42 @@ class ClinicAppHeader extends ConsumerWidget {
             ],
           ),
           const Spacer(),
+          // ── Çıkış ─────────────────────────────────────
+          IconButton(
+            tooltip: 'Çıkış yap',
+            onPressed: () async {
+              final confirm = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('Çıkış Yap'),
+                  content: const Text(
+                    'Oturumu kapatmak istediğinizden emin misiniz?',
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text('İptal'),
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: const Text(
+                        'Çıkış Yap',
+                        style: TextStyle(color: Colors.red),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+              if (confirm == true && context.mounted) {
+                await ref.read(authProvider.notifier).logout();
+                if (context.mounted) context.go('/signin');
+              }
+            },
+            splashRadius: 18,
+            icon: const Icon(Icons.logout_rounded),
+            color: const Color(0xFF64748B),
+            iconSize: 20,
+          ),
           // ── Zil ────────────────────────────────────────
           IconButton(
             onPressed: () => context.push('/notifications'),

@@ -1,0 +1,31 @@
+Retina AI — VPS’te degisikliklerin kaybolmamasi icin (ozette)
+
+1) Kod her zaman repodan gelsin
+   - Yerelde: degisiklikleri commit + remote’a push.
+   - Sunucuda: cd /opt/apps/retina_ai && git pull
+   - Elle nano ile route/middleware duzeltmek yerine repoyu guncelle.
+
+2) Next.js bu projede uretim ciktisi .next-build
+   - package.json: build -> NEXT_DIST_DIR=.next-build, start -> ayar ayni.
+   - Sunucuda: cd /opt/apps/retina_ai/apps/web && npm run build
+   - Eski sureci kapatip yeniden baslat: npm run start (PORT 3000 bos olmali).
+
+3) Mobil + AI icin repoda kritik parcalar
+   - apps/web/src/middleware.ts
+     Authorization ve x-retina-mobile-token basliklari acikca korunur (Edge uyumlu).
+   - apps/web/src/app/api/ai/predict-oct/route.ts
+   - apps/web/src/app/api/ai/predict-ffa/route.ts
+     Oturum: getMobileDoctorSession(req) ?? await getCurrentDoctorSession()
+     (fundus predict/route.ts ile ayni mantik).
+
+4) Nginx (ornek: deploy/nginx-retina-mobile-api.example.conf)
+   - location ^~ /api  ... icinde:
+     proxy_set_header Authorization $http_authorization;
+     proxy_set_header X-Retina-Mobile-Token $http_x_retina_mobile_token;
+   - Statik location / try_files, /api’den sonra gelmemeli (siraya dikkat).
+
+5) Test token
+   - Eski TOKEN ile 401 olabilir; curl testinde once mobile/login, sonra verify 200+valid.
+
+6) .env
+   - SESSION_SECRET / NEXTAUTH_SECRET deploy’lar arasinda degismesin; degisirse tum oturumlar iptal olur.

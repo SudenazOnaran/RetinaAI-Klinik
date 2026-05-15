@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 
 /// RevenueCat entitlements için sabit tanımlar.
@@ -17,17 +18,50 @@ class SubscriptionService {
     defaultValue: 'REVENUECAT_API_KEY_BURAYA',
   );
 
-  bool _initialized = false;
+  bool _initCalled = false;
+  bool _sdkConfigured = false;
+
+  static bool _looksLikeValidRevenueCatKey(String key) {
+    final k = key.trim();
+    if (k.isEmpty) return false;
+    if (k == 'REVENUECAT_API_KEY_BURAYA') return false;
+    // Public SDK keys are non-trivial strings; placeholder kısa kalır.
+    if (k.length < 12) return false;
+    return true;
+  }
+
+  /// RevenueCat SDK gerçekten yapılandırıldı mı?
+  bool get isConfigured => _sdkConfigured;
 
   /// Uygulamanın başında (main.dart) çağrılır.
   Future<void> init() async {
-    if (_initialized) return;
-    await Purchases.configure(PurchasesConfiguration(_apiKey));
-    _initialized = true;
+    if (_initCalled) return;
+    _initCalled = true;
+
+    if (!_looksLikeValidRevenueCatKey(_apiKey)) {
+      if (kDebugMode) {
+        debugPrint(
+          'RevenueCat atlandı: RC_API_KEY yok veya placeholder. '
+          'Derlemede --dart-define=RC_API_KEY=... verin.',
+        );
+      }
+      return;
+    }
+
+    try {
+      await Purchases.configure(PurchasesConfiguration(_apiKey.trim()));
+      _sdkConfigured = true;
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('RevenueCat.configure başarısız: $e');
+        debugPrint('$st');
+      }
+    }
   }
 
   /// Kullanıcının "pro" entitlement'ı aktif mi?
   Future<bool> isProActive() async {
+    if (!_sdkConfigured) return false;
     try {
       final info = await Purchases.getCustomerInfo();
       return info.entitlements.active.containsKey(_Entitlements.pro);
@@ -38,6 +72,7 @@ class SubscriptionService {
 
   /// Mevcut teklifleri yükler.
   Future<Offerings?> getOfferings() async {
+    if (!_sdkConfigured) return null;
     try {
       return await Purchases.getOfferings();
     } catch (_) {
@@ -47,6 +82,7 @@ class SubscriptionService {
 
   /// Bir paketi satın al. Başarılıysa `true` döner.
   Future<bool> purchasePackage(Package package) async {
+    if (!_sdkConfigured) return false;
     try {
       final info = await Purchases.purchasePackage(package);
       return info.entitlements.active.containsKey(_Entitlements.pro);
@@ -58,6 +94,7 @@ class SubscriptionService {
 
   /// Geçmiş satın almaları geri yükle.
   Future<bool> restorePurchases() async {
+    if (!_sdkConfigured) return false;
     try {
       final info = await Purchases.restorePurchases();
       return info.entitlements.active.containsKey(_Entitlements.pro);

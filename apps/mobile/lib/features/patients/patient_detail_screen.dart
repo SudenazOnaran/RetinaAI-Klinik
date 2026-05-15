@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:go_router/go_router.dart';
 import 'dart:io';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
@@ -19,6 +19,483 @@ import '../../core/network/api_client.dart';
 import '../../core/constants/api_constants.dart';
 import '../../services/analysis_service.dart';
 import '../../core/utils/uuid_generator.dart';
+import 'widgets/structured_doctor_feedback_form.dart';
+
+Map<String, dynamic>? _parseAiInferenceMap(String? raw) {
+  if (raw == null || raw.isEmpty) return null;
+  try {
+    final decoded = jsonDecode(raw);
+    if (decoded is Map<String, dynamic>) return decoded;
+    if (decoded is Map) return Map<String, dynamic>.from(decoded);
+  } catch (_) {}
+  return null;
+}
+
+/// `report_kind` = `radiological_ai` (web) veya boş olabilir; gerçek modalite JSON / URL ile çözülür.
+String? effectiveReportKindFromAnalysis(AnalysisApiModel a) {
+  final root = _parseAiInferenceMap(a.aiInferenceJson);
+
+  if (root != null) {
+    final modality = root['modality']?.toString().trim().toLowerCase();
+    if (modality == 'oct' || modality == 'ffa' || modality == 'fundus') {
+      return modality;
+    }
+
+    final octVal = root['oct'];
+    final ffaVal = root['ffa'];
+    if (ffaVal is Map) return 'ffa';
+    if (octVal is Map) return 'oct';
+
+    if (root.containsKey('pytorch') ||
+        root.containsKey('drGrade') ||
+        root.containsKey('dr_grade') ||
+        root.containsKey('drLabel') ||
+        root.containsKey('dr_label') ||
+        root.containsKey('clinicalReasoning') ||
+        root.containsKey('clinical_reasoning') ||
+        root.containsKey('fundusFindings') ||
+        root.containsKey('fundus_findings')) {
+      return 'fundus';
+    }
+  }
+
+  final rk = a.reportKind?.trim().toLowerCase();
+  if (rk == 'oct' || rk == 'ffa' || rk == 'fundus') return rk;
+
+  final fromUrls = _inferSingleModalityFromImageUrls(a);
+  if (fromUrls != null) return fromUrls;
+
+  return null;
+}
+
+bool _nonEmptyUrl(String? u) => u != null && u.trim().isNotEmpty;
+
+/// Yalnızca tek modalite URL’si varsa döndürür (çok modlu kayıtta null).
+String? _inferSingleModalityFromImageUrls(AnalysisApiModel a) {
+  final hasFfa = _nonEmptyUrl(a.ffaImageUrl);
+  final hasOct = _nonEmptyUrl(a.octImageUrl);
+  final hasFundus = _nonEmptyUrl(a.originalImage) || _nonEmptyUrl(a.heatmapUrl);
+  final n = (hasFfa ? 1 : 0) + (hasOct ? 1 : 0) + (hasFundus ? 1 : 0);
+  if (n != 1) return null;
+  if (hasFfa) return 'ffa';
+  if (hasOct) return 'oct';
+  if (hasFundus) return 'fundus';
+  return null;
+}
+
+/// Geri bildirim formu yalnızca fundus | oct | ffa kabul eder (`radiological_ai` yok).
+String resolvedFeedbackModalityForAnalysis(AnalysisApiModel a) {
+  final inferred = effectiveReportKindFromAnalysis(a) ??
+      _inferSingleModalityFromImageUrls(a);
+  if (inferred == 'oct' || inferred == 'ffa' || inferred == 'fundus') {
+    return inferred!;
+  }
+  final rk = a.reportKind?.trim().toLowerCase();
+  if (rk == 'oct' || rk == 'ffa' || rk == 'fundus') return rk!;
+  return 'fundus';
+}
+
+String radiologyModalityDisplayTitle(String? kind) {
+  switch (kind?.toLowerCase()) {
+    case 'oct':
+      return 'OCT';
+    case 'ffa':
+      return 'FFA';
+    case 'fundus':
+      return 'Fundus';
+    case 'radiological_ai':
+      return 'Radyolojik AI';
+    case 'clinical_manual':
+      return 'Klinik rapor';
+    default:
+      return 'AI analizi';
+  }
+}
+
+Map<String, dynamic> _buildInferenceSnapshot(
+  String modality,
+  Map<String, dynamic> body,
+) {
+  final m = modality.toLowerCase();
+  if (m == 'oct') {
+    return {
+      'modality': 'oct',
+      'oct': body['oct'],
+      'success': body['success'],
+      'inference': body['inference'],
+    };
+  }
+  if (m == 'ffa') {
+    return {
+      'modality': 'ffa',
+      'ffa': body['ffa'],
+      'success': body['success'],
+      'inference': body['inference'],
+    };
+  }
+  final od = body['odir'];
+  return {
+    'modality': 'fundus',
+    'drGrade': body['drGrade'] ?? body['dr_grade'],
+    'drLabel': body['drLabel'] ?? body['dr_label'],
+    'pytorch': body['pytorch'],
+    'clinicalReasoning':
+        body['clinicalReasoning'] ?? body['clinical_reasoning'],
+    'clinicalDecision':
+        body['clinicalDecision'] ?? body['clinical_decision'],
+    'uncertaintyNote':
+        body['uncertaintyNote'] ?? body['uncertainty_note'],
+    'dmeSuspected': body['dmeSuspected'] ?? body['dme_suspected'],
+    'dmeConfidence': body['dmeConfidence'] ?? body['dme_confidence'],
+    'fundusFindings': body['fundusFindings'] ?? body['fundus_findings'],
+    'fundusAssessment':
+        body['fundusAssessment'] ?? body['fundus_assessment'],
+    if (od is Map) 'odir': Map<String, dynamic>.from(od),
+  };
+}
+
+/// Bazı proxy/gateway yanıtları `{ success, data: { ... asıl gövde } }` dönebilir.
+Map<String, dynamic> _mergeAiResponseEnvelope(Map<String, dynamic> body) {
+  final data = body['data'];
+  if (data is Map) {
+    final inner = Map<String, dynamic>.from(data);
+    if (inner.containsKey('oct') ||
+        inner.containsKey('ffa') ||
+        inner.containsKey('pytorch') ||
+        inner.containsKey('clinicalReasoning') ||
+        inner.containsKey('clinical_reasoning')) {
+      final merged = Map<String, dynamic>.from(body);
+      inner.forEach((k, v) {
+        if (v != null) merged[k] = v;
+      });
+      return merged;
+    }
+  }
+  return body;
+}
+
+String? _labelFromAiBody(String modality, Map<String, dynamic> body) {
+  final m = modality.toLowerCase();
+  if (m == 'oct') {
+    final oct = body['oct'];
+    if (oct is! Map) return 'OCT yanıtı eksik';
+    final octMap = Map<String, dynamic>.from(oct);
+    final conditions = octMap['conditions'] as List?;
+    if (conditions != null && conditions.isNotEmpty) {
+      final c0 = conditions.first;
+      if (c0 is Map) {
+        final name = c0['name']?.toString().trim() ?? '';
+        final lk = c0['likelihood']?.toString().trim() ?? '';
+        if (name.isEmpty) return 'Koşul belirtilmedi';
+        return lk.isEmpty ? name : '$name ($lk)';
+      }
+    }
+    final summary = octMap['clinicalSummary']?.toString().trim() ?? '';
+    if (summary.isEmpty) return 'Özet üretilemedi';
+    return summary.length > 90 ? '${summary.substring(0, 90)}…' : summary;
+  }
+  if (m == 'ffa') {
+    final ffa = body['ffa'];
+    if (ffa is! Map) return 'FFA yanıtı eksik';
+    final ffaMap = Map<String, dynamic>.from(ffa);
+    final diseases = ffaMap['diseases'] as List?;
+    if (diseases != null && diseases.isNotEmpty) {
+      final d0 = diseases.first;
+      if (d0 is Map) {
+        final name = d0['name']?.toString().trim() ?? '';
+        final lk = d0['likelihood']?.toString().trim() ?? '';
+        if (name.isEmpty) return 'Bulgu belirtilmedi';
+        return lk.isEmpty ? name : '$name ($lk)';
+      }
+    }
+    final summary = ffaMap['clinicalSummary']?.toString().trim() ?? '';
+    if (summary.isEmpty) return 'Özet üretilemedi';
+    return summary.length > 90 ? '${summary.substring(0, 90)}…' : summary;
+  }
+  final pytorch = body['pytorch'] as Map<String, dynamic>?;
+  final label = pytorch?['label'] as String?;
+  final confidence = ((pytorch?['confidence'] as num?) ?? 0).toDouble();
+  if (confidence < 0.75 || label == null) return 'Belirsiz';
+  return label;
+}
+
+double _confidenceFromAiBody(String modality, Map<String, dynamic> body) {
+  final m = modality.toLowerCase();
+  if (m == 'oct') {
+    final oct = body['oct'];
+    if (oct is! Map) return 0.35;
+    final cs =
+        (Map<String, dynamic>.from(oct)['confidenceScore'] as num?)
+            ?.toDouble() ??
+        0;
+    if (cs <= 0) return 0.35;
+    return (cs / 100.0).clamp(0.0, 1.0);
+  }
+  if (m == 'ffa') {
+    final ffa = body['ffa'];
+    if (ffa is! Map) return 0.35;
+    final cs =
+        (Map<String, dynamic>.from(ffa)['confidenceScore'] as num?)
+            ?.toDouble() ??
+        0;
+    if (cs <= 0) return 0.35;
+    return (cs / 100.0).clamp(0.0, 1.0);
+  }
+  final pytorch = body['pytorch'] as Map<String, dynamic>?;
+  return ((pytorch?['confidence'] as num?) ?? 0).toDouble().clamp(0.0, 1.0);
+}
+
+List<Widget> _clinicalWidgetsFromInferenceMap(Map<String, dynamic>? map) {
+  if (map == null || map.isEmpty) return [];
+  final modality =
+      (map['modality'] ?? 'fundus').toString().toLowerCase();
+  final out = <Widget>[];
+
+  void addHeading(String t) {
+    out.add(
+      Text(
+        t,
+        style: GoogleFonts.manrope(
+          fontWeight: FontWeight.w700,
+          fontSize: 12,
+          color: const Color(0xFF64748B),
+        ),
+      ),
+    );
+    out.add(const SizedBox(height: 4));
+  }
+
+  void addBody(String t) {
+    out.add(
+      Text(
+        t,
+        style: GoogleFonts.inter(
+          fontSize: 13,
+          color: const Color(0xFF1E293B),
+          height: 1.5,
+        ),
+      ),
+    );
+    out.add(const SizedBox(height: 12));
+  }
+
+  if (modality == 'fundus') {
+    final cr = (map['clinicalReasoning'] ?? map['clinical_reasoning'])
+        ?.toString()
+        .trim();
+    if (cr != null && cr.isNotEmpty) {
+      addHeading('Klinik gerekçe');
+      addBody(cr);
+    }
+    final un = (map['uncertaintyNote'] ?? map['uncertainty_note'])
+        ?.toString()
+        .trim();
+    if (un != null && un.isNotEmpty) {
+      addHeading('Belirsizlik notu');
+      addBody(un);
+    }
+    final cd = map['clinicalDecision'] ?? map['clinical_decision'];
+    if (cd is Map) {
+      final follow =
+          (cd['followUpTr'] ?? cd['follow_up_tr'])?.toString().trim();
+      final urg = cd['urgency']?.toString().trim();
+      final ref = cd['referableDr'] ?? cd['referable_dr'];
+      final actions = cd['recommendedActions'] ?? cd['recommended_actions'];
+      final buf = StringBuffer();
+      if (follow != null && follow.isNotEmpty) {
+        buf.writeln(follow);
+      }
+      if (urg != null && urg.isNotEmpty) {
+        buf.writeln('Öncelik: $urg');
+      }
+      if (ref != null) {
+        buf.writeln('Sevk önerisi (DR): $ref');
+      }
+      if (actions is List && actions.isNotEmpty) {
+        buf.writeln('Önerilen adımlar:');
+        for (final a in actions) {
+          buf.writeln('• ${a.toString().trim()}');
+        }
+      }
+      final block = buf.toString().trim();
+      if (block.isNotEmpty) {
+        addHeading('Klinik öneri özeti');
+        addBody(block);
+      }
+    }
+    final dme = map['dmeSuspected'] ?? map['dme_suspected'];
+    if (dme == true) {
+      addHeading('DME şüphesi');
+      addBody('Evet (model uyarısı; kesin tanı değildir).');
+    }
+    dynamic rawFf = map['fundusFindings'] ?? map['fundus_findings'];
+    dynamic rawFa = map['fundusAssessment'] ?? map['fundus_assessment'];
+    if (rawFf != null) {
+      final t = rawFf is String ? rawFf.trim() : jsonEncode(rawFf);
+      if (t.isNotEmpty && t != '{}' && t != '[]') {
+        addHeading('Fundus bulguları');
+        addBody(t);
+      }
+    }
+    if (rawFa != null) {
+      final t = rawFa is String ? rawFa.trim() : jsonEncode(rawFa);
+      if (t.isNotEmpty && t != '{}' && t != '[]') {
+        addHeading('Fundus değerlendirme');
+        addBody(t);
+      }
+    }
+  } else if (modality == 'oct') {
+    final oct = map['oct'];
+    if (oct is Map) {
+      final om = Map<String, dynamic>.from(oct);
+      final iq = om['imageQuality']?.toString().trim();
+      if (iq != null && iq.isNotEmpty) {
+        addHeading('Görüntü kalitesi');
+        addBody(iq);
+      }
+      final summary = om['clinicalSummary']?.toString().trim();
+      if (summary != null && summary.isNotEmpty) {
+        addHeading('Klinik özet');
+        addBody(summary);
+      }
+      final findings = om['findings'];
+      if (findings is List && findings.isNotEmpty) {
+        addHeading('Bulgular');
+        addBody(findings.map((e) => '• ${e.toString().trim()}').join('\n'));
+      }
+      final conds = om['conditions'] as List?;
+      if (conds != null && conds.isNotEmpty) {
+        addHeading('Koşullar / olasılıklar');
+        final lines = <String>[];
+        for (final c in conds) {
+          if (c is! Map) continue;
+          final name = c['name']?.toString().trim() ?? '';
+          final lk = c['likelihood']?.toString().trim() ?? '';
+          lines.add(
+            lk.isEmpty ? name : '$name — olasılık: $lk',
+          );
+        }
+        if (lines.isNotEmpty) {
+          addBody(lines.map((l) => '• $l').join('\n'));
+        }
+      }
+      final recs = om['recommendations'];
+      if (recs is List && recs.isNotEmpty) {
+        addHeading('Öneriler');
+        addBody(recs.map((e) => '• ${e.toString().trim()}').join('\n'));
+      }
+    }
+  } else if (modality == 'ffa') {
+    final ffa = map['ffa'];
+    if (ffa is Map) {
+      final fm = Map<String, dynamic>.from(ffa);
+      final iq = fm['imageQuality']?.toString().trim();
+      if (iq != null && iq.isNotEmpty) {
+        addHeading('Görüntü kalitesi');
+        addBody(iq);
+      }
+      final summary = fm['clinicalSummary']?.toString().trim();
+      if (summary != null && summary.isNotEmpty) {
+        addHeading('Klinik özet');
+        addBody(summary);
+      }
+      final findings = fm['findings'];
+      if (findings is List && findings.isNotEmpty) {
+        addHeading('Bulgular');
+        addBody(findings.map((e) => '• ${e.toString().trim()}').join('\n'));
+      }
+      final diseases = fm['diseases'] as List?;
+      if (diseases != null && diseases.isNotEmpty) {
+        addHeading('Hastalık olasılıkları');
+        final lines = <String>[];
+        for (final d in diseases) {
+          if (d is! Map) continue;
+          final name = d['name']?.toString().trim() ?? '';
+          final lk = d['likelihood']?.toString().trim() ?? '';
+          lines.add(lk.isEmpty ? name : '$name — olasılık: $lk');
+        }
+        if (lines.isNotEmpty) {
+          addBody(lines.map((l) => '• $l').join('\n'));
+        }
+      }
+      final recs = fm['recommendations'];
+      if (recs is List && recs.isNotEmpty) {
+        addHeading('Öneriler');
+        addBody(recs.map((e) => '• ${e.toString().trim()}').join('\n'));
+      }
+    }
+  }
+  if (out.isNotEmpty && out.last is SizedBox) {
+    out.removeLast();
+  }
+  return out;
+}
+
+/// PDF / forma aktarım için düz metin (widget ayrıştırması yok).
+String? _inferencePlainNarration(Map<String, dynamic>? map) {
+  if (map == null || map.isEmpty) return null;
+  final w = _clinicalWidgetsFromInferenceMap(map);
+  final buf = StringBuffer();
+  for (final el in w) {
+    if (el is Text) {
+      final t = el.data;
+      if (t != null && t.isNotEmpty) {
+        buf.writeln(t);
+      }
+    }
+  }
+  final s = buf.toString().trim();
+  return s.isEmpty ? null : s;
+}
+
+Map<String, dynamic> _normalizeAiResponseBody(dynamic raw) {
+  if (raw == null) return {};
+  if (raw is String) {
+    final s = raw.trim();
+    if (s.isEmpty) return {};
+    try {
+      final d = jsonDecode(s);
+      if (d is Map) return Map<String, dynamic>.from(d);
+    } catch (_) {}
+    return {};
+  }
+  if (raw is Map) {
+    return Map<String, dynamic>.from(raw);
+  }
+  return {};
+}
+
+dynamic _jsonSanitize(dynamic value) {
+  if (value == null || value is num || value is String || value is bool) {
+    return value;
+  }
+  if (value is List) {
+    return value.map(_jsonSanitize).toList();
+  }
+  if (value is Map) {
+    return value.map(
+      (k, v) => MapEntry(k.toString(), _jsonSanitize(v)),
+    );
+  }
+  return value.toString();
+}
+
+Uint8List? _decodeHeatmapImageBytes(String? heatmapRaw) {
+  if (heatmapRaw == null || heatmapRaw.isEmpty) return null;
+  try {
+    if (heatmapRaw.startsWith('data:')) {
+      final uri = Uri.parse(heatmapRaw);
+      final data = uri.data;
+      if (data != null) return Uint8List.fromList(data.contentAsBytes());
+    }
+    final b64 = heatmapRaw.contains(',')
+        ? heatmapRaw.split(',').last
+        : heatmapRaw;
+    return base64Decode(b64);
+  } catch (_) {
+    return null;
+  }
+}
 
 class PatientDetailScreen extends StatefulWidget {
   const PatientDetailScreen({super.key, required this.patient});
@@ -33,7 +510,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
     with TickerProviderStateMixin {
   late final TabController _tabController;
 
-  // Forma aktarılan AI özet metinleri
+  // Rapor Oluştur sekmesine «Rapora aktar» ile eklenen AI özetleri (web ile aynı akış)
   String _fundusTransferText = '';
   String _octTransferText = '';
   String _ffaTransferText = '';
@@ -64,6 +541,32 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
       widget.patient.id,
     );
     if (mounted) setState(() => _analyses = analyses);
+  }
+
+  /// Bu hasta için ilgili türde en son AI analizi (created_at DESC).
+  AnalysisApiModel? _latestAnalysisForKind(String kind) {
+    final k = kind.toLowerCase();
+    for (final a in _analyses) {
+      final ek =
+          effectiveReportKindFromAnalysis(a) ?? (a.reportKind ?? '').toLowerCase();
+      if (ek == k) return a;
+    }
+    return null;
+  }
+
+  void _openRadiologicalReportsTab() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Analizler kaydedildiğinde «Radyolojik raporlar» listesinde görünür. Özetleri yukarıdan «Rapora aktar» ile klinik rapora da ekleyebilirsiniz.',
+          style: GoogleFonts.inter(fontSize: 13),
+        ),
+        backgroundColor: const Color(0xFF1B5E20),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+    _tabController.animateTo(3);
   }
 
   Future<void> _loadSavedReports() async {
@@ -186,10 +689,10 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
           unselectedLabelStyle: GoogleFonts.inter(fontSize: 12),
           tabs: const [
             Tab(text: 'Rapor Oluştur'),
-            Tab(text: 'AI Analiz'),
-            Tab(text: 'Raporlar'),
-            Tab(text: 'Radyolojik'),
-            Tab(text: 'İlerleme'),
+            Tab(text: 'AI & Görüntü Analizi'),
+            Tab(text: 'Geçmiş Raporlar'),
+            Tab(text: 'Radyolojik raporlar'),
+            Tab(text: 'DR Değişim Analizi'),
           ],
         ),
       ),
@@ -218,7 +721,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              'Rapor Olustur',
+                              'Rapor editörü',
                               style: GoogleFonts.manrope(
                                 fontSize: 19,
                                 fontWeight: FontWeight.w800,
@@ -229,14 +732,13 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Gorsel yukleme zorunlu degildir. Standart goz klinigi rapor alanlarini doldurarak rapor olusturabilirsiniz.',
+                          'Klinik metin alanlarını doldurun. Fundus, OCT ve FFA yapay zeka araçları «AI & Görüntü Analizi» sekmesindedir.',
                           style: GoogleFonts.inter(
                             fontSize: 12,
                             color: const Color(0xFF4D5D77),
+                            height: 1.35,
                           ),
                         ),
-                        const SizedBox(height: 12),
-                        _aiAnalysisNavBanner(),
                         const SizedBox(height: 12),
                         _label('Rapor Başlığı'),
                         _input(
@@ -288,7 +790,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                           _examController,
                           maxLines: 3,
                           hint:
-                              'Görme keskinliği, biyomikroskopi, fundus muayenesi bulguları',
+                              'Görme keskinliği, biyomikroskopi, fundus muayenesi; yalnız klinik gözlemler',
                         ),
                         const SizedBox(height: 10),
                         _label('Laboratuvar Sonuçları'),
@@ -321,10 +823,6 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                           hint:
                               'Ek klinik notlar, özel uyarılar veya takip planı',
                         ),
-                        if (_fundusTransferText.isNotEmpty ||
-                            _octTransferText.isNotEmpty ||
-                            _ffaTransferText.isNotEmpty)
-                          ..._transferredResultBox(),
                         const SizedBox(height: 12),
                         SizedBox(
                           width: double.infinity,
@@ -395,7 +893,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Rapor Oluştur sekmesinden rapor kaydedebilirsiniz.',
+                            '«Rapor Oluştur» sekmesinden klinik rapor kaydedebilirsiniz. AI analiz geçmişi «Radyolojik raporlar» sekmesindedir.',
                             style: GoogleFonts.inter(
                               fontSize: 12,
                               color: const Color(0xFF9CA3AF),
@@ -409,7 +907,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                 : ListView.separated(
                     padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
                     itemCount: _savedReports.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    separatorBuilder: (_, _) => const SizedBox(height: 10),
                     itemBuilder: (context, index) {
                       final report = _savedReports[index];
                       return _ReportCard(report: report);
@@ -440,7 +938,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'AI Analiz sekmesinden görsel yükleyerek analiz başlatın.',
+                            '«AI & Görüntü Analizi» sekmesinden görsel yükleyerek analiz başlatın. Detay ve doktor geri bildirimi için kayda dokunun.',
                             style: GoogleFonts.inter(
                               fontSize: 12,
                               color: const Color(0xFF9CA3AF),
@@ -458,12 +956,12 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                     ),
                     child: ListView.separated(
                       itemCount: _analyses.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      separatorBuilder: (_, _) => const SizedBox(height: 10),
                       itemBuilder: (context, index) {
                         final analysis = _analyses[index];
                         return _RadiologyCard(
                           analysis: analysis,
-                          onDeleted: _loadAnalyses,
+                          onRefresh: _loadAnalyses,
                         );
                       },
                     ),
@@ -509,25 +1007,86 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
     );
   }
 
-  // ── AI Analiz Panel (Tab 2) ──────────────────────────────────────────────
+  // ── AI Analiz Panel (Tab 2) — web `ManualReportCard` radiological + `AiAnalysisPanel` ──
   Widget _aiAnalysisPanel(Color card, Color border) {
+    const primary = Color(0xFF0A8FB6);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'AI Görüntü Analizi',
-          style: GoogleFonts.manrope(
-            fontSize: 20,
-            fontWeight: FontWeight.w800,
-            color: const Color(0xFF14243D),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: card,
+            border: Border.all(color: border),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.biotech_outlined,
+                    color: primary,
+                    size: 22,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'AI analizi (Fundus / OCT / FFA)',
+                          style: GoogleFonts.manrope(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF14243D),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Görüntüleri yükleyin veya analiz edin; kayıt «Radyolojik raporlar» listesinde görünür. Özeti kart üzerindeki «Rapora aktar» ile klinik rapor taslağına ekleyebilirsiniz.',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: const Color(0xFF4D5D77),
+                            height: 1.35,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Listeyi görmek veya akışı tamamlamak için aşağıdaki «Radyolojik raporu kaydet» düğmesini kullanın (analizler otomatik saklanır).',
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            color: const Color(0xFF64748B),
+                            height: 1.35,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 4),
-        Text(
-          'Fundus, OCT veya FFA görüntüsü yükleyin. Sonucu Rapor Oluştur sekmesine aktarabilirsiniz.',
-          style: GoogleFonts.inter(
-            fontSize: 13,
-            color: const Color(0xFF4D5D77),
+        const SizedBox(height: 12),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFE1F5FE),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFF81D4FA)),
+          ),
+          child: Text(
+            'Fundus, OCT ve FFA için yapay zeka analizlerini kullanın; kayıt «Radyolojik raporlar» listesinde görünür.',
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              color: const Color(0xFF0277BD),
+              height: 1.35,
+            ),
           ),
         ),
         const SizedBox(height: 16),
@@ -544,6 +1103,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
           onTransfer: (text) => setState(() => _fundusTransferText = text),
           onClearTransfer: () => setState(() => _fundusTransferText = ''),
           onAnalysisSaved: _loadAnalyses,
+          lastSavedAnalysis: _latestAnalysisForKind('fundus'),
         ),
         const SizedBox(height: 12),
         _InlineAnalysisCard(
@@ -559,6 +1119,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
           onTransfer: (text) => setState(() => _octTransferText = text),
           onClearTransfer: () => setState(() => _octTransferText = ''),
           onAnalysisSaved: _loadAnalyses,
+          lastSavedAnalysis: _latestAnalysisForKind('oct'),
         ),
         const SizedBox(height: 12),
         _InlineAnalysisCard(
@@ -574,11 +1135,30 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
           onTransfer: (text) => setState(() => _ffaTransferText = text),
           onClearTransfer: () => setState(() => _ffaTransferText = ''),
           onAnalysisSaved: _loadAnalyses,
+          lastSavedAnalysis: _latestAnalysisForKind('ffa'),
         ),
         if (_fundusTransferText.isNotEmpty ||
             _octTransferText.isNotEmpty ||
             _ffaTransferText.isNotEmpty)
           ..._transferredResultBox(),
+        const SizedBox(height: 14),
+        SizedBox(
+          width: double.infinity,
+          child: FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: primary,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+            onPressed: _openRadiologicalReportsTab,
+            child: Text(
+              'Radyolojik raporu kaydet',
+              style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -593,51 +1173,6 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
         borderRadius: BorderRadius.circular(14),
       ),
       child: child,
-    );
-  }
-
-  Widget _aiAnalysisNavBanner() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFE1F5FE),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFF81D4FA)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              'Fundus, OCT veya FFA görüntüsü yüklemek için:',
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                color: const Color(0xFF0277BD),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          TextButton(
-            onPressed: () => _tabController.animateTo(1),
-            style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFF0277BD),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-                side: const BorderSide(color: Color(0xFF0277BD)),
-              ),
-            ),
-            child: Text(
-              'AI Analiz →',
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -664,7 +1199,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  'Forma aktarılan AI içeriği:',
+                  'Rapora aktarılan AI özeti:',
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
@@ -706,6 +1241,16 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
                 ),
               ),
             ],
+            const SizedBox(height: 8),
+            Text(
+              'Klinik rapora yazdırmak için «Rapor Oluştur» sekmesine geçip «Raporu Kaydet» ile kaydedin.',
+              style: GoogleFonts.inter(
+                fontSize: 10,
+                color: const Color(0xFF2E7D32),
+                fontStyle: FontStyle.italic,
+                height: 1.35,
+              ),
+            ),
           ],
         ),
       ),
@@ -1164,20 +1709,9 @@ class _ClinicalReportDetailSheet extends StatelessWidget {
 
 // ── Radiology Card ──────────────────────────────────────────────────────────
 class _RadiologyCard extends StatelessWidget {
-  const _RadiologyCard({required this.analysis, required this.onDeleted});
+  const _RadiologyCard({required this.analysis, required this.onRefresh});
   final AnalysisApiModel analysis;
-  final VoidCallback onDeleted;
-
-  static String _kindLabel(String? kind) {
-    switch (kind?.toLowerCase()) {
-      case 'oct':
-        return 'OCT';
-      case 'ffa':
-        return 'FFA';
-      default:
-        return 'Fundus';
-    }
-  }
+  final VoidCallback onRefresh;
 
   static IconData _kindIcon(String? kind) {
     switch (kind?.toLowerCase()) {
@@ -1185,8 +1719,10 @@ class _RadiologyCard extends StatelessWidget {
         return Icons.grid_view_rounded;
       case 'ffa':
         return Icons.blur_on_rounded;
-      default:
+      case 'fundus':
         return Icons.visibility_outlined;
+      default:
+        return Icons.biotech_outlined;
     }
   }
 
@@ -1196,8 +1732,10 @@ class _RadiologyCard extends StatelessWidget {
         return const Color(0xFF006645);
       case 'ffa':
         return const Color(0xFF8B5000);
-      default:
+      case 'fundus':
         return const Color(0xFF005D90);
+      default:
+        return const Color(0xFF0A8FB6);
     }
   }
 
@@ -1213,7 +1751,10 @@ class _RadiologyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final kind = analysis.reportKind;
+    final kindRaw = effectiveReportKindFromAnalysis(analysis) ??
+        _inferSingleModalityFromImageUrls(analysis) ??
+        analysis.reportKind;
+    final kindLabel = radiologyModalityDisplayTitle(kindRaw);
     return InkWell(
       borderRadius: BorderRadius.circular(14),
       onTap: () => _showDetail(context),
@@ -1229,10 +1770,10 @@ class _RadiologyCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: _kindColor(kind).withValues(alpha: 0.1),
+                color: _kindColor(kindRaw).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(_kindIcon(kind), size: 22, color: _kindColor(kind)),
+              child: Icon(_kindIcon(kindRaw), size: 22, color: _kindColor(kindRaw)),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -1240,7 +1781,7 @@ class _RadiologyCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '${_kindLabel(kind)} Analizi',
+                    '$kindLabel Analizi',
                     style: GoogleFonts.manrope(
                       fontWeight: FontWeight.w700,
                       fontSize: 14,
@@ -1298,36 +1839,292 @@ class _RadiologyCard extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _RadiologyDetailSheet(analysis: analysis),
+      builder: (_) => _RadiologyDetailSheet(
+        analysis: analysis,
+        onChanged: onRefresh,
+      ),
     );
   }
 }
 
 // ── Radiology Detail Bottom Sheet ──────────────────────────────────────────
-class _RadiologyDetailSheet extends StatelessWidget {
-  const _RadiologyDetailSheet({required this.analysis});
+class _RadiologyDetailSheet extends StatefulWidget {
+  const _RadiologyDetailSheet({
+    required this.analysis,
+    required this.onChanged,
+  });
   final AnalysisApiModel analysis;
+  final VoidCallback onChanged;
+
+  @override
+  State<_RadiologyDetailSheet> createState() => _RadiologyDetailSheetState();
+}
+
+class _RadiologyDetailSheetState extends State<_RadiologyDetailSheet> {
+  late AnalysisApiModel _analysis;
 
   String get _dateFormatted {
-    final d = analysis.createdAt;
+    final d = _analysis.createdAt;
     return '${d.day.toString().padLeft(2, '0')}.${d.month.toString().padLeft(2, '0')}.${d.year}';
   }
 
-  String _kindLabel(String? kind) {
-    switch (kind?.toLowerCase()) {
-      case 'oct':
-        return 'OCT';
-      case 'ffa':
-        return 'FFA';
-      default:
-        return 'Fundus';
+  @override
+  void initState() {
+    super.initState();
+    _analysis = widget.analysis;
+  }
+
+  String _radiologyApprovalLabel() {
+    final modality = effectiveReportKindFromAnalysis(_analysis) ??
+        _inferSingleModalityFromImageUrls(_analysis);
+    final root = _parseAiInferenceMap(_analysis.aiInferenceJson);
+    if (root == null) return _analysis.aiResult;
+    if (modality == 'oct') {
+      final oct = root['oct'];
+      if (oct is Map) {
+        final l = _labelFromAiBody('OCT', {'oct': oct});
+        if (l != null && l.isNotEmpty) return l;
+      }
+    } else if (modality == 'ffa') {
+      final ffa = root['ffa'];
+      if (ffa is Map) {
+        final l = _labelFromAiBody('FFA', {'ffa': ffa});
+        if (l != null && l.isNotEmpty) return l;
+      }
+    } else if (modality == 'fundus') {
+      final l = _labelFromAiBody('Fundus', root);
+      if (l != null && l.isNotEmpty) return l;
     }
+    return _analysis.aiResult;
+  }
+
+  Future<void> _downloadPdf() async {
+    final pct = (_analysis.confidence * 100).toStringAsFixed(1);
+    final kindRaw = effectiveReportKindFromAnalysis(_analysis) ??
+        _inferSingleModalityFromImageUrls(_analysis) ??
+        _analysis.reportKind;
+    final kind = radiologyModalityDisplayTitle(kindRaw);
+
+    final fontRegular = await PdfGoogleFonts.notoSansRegular();
+    final fontBold = await PdfGoogleFonts.notoSansBold();
+
+    pw.MemoryImage? originalImg;
+    pw.MemoryImage? heatmapImg;
+    try {
+      if (_analysis.originalImage != null &&
+          _analysis.originalImage!.isNotEmpty &&
+          File(_analysis.originalImage!).existsSync()) {
+        originalImg = pw.MemoryImage(
+          await File(_analysis.originalImage!).readAsBytes(),
+        );
+      }
+    } catch (_) {}
+    try {
+      if (_analysis.heatmapUrl != null &&
+          _analysis.heatmapUrl!.isNotEmpty &&
+          _analysis.heatmapUrl!.startsWith('/') &&
+          File(_analysis.heatmapUrl!).existsSync()) {
+        heatmapImg = pw.MemoryImage(
+          await File(_analysis.heatmapUrl!).readAsBytes(),
+        );
+      }
+    } catch (_) {}
+
+    final infMap = _parseAiInferenceMap(_analysis.aiInferenceJson);
+    final detailBlock = _inferencePlainNarration(infMap);
+
+    final doc = pw.Document();
+    doc.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        theme: pw.ThemeData.withFont(base: fontRegular, bold: fontBold),
+        build: (pw.Context ctx) => [
+          pw.Header(
+            level: 0,
+            child: pw.Text(
+              'Radyolojik Rapor: $kind Analizi',
+              style: pw.TextStyle(
+                font: fontBold,
+                fontSize: 18,
+                fontWeight: pw.FontWeight.bold,
+              ),
+            ),
+          ),
+          pw.SizedBox(height: 8),
+          pw.Text(
+            'Tarih: $_dateFormatted',
+            style: pw.TextStyle(
+              font: fontRegular,
+              fontSize: 11,
+              color: PdfColors.grey700,
+            ),
+          ),
+          pw.Divider(),
+          pw.Header(
+            level: 1,
+            child: pw.Text(
+              'Analiz Sonucu',
+              style: pw.TextStyle(font: fontBold),
+            ),
+          ),
+          pw.Text(_analysis.aiResult, style: pw.TextStyle(font: fontRegular)),
+          pw.SizedBox(height: 8),
+          pw.Header(
+            level: 1,
+            child: pw.Text('Güven Skoru', style: pw.TextStyle(font: fontBold)),
+          ),
+          pw.Text('%$pct', style: pw.TextStyle(font: fontRegular)),
+          if (detailBlock != null && detailBlock.isNotEmpty) ...[
+            pw.SizedBox(height: 8),
+            pw.Header(
+              level: 1,
+              child: pw.Text(
+                'Detaylı açıklama',
+                style: pw.TextStyle(font: fontBold),
+              ),
+            ),
+            pw.Text(
+              detailBlock,
+              style: pw.TextStyle(font: fontRegular),
+            ),
+          ],
+          if (_analysis.drFeedback != null &&
+              _analysis.drFeedback!.isNotEmpty) ...[
+            pw.SizedBox(height: 8),
+            pw.Header(
+              level: 1,
+              child: pw.Text(
+                'DR Değerlendirmesi',
+                style: pw.TextStyle(font: fontBold),
+              ),
+            ),
+            pw.Text(
+              _analysis.drFeedback!,
+              style: pw.TextStyle(font: fontRegular),
+            ),
+          ],
+          if (_analysis.isCorrect != null) ...[
+            pw.SizedBox(height: 8),
+            pw.Header(
+              level: 1,
+              child: pw.Text(
+                'AI doğruluk görüşü',
+                style: pw.TextStyle(font: fontBold),
+              ),
+            ),
+            pw.Text(
+              _analysis.isCorrect == true
+                  ? 'Klinik olarak uygun bulundu.'
+                  : 'Klinik olarak uygun bulunmadı.',
+              style: pw.TextStyle(font: fontRegular),
+            ),
+          ],
+          if (_analysis.actualResult != null &&
+              _analysis.actualResult!.trim().isNotEmpty) ...[
+            pw.SizedBox(height: 8),
+            pw.Header(
+              level: 1,
+              child: pw.Text(
+                'Gerçek sonuç / düzeltme',
+                style: pw.TextStyle(font: fontBold),
+              ),
+            ),
+            pw.Text(
+              _analysis.actualResult!.trim(),
+              style: pw.TextStyle(font: fontRegular),
+            ),
+          ],
+          if (_analysis.doctorNote != null &&
+              _analysis.doctorNote!.trim().isNotEmpty) ...[
+            pw.SizedBox(height: 8),
+            pw.Header(
+              level: 1,
+              child: pw.Text(
+                'Doktor notu',
+                style: pw.TextStyle(font: fontBold),
+              ),
+            ),
+            pw.Text(
+              _analysis.doctorNote!.trim(),
+              style: pw.TextStyle(font: fontRegular),
+            ),
+          ],
+          if (originalImg != null) ...[
+            pw.SizedBox(height: 16),
+            pw.Header(
+              level: 1,
+              child: pw.Text(
+                'Orijinal Görsel',
+                style: pw.TextStyle(font: fontBold),
+              ),
+            ),
+            pw.SizedBox(height: 8),
+            pw.Center(
+              child: pw.Image(originalImg, height: 280, fit: pw.BoxFit.contain),
+            ),
+          ],
+          if (heatmapImg != null) ...[
+            pw.SizedBox(height: 16),
+            pw.Header(
+              level: 1,
+              child: pw.Text(
+                'Isı Haritası (Heatmap)',
+                style: pw.TextStyle(font: fontBold),
+              ),
+            ),
+            pw.SizedBox(height: 8),
+            pw.Center(
+              child: pw.Image(heatmapImg, height: 280, fit: pw.BoxFit.contain),
+            ),
+          ],
+        ],
+      ),
+    );
+    await Printing.layoutPdf(
+      onLayout: (_) async => doc.save(),
+      name: '${kind}_Analiz_$_dateFormatted.pdf',
+    );
+  }
+
+  Widget _item(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.manrope(
+              fontWeight: FontWeight.w700,
+              fontSize: 12,
+              color: const Color(0xFF64748B),
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            value,
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              color: const Color(0xFF1E293B),
+              height: 1.5,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final pct = (analysis.confidence * 100).toStringAsFixed(1);
-    final kind = _kindLabel(analysis.reportKind);
+    final pct = (_analysis.confidence * 100).toStringAsFixed(1);
+    final kindRaw = effectiveReportKindFromAnalysis(_analysis) ??
+        _inferSingleModalityFromImageUrls(_analysis) ??
+        _analysis.reportKind;
+    final kind = radiologyModalityDisplayTitle(kindRaw);
+    final inf = _parseAiInferenceMap(_analysis.aiInferenceJson);
+    final detailWidgets = _clinicalWidgetsFromInferenceMap(inf);
+
     return DraggableScrollableSheet(
       initialChildSize: 0.75,
       minChildSize: 0.4,
@@ -1384,18 +2181,40 @@ class _RadiologyDetailSheet extends StatelessWidget {
                 children: [
                   _item('Analiz Türü', kind),
                   _item('Tarih', _dateFormatted),
-                  _item('AI Sonucu', analysis.aiResult),
+                  _item('AI Sonucu', _analysis.aiResult),
                   _item('Güven Skoru', '%$pct'),
-                  if (analysis.drFeedback != null &&
-                      analysis.drFeedback!.isNotEmpty)
-                    _item('DR Değerlendirmesi', analysis.drFeedback!),
-                  if (analysis.doctorNote != null &&
-                      analysis.doctorNote!.isNotEmpty)
-                    _item('Doktor Notu', analysis.doctorNote!),
+                  if (detailWidgets.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Detaylı açıklama',
+                      style: GoogleFonts.manrope(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                        color: const Color(0xFF14243D),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: detailWidgets,
+                      ),
+                    ),
+                  ],
+                  if (_analysis.drFeedback != null &&
+                      _analysis.drFeedback!.isNotEmpty)
+                    _item('DR Değerlendirmesi', _analysis.drFeedback!),
                   // ── Orijinal görsel ───────────────────────────────────────
-                  if (analysis.originalImage != null &&
-                      analysis.originalImage!.isNotEmpty &&
-                      File(analysis.originalImage!).existsSync()) ...[
+                  if (_analysis.originalImage != null &&
+                      _analysis.originalImage!.isNotEmpty &&
+                      File(_analysis.originalImage!).existsSync()) ...[
                     const SizedBox(height: 12),
                     Text(
                       'Orijinal Görsel',
@@ -1409,17 +2228,16 @@ class _RadiologyDetailSheet extends StatelessWidget {
                     ClipRRect(
                       borderRadius: BorderRadius.circular(10),
                       child: Image.file(
-                        File(analysis.originalImage!),
+                        File(_analysis.originalImage!),
                         width: double.infinity,
                         fit: BoxFit.contain,
                       ),
                     ),
                   ],
-                  // ── Heatmap görsel ────────────────────────────────────────
-                  if (analysis.heatmapUrl != null &&
-                      analysis.heatmapUrl!.isNotEmpty &&
-                      analysis.heatmapUrl!.startsWith('/') &&
-                      File(analysis.heatmapUrl!).existsSync()) ...[
+                  if (_analysis.heatmapUrl != null &&
+                      _analysis.heatmapUrl!.isNotEmpty &&
+                      _analysis.heatmapUrl!.startsWith('/') &&
+                      File(_analysis.heatmapUrl!).existsSync()) ...[
                     const SizedBox(height: 12),
                     Text(
                       'Isı Haritası (Heatmap)',
@@ -1433,12 +2251,24 @@ class _RadiologyDetailSheet extends StatelessWidget {
                     ClipRRect(
                       borderRadius: BorderRadius.circular(10),
                       child: Image.file(
-                        File(analysis.heatmapUrl!),
+                        File(_analysis.heatmapUrl!),
                         width: double.infinity,
                         fit: BoxFit.contain,
                       ),
                     ),
                   ],
+                  const SizedBox(height: 20),
+                  StructuredDoctorFeedbackForm(
+                    initialRecord: _analysis,
+                    reportKind: resolvedFeedbackModalityForAnalysis(_analysis),
+                    aiSummaryLabel: _radiologyApprovalLabel(),
+                    liveResponseBody: null,
+                    onSaved: (updated) {
+                      setState(() => _analysis = updated);
+                      widget.onChanged();
+                    },
+                  ),
+                  const SizedBox(height: 8),
                 ],
               ),
             ),
@@ -1456,182 +2286,12 @@ class _RadiologyDetailSheet extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  onPressed: () => _downloadPdf(context),
+                  onPressed: _downloadPdf,
                 ),
               ),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Future<void> _downloadPdf(BuildContext context) async {
-    final pct = (analysis.confidence * 100).toStringAsFixed(1);
-    final kind = _kindLabel(analysis.reportKind);
-
-    // Türkçe karakter destekli fontlar (internet bağlantısı gerekir)
-    final fontRegular = await PdfGoogleFonts.notoSansRegular();
-    final fontBold = await PdfGoogleFonts.notoSansBold();
-
-    // Görselleri yükle
-    pw.MemoryImage? originalImg;
-    pw.MemoryImage? heatmapImg;
-    try {
-      if (analysis.originalImage != null &&
-          analysis.originalImage!.isNotEmpty &&
-          File(analysis.originalImage!).existsSync()) {
-        originalImg = pw.MemoryImage(
-          await File(analysis.originalImage!).readAsBytes(),
-        );
-      }
-    } catch (_) {}
-    try {
-      if (analysis.heatmapUrl != null &&
-          analysis.heatmapUrl!.isNotEmpty &&
-          analysis.heatmapUrl!.startsWith('/') &&
-          File(analysis.heatmapUrl!).existsSync()) {
-        heatmapImg = pw.MemoryImage(
-          await File(analysis.heatmapUrl!).readAsBytes(),
-        );
-      }
-    } catch (_) {}
-
-    final doc = pw.Document();
-    doc.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.all(32),
-        theme: pw.ThemeData.withFont(base: fontRegular, bold: fontBold),
-        build: (pw.Context ctx) => [
-          pw.Header(
-            level: 0,
-            child: pw.Text(
-              'Radyolojik Rapor: $kind Analizi',
-              style: pw.TextStyle(
-                font: fontBold,
-                fontSize: 18,
-                fontWeight: pw.FontWeight.bold,
-              ),
-            ),
-          ),
-          pw.SizedBox(height: 8),
-          pw.Text(
-            'Tarih: $_dateFormatted',
-            style: pw.TextStyle(
-              font: fontRegular,
-              fontSize: 11,
-              color: PdfColors.grey700,
-            ),
-          ),
-          pw.Divider(),
-          pw.Header(
-            level: 1,
-            child: pw.Text(
-              'Analiz Sonucu',
-              style: pw.TextStyle(font: fontBold),
-            ),
-          ),
-          pw.Text(analysis.aiResult, style: pw.TextStyle(font: fontRegular)),
-          pw.SizedBox(height: 8),
-          pw.Header(
-            level: 1,
-            child: pw.Text('Güven Skoru', style: pw.TextStyle(font: fontBold)),
-          ),
-          pw.Text('%$pct', style: pw.TextStyle(font: fontRegular)),
-          if (analysis.drFeedback != null &&
-              analysis.drFeedback!.isNotEmpty) ...[
-            pw.SizedBox(height: 8),
-            pw.Header(
-              level: 1,
-              child: pw.Text(
-                'DR Değerlendirmesi',
-                style: pw.TextStyle(font: fontBold),
-              ),
-            ),
-            pw.Text(
-              analysis.drFeedback!,
-              style: pw.TextStyle(font: fontRegular),
-            ),
-          ],
-          if (analysis.doctorNote != null &&
-              analysis.doctorNote!.isNotEmpty) ...[
-            pw.SizedBox(height: 8),
-            pw.Header(
-              level: 1,
-              child: pw.Text(
-                'Doktor Notu',
-                style: pw.TextStyle(font: fontBold),
-              ),
-            ),
-            pw.Text(
-              analysis.doctorNote!,
-              style: pw.TextStyle(font: fontRegular),
-            ),
-          ],
-          // Orijinal görsel
-          if (originalImg != null) ...[
-            pw.SizedBox(height: 16),
-            pw.Header(
-              level: 1,
-              child: pw.Text(
-                'Orijinal Görsel',
-                style: pw.TextStyle(font: fontBold),
-              ),
-            ),
-            pw.SizedBox(height: 8),
-            pw.Center(
-              child: pw.Image(originalImg, height: 280, fit: pw.BoxFit.contain),
-            ),
-          ],
-          // Heatmap
-          if (heatmapImg != null) ...[
-            pw.SizedBox(height: 16),
-            pw.Header(
-              level: 1,
-              child: pw.Text(
-                'Isı Haritası (Heatmap)',
-                style: pw.TextStyle(font: fontBold),
-              ),
-            ),
-            pw.SizedBox(height: 8),
-            pw.Center(
-              child: pw.Image(heatmapImg, height: 280, fit: pw.BoxFit.contain),
-            ),
-          ],
-        ],
-      ),
-    );
-    await Printing.layoutPdf(
-      onLayout: (_) async => doc.save(),
-      name: '${kind}_Analiz_$_dateFormatted.pdf',
-    );
-  }
-
-  Widget _item(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: GoogleFonts.manrope(
-              fontWeight: FontWeight.w700,
-              fontSize: 12,
-              color: const Color(0xFF64748B),
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            value,
-            style: GoogleFonts.inter(
-              fontSize: 13,
-              color: const Color(0xFF1E293B),
-              height: 1.5,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -1654,6 +2314,7 @@ class _InlineAnalysisCard extends StatefulWidget {
     required this.onTransfer,
     required this.onClearTransfer,
     required this.onAnalysisSaved,
+    this.lastSavedAnalysis,
   });
 
   final IconData icon;
@@ -1668,6 +2329,8 @@ class _InlineAnalysisCard extends StatefulWidget {
   final void Function(String text) onTransfer;
   final VoidCallback onClearTransfer;
   final VoidCallback onAnalysisSaved;
+  /// Yerelde / sunucudan gelen bu türdeki en son analiz — geri bildirim ve özet için.
+  final AnalysisApiModel? lastSavedAnalysis;
 
   @override
   State<_InlineAnalysisCard> createState() => _InlineAnalysisCardState();
@@ -1680,20 +2343,57 @@ class _InlineAnalysisCardState extends State<_InlineAnalysisCard> {
   bool _analyzing = false;
   Map<String, dynamic>? _result;
   String? _errorMsg;
+  AnalysisApiModel? _persistedRecord;
 
-  String? get _aiLabel {
-    if (_result == null) return null;
-    final pytorch = _result!['pytorch'] as Map<String, dynamic>?;
-    final label = pytorch?['label'] as String?;
-    final confidence = (pytorch?['confidence'] as num?)?.toDouble() ?? 0.0;
-    if (confidence < 0.75 || label == null) return 'Belirsiz';
-    return label;
+  @override
+  void initState() {
+    super.initState();
   }
 
-  double get _confidence {
-    final pytorch = _result?['pytorch'] as Map<String, dynamic>?;
-    return ((pytorch?['confidence'] as num?) ?? 0.0).toDouble();
+  @override
+  void didUpdateWidget(covariant _InlineAnalysisCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.lastSavedAnalysis?.id != oldWidget.lastSavedAnalysis?.id &&
+        _pickedImage == null &&
+        _result == null) {
+      _persistedRecord = null;
+      setState(() {});
+    }
   }
+
+  AnalysisApiModel? get _activeFeedbackTarget =>
+      _persistedRecord ??
+      (_pickedImage == null && _result == null
+          ? widget.lastSavedAnalysis
+          : null);
+
+  bool get _showRestoredSummary =>
+      widget.lastSavedAnalysis != null &&
+      _pickedImage == null &&
+      _result == null;
+
+  String? get _displayLabel {
+    if (_result != null) return _labelFromAiBody(widget.label, _result!);
+    if (_showRestoredSummary) return widget.lastSavedAnalysis!.aiResult;
+    return null;
+  }
+
+  double get _displayConfidence {
+    if (_result != null) return _confidenceFromAiBody(widget.label, _result!);
+    if (_showRestoredSummary) return widget.lastSavedAnalysis!.confidence;
+    return 0;
+  }
+
+  Map<String, dynamic>? get _inferencePreviewMap {
+    if (_result != null) return _buildInferenceSnapshot(widget.label, _result!);
+    if (_showRestoredSummary) {
+      return _parseAiInferenceMap(widget.lastSavedAnalysis!.aiInferenceJson);
+    }
+    return null;
+  }
+
+  List<Widget> get _inferenceUiBlocks =>
+      _clinicalWidgetsFromInferenceMap(_inferencePreviewMap);
 
   String? get _heatmapBase64 => _result?['heatmapPlus'] as String?;
 
@@ -1703,13 +2403,18 @@ class _InlineAnalysisCardState extends State<_InlineAnalysisCard> {
         _analyzing = true;
         _errorMsg = null;
       });
-      final formData = FormData.fromMap({
+      final formMap = <String, dynamic>{
         'image': await MultipartFile.fromFile(
           image.path,
           filename: 'image.jpg',
         ),
         'patientId': widget.patientId,
-      });
+      };
+      final ep = widget.apiEndpoint;
+      if (ep.contains('/api/ai/predict')) {
+        formMap['locale'] = 'tr';
+      }
+      final formData = FormData.fromMap(formMap);
 
       final response = await ApiClient.instance.postAi(
         widget.apiEndpoint,
@@ -1717,10 +2422,13 @@ class _InlineAnalysisCardState extends State<_InlineAnalysisCard> {
       );
 
       if (!mounted) return;
-      final body = response.data as Map<String, dynamic>;
+      var body = _normalizeAiResponseBody(response.data);
+      body = _mergeAiResponseEnvelope(body);
+
       setState(() {
         _result = body;
         _analyzing = false;
+        _persistedRecord = null;
       });
 
       // Heatmap base64'ü ve orijinal görseli kalıcı dosyalara kaydet
@@ -1756,28 +2464,67 @@ class _InlineAnalysisCardState extends State<_InlineAnalysisCard> {
         } catch (_) {}
       }
 
-      // Analizi kaydet
-      final pytorch = body['pytorch'] as Map<String, dynamic>?;
-      final savedAnalysis = AnalysisApiModel(
-        id: UuidGenerator.generateOfflineId(),
-        patientId: widget.patientId,
-        aiResult: _aiLabel ?? 'unknown',
-        confidence: _confidence,
-        heatmapUrl: savedHeatmapPath ?? (body['heatmapUrl'] as String?),
-        originalImage: savedOriginalPath,
-        createdAt: DateTime.now(),
-        isSynced: false,
-        reportKind: widget.label.toLowerCase(),
-        drGradeInt: (body['drGrade'] as num?)?.toInt(),
-        drFeedback: pytorch?['label'] as String?,
-      );
-      await AnalysisService.instance.add(savedAnalysis);
+      AnalysisApiModel? persisted;
+      try {
+        final label = _labelFromAiBody(widget.label, body);
+        final conf = _confidenceFromAiBody(widget.label, body);
+        final snapshot = _buildInferenceSnapshot(widget.label, body);
+        final enc = jsonEncode(_jsonSanitize(snapshot));
+        final savedAnalysis = AnalysisApiModel(
+          id: UuidGenerator.generateOfflineId(),
+          patientId: widget.patientId,
+          aiResult: label ?? 'unknown',
+          confidence: conf,
+          heatmapUrl: savedHeatmapPath ?? (body['heatmapUrl'] as String?),
+          originalImage: savedOriginalPath,
+          createdAt: DateTime.now(),
+          isSynced: false,
+          reportKind: widget.label.toLowerCase(),
+          drGradeInt: ((body['drGrade'] ?? body['dr_grade']) as num?)?.toInt(),
+          aiInferenceJson: enc,
+        );
+        persisted = await AnalysisService.instance.add(savedAnalysis);
+      } catch (e) {
+        debugPrint('Analiz kaydı başarısız: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Analiz gösterildi; kayıt hatası: $e',
+                style: GoogleFonts.inter(),
+              ),
+              backgroundColor: const Color(0xFF93000A),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+
+      if (!mounted) return;
+      setState(() {
+        if (persisted != null) {
+          _persistedRecord = persisted;
+        }
+      });
       widget.onAnalysisSaved();
     } on DioException catch (e) {
       if (!mounted) return;
-      final msg = e.response?.data is Map
-          ? (e.response!.data as Map)['error'] ?? 'Sunucu hatası'
-          : 'Bağlantı hatası';
+      String msg;
+      if (e.message == kSessionTokenMissingMessage) {
+        msg =
+            'Oturum açık değil veya süre dolmuş. Çıkış yapıp tekrar giriş yapın.';
+      } else if (e.response?.statusCode == 401) {
+        final body = e.response?.data;
+        final fromServer =
+            body is Map ? body['error']?.toString().trim() : null;
+        msg = (fromServer != null && fromServer.isNotEmpty)
+            ? fromServer
+            : 'Oturum doğrulanamadı (401). Tekrar giriş yapın.';
+      } else {
+        msg = e.response?.data is Map
+            ? (e.response!.data as Map)['error']?.toString() ?? 'Sunucu hatası'
+            : 'Bağlantı hatası';
+      }
       setState(() {
         _analyzing = false;
         _errorMsg = msg.toString();
@@ -1823,22 +2570,243 @@ class _InlineAnalysisCardState extends State<_InlineAnalysisCard> {
       _pickedImage = null;
       _result = null;
       _errorMsg = null;
+      _persistedRecord = null;
     });
     widget.onClearTransfer();
   }
 
+  String _approvalLabelForFeedback() {
+    if (_result != null) {
+      final l = _labelFromAiBody(widget.label, _result!);
+      if (l != null && l.isNotEmpty) return l;
+    }
+    if (_showRestoredSummary) {
+      return widget.lastSavedAnalysis?.aiResult ?? '—';
+    }
+    return _activeFeedbackTarget?.aiResult ?? '—';
+  }
+
+  String _feedbackReportKind() {
+    final t = _activeFeedbackTarget;
+    if (t == null) return widget.label.toLowerCase();
+    return (effectiveReportKindFromAnalysis(t) ?? widget.label)
+        .toLowerCase();
+  }
+
   void _transfer() {
-    if (_aiLabel == null) return;
-    final pct = (_confidence * 100).toStringAsFixed(0);
-    widget.onTransfer(
-      '${widget.label} AI: $_aiLabel tespit edildi. Güven: %$pct.',
-    );
+    final label = _displayLabel;
+    if (label == null) return;
+    final pct = (_displayConfidence * 100).toStringAsFixed(0);
+    final buf = StringBuffer('${widget.label} AI: $label. Güven: %$pct.');
+    final extra = _inferencePlainNarration(_inferencePreviewMap);
+    if (extra != null && extra.isNotEmpty) {
+      buf.writeln();
+      buf.writeln(extra);
+    }
+    widget.onTransfer(buf.toString());
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('${widget.label} sonucu rapora aktarıldı.'),
         backgroundColor: const Color(0xFF006645),
         behavior: SnackBarBehavior.floating,
       ),
+    );
+  }
+
+  Widget _aiSummaryAndDetailsBox({required bool showTransferRow}) {
+    final label = _displayLabel;
+    if (label == null) return const SizedBox.shrink();
+    final modelDr =
+        (_persistedRecord?.drFeedback ?? widget.lastSavedAnalysis?.drFeedback ?? '')
+            .trim();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_heatmapBase64 != null && _heatmapBase64!.isNotEmpty) ...[
+          Text(
+            'Isı Haritası (Heatmap)',
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF64748B),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Builder(
+            builder: (context) {
+              final mem = _decodeHeatmapImageBytes(_heatmapBase64);
+              if (mem == null) return const SizedBox.shrink();
+              return ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.memory(
+                  mem,
+                  width: double.infinity,
+                  height: 180,
+                  fit: BoxFit.cover,
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 10),
+        ],
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFE3F2FD),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFF90CAF9)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(
+                    Icons.auto_awesome,
+                    size: 15,
+                    color: Color(0xFF1565C0),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'AI Sonucu',
+                    style: GoogleFonts.manrope(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: const Color(0xFF1565C0),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                label,
+                style: GoogleFonts.manrope(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF0D47A1),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Güven: %${(_displayConfidence * 100).toStringAsFixed(1)}',
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: const Color(0xFF1565C0),
+                ),
+              ),
+              if (modelDr.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'DR / model notu',
+                  style: GoogleFonts.inter(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF1565C0),
+                  ),
+                ),
+                Text(
+                  modelDr,
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: const Color(0xFF1E293B),
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        if (_inferenceUiBlocks.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Text(
+            'Detaylı açıklama',
+            style: GoogleFonts.manrope(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: const Color(0xFF64748B),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: _inferenceUiBlocks,
+            ),
+          ),
+        ],
+        if (_activeFeedbackTarget != null)
+          StructuredDoctorFeedbackForm(
+            initialRecord: _activeFeedbackTarget!,
+            reportKind: _feedbackReportKind(),
+            aiSummaryLabel: _approvalLabelForFeedback(),
+            liveResponseBody: _result,
+            onSaved: (updated) {
+              setState(() => _persistedRecord = updated);
+              widget.onAnalysisSaved();
+            },
+          ),
+        if (showTransferRow) ...[
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  icon: const Icon(Icons.arrow_circle_right_outlined, size: 15),
+                  label: Text(
+                    widget.transferText.isEmpty
+                        ? 'Rapora aktar'
+                        : 'Rapora eklendi ✓',
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+                  ),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: widget.transferText.isEmpty
+                        ? const Color(0xFF0A8FB6)
+                        : const Color(0xFF2E7D32),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                  onPressed: widget.transferText.isEmpty ? _transfer : null,
+                ),
+              ),
+              if (_pickedImage != null) ...[
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.refresh, size: 14),
+                  label: Text(
+                    'Yeni',
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF64748B),
+                    side: const BorderSide(color: Color(0xFFCFD8DC)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 10,
+                      horizontal: 12,
+                    ),
+                  ),
+                  onPressed: _reset,
+                ),
+              ],
+            ],
+          ),
+        ],
+      ],
     );
   }
 
@@ -1911,6 +2879,19 @@ class _InlineAnalysisCardState extends State<_InlineAnalysisCard> {
 
           // Yükleme butonu ya da loading
           if (_pickedImage == null) ...[
+            if (_showRestoredSummary) ...[
+              Text(
+                'Kayıtlı son analiz',
+                style: GoogleFonts.manrope(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFF64748B),
+                ),
+              ),
+              const SizedBox(height: 8),
+              _aiSummaryAndDetailsBox(showTransferRow: true),
+              const SizedBox(height: 14),
+            ],
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
@@ -2019,143 +3000,15 @@ class _InlineAnalysisCardState extends State<_InlineAnalysisCard> {
               ),
             ],
 
-            // Sonuç
+            // Sonuç (özet + detay + doktor geri bildirimi + forma aktar)
             if (_result != null && !_analyzing) ...[
               const SizedBox(height: 10),
-
-              // Heatmap
-              if (_heatmapBase64 != null && _heatmapBase64!.isNotEmpty) ...[
-                Text(
-                  'Isı Haritası (Heatmap)',
-                  style: GoogleFonts.inter(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: const Color(0xFF64748B),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: Image.memory(
-                    Uri.parse(_heatmapBase64!).data!.contentAsBytes(),
-                    width: double.infinity,
-                    height: 180,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                  ),
-                ),
-                const SizedBox(height: 10),
-              ],
-
-              // Sonuç kutusu
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE3F2FD),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFF90CAF9)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.auto_awesome,
-                          size: 15,
-                          color: Color(0xFF1565C0),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          'AI Sonucu',
-                          style: GoogleFonts.manrope(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                            color: const Color(0xFF1565C0),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      _aiLabel ?? '-',
-                      style: GoogleFonts.manrope(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: const Color(0xFF0D47A1),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Güven: %${(_confidence * 100).toStringAsFixed(1)}',
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: const Color(0xFF1565C0),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 10),
-
-              // Forma aktar / temizle
-              Row(
-                children: [
-                  Expanded(
-                    child: FilledButton.icon(
-                      icon: const Icon(
-                        Icons.arrow_circle_right_outlined,
-                        size: 15,
-                      ),
-                      label: Text(
-                        widget.transferText.isEmpty
-                            ? 'Forma Aktar'
-                            : 'Aktarıldı ✓',
-                        style: GoogleFonts.inter(fontWeight: FontWeight.w700),
-                      ),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: widget.transferText.isEmpty
-                            ? const Color(0xFF0A8FB6)
-                            : const Color(0xFF2E7D32),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                      ),
-                      onPressed: widget.transferText.isEmpty ? _transfer : null,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.refresh, size: 14),
-                    label: Text(
-                      'Yeni',
-                      style: GoogleFonts.inter(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13,
-                      ),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF64748B),
-                      side: const BorderSide(color: Color(0xFFCFD8DC)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 10,
-                        horizontal: 12,
-                      ),
-                    ),
-                    onPressed: _reset,
-                  ),
-                ],
-              ),
+              _aiSummaryAndDetailsBox(showTransferRow: true),
             ],
           ],
 
           // Aktarılmış metin göstergesi
-          if (widget.transferText.isNotEmpty && _result == null) ...[
+          if (widget.transferText.isNotEmpty) ...[
             const SizedBox(height: 10),
             Container(
               width: double.infinity,

@@ -57,9 +57,14 @@ export function createDoctorSessionToken(doctor: DoctorIdentity) {
 }
 
 export function verifyDoctorSessionToken(token?: string | null) {
-  if (!token) return null;
-
-  const [payload, signature] = token.split(".");
+  if (!token?.trim()) return null;
+  const raw = token.trim();
+  // Oturum jetonu: payload.imza (tek ayırıcı nokta). split(".") JWT ile karışmaz ama
+  // imza tarafında nadir edge-case'lerde ilk noktadan bölüm daha güvenli.
+  const dot = raw.indexOf(".");
+  if (dot === -1) return null;
+  const payload = raw.slice(0, dot);
+  const signature = raw.slice(dot + 1);
   if (!payload || !signature) return null;
 
   const expectedSignature = signPayload(payload);
@@ -88,10 +93,19 @@ export async function getCurrentDoctorSession() {
   return verifyDoctorSessionToken(token);
 }
 
-/** Mobile API: Authorization: Bearer <token> header'dan oturumu doğrular. */
+/** Mobil istemciler: nginx/bazı proxy'ler Authorization'ı düşürebilir; yedek başlık aynı token'ı taşır. */
+export const MOBILE_SESSION_TOKEN_HEADER = "x-retina-mobile-token";
+
+/** Mobile API: Authorization: Bearer <token> veya X-Retina-Mobile-Token: <token> */
 export function getMobileDoctorSession(request: Request) {
   const authHeader = request.headers.get("authorization");
-  if (!authHeader?.startsWith("Bearer ")) return null;
-  const token = authHeader.slice(7).trim();
+  let token: string | null = null;
+  if (authHeader?.trim()) {
+    const m = authHeader.trim().match(/^Bearer\s+(.+)$/i);
+    token = m?.[1]?.trim() ?? null;
+  }
+  if (!token) {
+    token = request.headers.get(MOBILE_SESSION_TOKEN_HEADER)?.trim() ?? null;
+  }
   return verifyDoctorSessionToken(token);
 }
