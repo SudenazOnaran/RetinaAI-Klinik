@@ -9,6 +9,7 @@ class ApiConstants {
   // --- Auth (mobile JWT endpoint'leri) ---
   static const String login = '/api/doctor/mobile/login';
   static const String verify = '/api/doctor/mobile/verify';
+  static const String accountDelete = '/api/doctor/mobile/account';
 
   // --- Patients ---
   static const String patients = '/api/doctor/patients';

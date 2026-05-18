@@ -2,7 +2,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import 'package:retina_ai_app/core/config/app_config.dart';
 import 'package:retina_ai_app/core/network/api_client.dart';
 import 'package:retina_ai_app/core/constants/api_constants.dart';
 import 'package:retina_ai_app/core/providers/auth_provider.dart';
@@ -146,6 +148,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                           _InfoNote(scale: scale),
                           SizedBox(height: 14 * scale),
                           _SettingsCard(scale: scale),
+                          SizedBox(height: 14 * scale),
+                          _AccountDataCard(
+                            scale: scale,
+                            onOpenInfo: () => _openAccountDeletionInfo(context),
+                            onRequestDelete: () =>
+                                _confirmDeleteAccount(context, ref),
+                          ),
                         ],
                       ),
                     ),
@@ -156,6 +165,158 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       extendBody: true,
       bottomNavigationBar: const ClinicBottomNav(
         selectedTab: ClinicBottomTab.profile,
+      ),
+    );
+  }
+
+  Future<void> _openAccountDeletionInfo(BuildContext context) async {
+    final uri = Uri.parse(AppConfig.accountDeletionInfoUrl);
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Bağlantı açılamadı')),
+      );
+    }
+  }
+
+  Future<void> _confirmDeleteAccount(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          'Hesabı sil',
+          style: GoogleFonts.manrope(fontWeight: FontWeight.w700),
+        ),
+        content: Text(
+          'Hesabınız ve bu hesaba bağlı profil ile hasta / analiz verileri '
+          'sunucudan kalıcı olarak silinecek. Bu işlem geri alınamaz.',
+          style: GoogleFonts.inter(fontSize: 14, height: 1.45),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('İptal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFF93000A),
+            ),
+            child: const Text('Hesabı sil'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !context.mounted) return;
+
+    final err = await ref.read(authProvider.notifier).deleteAccount();
+    if (!context.mounted) return;
+    if (err != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+      return;
+    }
+    context.go('/signin');
+  }
+}
+
+class _AccountDataCard extends StatelessWidget {
+  const _AccountDataCard({
+    required this.scale,
+    required this.onOpenInfo,
+    required this.onRequestDelete,
+  });
+
+  final double scale;
+  final VoidCallback onOpenInfo;
+  final VoidCallback onRequestDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14 * scale),
+        border: Border.all(color: const Color(0xFFE2E8EE)),
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(14 * scale)),
+            onTap: onOpenInfo,
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: 16 * scale,
+                vertical: 14 * scale,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.policy_outlined,
+                    size: 20,
+                    color: const Color(0xFF00687A),
+                  ),
+                  SizedBox(width: 12 * scale),
+                  Expanded(
+                    child: Text(
+                      'Hesap ve veri silme bilgisi (web)',
+                      style: GoogleFonts.inter(
+                        fontSize: 14 * scale,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFF1E293B),
+                      ),
+                    ),
+                  ),
+                  const Icon(
+                    Icons.open_in_new_rounded,
+                    size: 18,
+                    color: Color(0xFF9CA3AF),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const Divider(height: 1, thickness: 1, color: Color(0xFFF0F2F5)),
+          InkWell(
+            borderRadius: BorderRadius.vertical(
+              bottom: Radius.circular(14 * scale),
+            ),
+            onTap: onRequestDelete,
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: 16 * scale,
+                vertical: 14 * scale,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.delete_forever_outlined,
+                    size: 20,
+                    color: const Color(0xFF93000A),
+                  ),
+                  SizedBox(width: 12 * scale),
+                  Expanded(
+                    child: Text(
+                      'Hesabımı ve verilerimi sil',
+                      style: GoogleFonts.inter(
+                        fontSize: 14 * scale,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF93000A),
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 18,
+                    color: Colors.grey.shade400,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

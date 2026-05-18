@@ -28,4 +28,10 @@ class AppConfig {
     if (_baseUrlOverride.isNotEmpty) return _baseUrlOverride;
     return 'https://retina-ai.tech';
   }
+
+  /// Play Console / veri güvenliği formları için hesap silme bilgi sayfası (web).
+  static String get accountDeletionInfoUrl {
+    final base = baseUrl.replaceAll(RegExp(r'/+$'), '');
+    return '$base/hesap-silme';
+  }
 }

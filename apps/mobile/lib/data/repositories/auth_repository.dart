@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import '../../core/network/api_client.dart';
 import '../../core/constants/api_constants.dart';
 import '../local/secure_storage.dart';
+import '../local/database/app_database.dart';
 import '../models/doctor_model.dart';
 
 /// Authentication repository: login, verify, logout.
@@ -58,6 +59,26 @@ class AuthRepository {
     }
   }
 
+  /// Sunucuda hesabı kalıcı olarak siler; yerel güvenli depolama ve SQLite temizlenir.
+  Future<void> deleteAccount() async {
+    try {
+      final response = await _api.delete(ApiConstants.accountDelete);
+      final data = response.data;
+      if (data is Map<String, dynamic> && data['success'] == true) {
+        await _storage.clearAll();
+        await AppDatabase.instance.clearAll();
+        return;
+      }
+      final err =
+          data is Map<String, dynamic> ? data['error']?.toString() : null;
+      throw Exception(
+        (err != null && err.isNotEmpty) ? err : 'Hesap silinemedi',
+      );
+    } on DioException catch (e) {
+      throw Exception(_friendlyDeleteMessageFromDio(e));
+    }
+  }
+
   /// Oturumu kapat: token ve yerel veriler temizlenir.
   Future<void> logout() async {
     await _storage.clearAll();
@@ -97,6 +118,31 @@ class AuthRepository {
     }
 
     return _friendlyLoginMessage(raw: raw, statusCode: code);
+  }
+
+  static String _friendlyDeleteMessageFromDio(DioException e) {
+    final code = e.response?.statusCode;
+    String? raw;
+    final d = e.response?.data;
+    if (d is Map<String, dynamic>) {
+      raw = d['error']?.toString() ??
+          d['message']?.toString() ??
+          d['detail']?.toString();
+    } else if (d is String) {
+      raw = d;
+    }
+    if (raw != null && raw.isNotEmpty && raw.length <= 160) return raw;
+    if (code == 401) return 'Oturumunuz geçersiz. Lütfen tekrar giriş yapın.';
+    final t = e.type;
+    if (t == DioExceptionType.connectionTimeout ||
+        t == DioExceptionType.receiveTimeout ||
+        t == DioExceptionType.sendTimeout) {
+      return 'Bağlantı zaman aşımına uğradı. İnternetinizi kontrol edin.';
+    }
+    if (t == DioExceptionType.connectionError) {
+      return 'Sunucuya bağlanılamadı. Ağınızı kontrol edin.';
+    }
+    return 'Hesap şu anda silinemedi. Lütfen daha sonra tekrar deneyin.';
   }
 
   /// Sunucu gövdesi ve/veya HTTP koduna göre kısa, anlaşılır Türkçe metin.

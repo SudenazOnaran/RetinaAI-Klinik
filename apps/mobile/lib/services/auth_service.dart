@@ -15,6 +15,8 @@ class AuthService {
 
   Future<void> logout() => _repo.logout();
 
+  Future<void> deleteAccount() => _repo.deleteAccount();
+
   Future<DoctorModel?> getCachedDoctor() => _repo.getCachedDoctor();
 
   Future<bool> isLoggedIn() => _repo.isLoggedIn();

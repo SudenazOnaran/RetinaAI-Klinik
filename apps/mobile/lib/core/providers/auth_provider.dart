@@ -64,4 +64,15 @@ class AuthNotifier extends StateNotifier<AuthState> {
     await _authService.logout();
     state = const AuthState.unauthenticated();
   }
+
+  /// Hesabı sunucudan siler; başarılıysa null, aksi halde hata metni.
+  Future<String?> deleteAccount() async {
+    try {
+      await _authService.deleteAccount();
+      state = const AuthState.unauthenticated();
+      return null;
+    } catch (e) {
+      return e.toString().replaceFirst('Exception: ', '');
+    }
+  }
 }
