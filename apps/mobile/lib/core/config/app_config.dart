@@ -29,9 +29,9 @@ class AppConfig {
     return 'https://retina-ai.tech';
   }
 
-  /// Play Console / veri güvenliği formları için hesap silme bilgi sayfası (web).
+  /// Tanıtım sitesi: /hesap-silme/ — Play Console ile aynı yol (sondaki / dahil).
   static String get accountDeletionInfoUrl {
     final base = baseUrl.replaceAll(RegExp(r'/+$'), '');
-    return '$base/hesap-silme';
+    return '$base/hesap-silme/';
   }
 }

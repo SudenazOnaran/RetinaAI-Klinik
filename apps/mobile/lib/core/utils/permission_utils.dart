@@ -21,22 +21,9 @@ class PermissionUtils {
     return false;
   }
 
-  /// Galeri/medya iznini ister. Reddedilirse ayarlar ekranına yönlendirir.
+  /// Galeri seçimi Android Photo Picker ile yapılır; geniş depolama izni istenmez.
   static Future<bool> requestGalleryPermission(BuildContext context) async {
-    // Android 13+ için READ_MEDIA_IMAGES, daha eski için READ_EXTERNAL_STORAGE
-    final Permission permission = Permission.photos;
-    final status = await permission.request();
-    if (status.isGranted || status.isLimited) return true;
-
-    if (status.isPermanentlyDenied && context.mounted) {
-      await _showSettingsDialog(
-        context,
-        title: 'Galeri İzni Gerekli',
-        message:
-            'Fotoğraf seçmek için galeri erişimi gereklidir. Lütfen uygulama ayarlarından izni etkinleştirin.',
-      );
-    }
-    return false;
+    return true;
   }
 
   static Future<void> _showSettingsDialog(

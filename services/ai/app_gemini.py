@@ -1,6 +1,7 @@
 # =========================
 # app_gemini.py — Gemini API ile /predict (app.py degismez)
 # Opsiyonel: GEMINI_DR_HEATMAP + services/ai/models/model.pth veya model.pt ile yerel Grad-CAM++ (dr_gradcam_heatmap.py)
+# OCT/FFA: Gemini attention_regions (0-1 koordinat) -> gemini_attention_heatmap.py (GEMINI_ATTENTION_HEATMAP, varsayilan acik)
 # Calistirma: pip install google-genai  sonra  python app_gemini.py
 # Ortam: .env, .env.example (yalnizca eksik anahtarlari tamamlar), .env.local (override)
 # Gercek anahtarlari tercihen .env.local'e koyun; .env.example repoda placeholder kalmali.
@@ -623,6 +624,51 @@ def _heatmap_enabled() -> bool:
     return dr_heatmap_enabled()
 
 
+def _extract_attention_regions_from_model_json(data: object) -> list[dict]:
+    from gemini_attention_heatmap import parse_attention_regions
+
+    if not isinstance(data, dict):
+        return []
+    raw = _dict_get(
+        data,
+        "attention_regions",
+        "dikkat_bolgeleri",
+        "attentionRegions",
+        "localization_regions",
+    )
+    return parse_attention_regions(raw)
+
+
+def _attach_gemini_attention_heatmap(
+    result: dict,
+    image: Image.Image,
+    regions: list[dict],
+) -> None:
+    from gemini_attention_heatmap import (
+        gemini_attention_heatmap_enabled,
+        try_gemini_attention_heatmap_data_uri,
+    )
+
+    if not regions:
+        return
+    result["attentionRegions"] = regions
+    inference = result.get("inference")
+    if not isinstance(inference, dict):
+        inference = {}
+        result["inference"] = inference
+    inference["attentionRegionCount"] = len(regions)
+    if not gemini_attention_heatmap_enabled():
+        inference["heatmapMethod"] = "gemini_attention_coords_disabled"
+        return
+    try:
+        uri = try_gemini_attention_heatmap_data_uri(image, regions)
+    except Exception:
+        uri = None
+    if uri:
+        result["heatmapPlus"] = uri
+        inference["heatmapMethod"] = "gemini_attention_gaussian"
+
+
 def _predict_with_gemini_core(image: Image.Image, client: genai.Client) -> dict:
     img_send = _resize_pil_for_gemini(image)
     image_hash = _image_sha256_for_cache(img_send)
@@ -962,6 +1008,13 @@ For EACH condition provide:
 - Additional imaging if needed
 - Monitoring vs referral urgency
 
+5. ATTENTION REGIONS (for clinical explainability heatmap — coordinates only, NOT a pixel mask):
+- List 3–8 regions on the image that most influenced your assessment.
+- Use normalized image coordinates: x and y are floats in [0, 1] where (0,0) is top-left and (1,1) is bottom-right of the visible OCT frame.
+- weight: 0.0–1.0 relative importance for your conclusion (higher = more decisive).
+- radius: optional normalized extent ~0.05–0.25 (fraction of image width/height).
+- label: short finding name tied to that region (e.g. "subretinal fluid", "EZ disruption").
+
 OUTPUT FORMAT (STRICT JSON only, no markdown fences):
 
 {
@@ -988,11 +1041,21 @@ OUTPUT FORMAT (STRICT JSON only, no markdown fences):
     "...",
     "..."
   ],
-  "confidence_score": 0
+  "confidence_score": 0,
+  "attention_regions": [
+    {
+      "label": "foveal cystoid spaces",
+      "x": 0.5,
+      "y": 0.45,
+      "weight": 0.85,
+      "radius": 0.1
+    }
+  ]
 }
 
 Include all six conditions (DME, AMD, Macular Hole, ERM/VMT, CSR, RVO) in "conditions" with the exact name format you judge best, but each must have the four fields above.
 confidence_score is integer 0-100; if confidence_score < 75 use cautious/uncertain wording.
+attention_regions must contain at least 3 items when image quality is not Poor; coordinates must match visible pathology areas.
 """
 
 
@@ -1099,6 +1162,8 @@ def _normalize_oct_assessment(data: object) -> dict:
         if uncertainty_prefix not in summary:
             summary = f"{uncertainty_prefix} {summary}".strip()[:12_000]
 
+    attention_regions = _extract_attention_regions_from_model_json(d)
+
     return {
         "imageQuality": img_q,
         "findings": findings,
@@ -1106,6 +1171,7 @@ def _normalize_oct_assessment(data: object) -> dict:
         "clinicalSummary": summary,
         "recommendations": recs,
         "confidenceScore": confidence_score,
+        "attentionRegions": attention_regions,
     }
 
 
@@ -1139,6 +1205,9 @@ def _predict_oct_with_gemini_core(
     if not data:
         raise ValueError("Gemini OCT ciktisi bos veya gecersiz JSON.")
     normalized = _normalize_oct_assessment(data)
+    regions = normalized.get("attentionRegions") or _extract_attention_regions_from_model_json(
+        data
+    )
     result = {
         "success": True,
         "oct": normalized,
@@ -1148,6 +1217,7 @@ def _predict_oct_with_gemini_core(
             "locale": locale_norm,
         },
     }
+    _attach_gemini_attention_heatmap(result, image, regions)
     _analysis_cache_set(cache_key, result)
     return result
 
@@ -1494,7 +1564,8 @@ def predict_oct():
 FFA_OUTPUT_LANG_INSTRUCTION_TR = (
     "CIKTI: Asagidaki ZORUNLU JSON semasina harfiyen uy. Anahtar adlari Turkce kalsin. "
     "olasilik alanlarinda yalnizca: Dusuk | Orta | Yüksek. "
-    "aktivite_degerlendirmesi icinde: Var / Yok / Belirsiz ve neovaskularizasyon ile sizinti icin Var / Yok / Şüpheli."
+    "aktivite_degerlendirmesi icinde: Var / Yok / Belirsiz ve neovaskularizasyon ile sizinti icin Var / Yok / Şüpheli. "
+    "dikkat_bolgeleri: en az 3 oge; x,y,agirlik,yaricap sayisal; etiket Turkce kisa bulgu."
 )
 
 FFA_OUTPUT_LANG_INSTRUCTION_EN = (
@@ -1563,6 +1634,13 @@ Her hastalık için:
 - Ek tetkikler (OCT, tekrar FFA vb.)
 - Tedavi gerekliliği (genel ifade)
 
+5b. DİKKAT BÖLGELERİ (ısı haritası için — yalnızca koordinat, piksel maskesi DEĞİL):
+- Kararını en çok etkileyen 3–8 bölgeyi listele.
+- x, y: görüntü üzerinde normalize [0,1] (sol üst 0,0; sağ alt 1,1).
+- agirlik: 0–1 göreli önem.
+- yaricap: opsiyonel normalize genişlik ~0.05–0.25.
+- etiket: kısa bulgu adı (ör. "maküler sızıntı", "non-perfüzyon").
+
 6. Diyabetik Retinopati (DR) için FFA üzerinden ICDR ile uyumlu TAHMİNİ evre belirt (tek FFA ve faz belirsizliği nedeniyle güveni genelde düşük tut).
 Evre için şu etiketlerden birini kullan: Yok veya minimal bulgu | Hafif (Mild NPDR) | Orta (Moderate NPDR) | Şiddetli NPDR | Proliferatif DR | Belirsiz.
 Bu bilgiyi kökteki `diyabetik_retinopati_ffa` nesnesinde ver (DR ile ilgili görüş yoksa yine de Belirsiz/Yok diyebilirsin).
@@ -1611,10 +1689,20 @@ Neovaskülarizasyon değerlendirmesinde NVD/NVE ayrı belirtilmeli; bu bilgi ted
   "oneriler": [
     "..."
   ],
-  "guven_skoru": 0
+  "guven_skoru": 0,
+  "dikkat_bolgeleri": [
+    {
+      "etiket": "perifoveal sızıntı",
+      "x": 0.52,
+      "y": 0.48,
+      "agirlik": 0.9,
+      "yaricap": 0.12
+    }
+  ]
 }
 
 Bes hastalik satiri (DR, RVO, AMD/CNV, CSR, Uveit/vaskulit) "hastaliklar" listesinde olmali. guven_skoru 0-100 tamsayi.
+Goruntu kalitesi Kotu degilse dikkat_bolgeleri en az 3 oge icermeli; koordinatlar gercek patoloji alanlariyla uyumlu olmali.
 """
 
 FFA_BASE_PROMPT_EN = """
@@ -1642,6 +1730,11 @@ TASKS:
 3) Activity: active disease? neovascularization? active leakage?
 4) 3-5 sentence clinical summary for a physician.
 5) Recommendations: follow-up, additional tests (OCT, repeat FFA, etc.), and general need for treatment discussion.
+
+5b) ATTENTION REGIONS (for explainability heatmap — coordinates only, NOT a pixel mask):
+- List 3–8 regions that most influenced your assessment.
+- x, y: normalized [0,1] (top-left 0,0; bottom-right 1,1).
+- weight: 0–1 relative importance; radius: optional ~0.05–0.25; label: short finding name.
 
 6) For diabetic retinopathy, give an ICDR-aligned ESTIMATED stage based on FFA alone (usually lower confidence). Use one label:
 None or minimal | Mild NPDR | Moderate NPDR | Severe NPDR | Proliferative DR | Uncertain.
@@ -1687,10 +1780,20 @@ Output ONLY valid JSON (no markdown) using exactly these English keys and shapes
   },
   "clinical_summary": "...",
   "recommendations": ["..."],
-  "confidence_score": 0
+  "confidence_score": 0,
+  "attention_regions": [
+    {
+      "label": "macular leakage",
+      "x": 0.52,
+      "y": 0.48,
+      "weight": 0.9,
+      "radius": 0.12
+    }
+  ]
 }
 
 Include all five conditions (DR, RVO, AMD/CNV, CSR, uveitis/vasculitis) in "diseases". confidence_score is an integer 0-100.
+If image quality is not Poor, include at least 3 attention_regions aligned with visible pathology.
 """
 
 
@@ -2041,6 +2144,8 @@ def _normalize_ffa_assessment(data: object, source_locale: str) -> dict:
                         f"staging: {stage_now}."
                     )
 
+    attention_regions = _extract_attention_regions_from_model_json(d)
+
     out = {
         "imageQuality": img_q,
         "phaseAssessment": phase,
@@ -2054,6 +2159,7 @@ def _normalize_ffa_assessment(data: object, source_locale: str) -> dict:
         "clinicalSummary": summary[:12_000],
         "recommendations": recs,
         "confidenceScore": conf,
+        "attentionRegions": attention_regions,
     }
     if diabetic_ffa:
         out["diabeticRetinopathyFfa"] = diabetic_ffa
@@ -2142,6 +2248,9 @@ def _predict_ffa_with_gemini_core(
     if not data:
         raise ValueError("Gemini FFA ciktisi bos veya gecersiz JSON.")
     normalized = _normalize_ffa_assessment(data, out_loc)
+    regions = normalized.get("attentionRegions") or _extract_attention_regions_from_model_json(
+        data
+    )
     result = {
         "success": True,
         "ffa": normalized,
@@ -2151,6 +2260,7 @@ def _predict_ffa_with_gemini_core(
             "locale": "tr" if out_loc == "tr" else "en",
         },
     }
+    _attach_gemini_attention_heatmap(result, image, regions)
     _analysis_cache_set(cache_key, result)
     return result
 

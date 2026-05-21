@@ -51,7 +51,7 @@ android {
     defaultConfig {
         applicationId = "com.retinaai.klinik"
         minSdk = 24
-        targetSdk = 34
+        targetSdk = 35
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
