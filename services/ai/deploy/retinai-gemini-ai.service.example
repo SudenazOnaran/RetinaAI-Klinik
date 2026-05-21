@@ -1,0 +1,24 @@
+# VPS: /etc/systemd/system/retinai-gemini-ai.service
+# Yolları sunucudaki gerçek dizinle değiştirin, sonra:
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now retinai-gemini-ai
+#   curl -s http://127.0.0.1:5001/health
+
+[Unit]
+Description=Retina AI Gemini Flask (app_gemini.py)
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/apps/retina_ai/services/ai
+EnvironmentFile=-/opt/apps/retina_ai/services/ai/.env.local
+ExecStart=/opt/apps/retina_ai/services/ai/.venv/bin/python app_gemini.py
+Restart=on-failure
+RestartSec=8
+# OCT/FFA Gemini cevabi uzun sürebilir
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

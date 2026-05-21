@@ -1254,6 +1254,23 @@ def _predict_oct_with_gemini(image: Image.Image, locale_tag: str) -> dict:
     )
 
 
+@app.route("/health", methods=["GET"])
+def health():
+    """systemd/nginx icin; gateway anahtari gerekmez."""
+    return jsonify(
+        {
+            "ok": True,
+            "service": "app_gemini",
+            "model": GEMINI_MODEL,
+            "geminiKeysConfigured": len(_gemini_api_key_list()),
+            "localMultitask": bool(
+                USE_LOCAL_MULTITASK_FIRST and _local_multitask_weights_path()
+            ),
+            "densenetFallback": _densenet_fallback_available(),
+        }
+    )
+
+
 @app.route("/predict", methods=["POST"])
 def predict():
     request_id = resolve_request_id(request.headers)

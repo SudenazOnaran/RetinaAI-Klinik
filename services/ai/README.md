@@ -24,3 +24,48 @@ Bu klasor Retina AI Flask servisinin calistigi alandir.
 
 - Model agirliklari `models/` altinda: `model.pth` veya `model.pt` (veya `DR_DENSENET_WEIGHTS` ile tam yol).
 - `models/` Git’e dahil degildir; canlida sunucuya ayri kopyalayin.
+
+## VPS (retina-ai.tech) — “AI servisine erişilemiyor”
+
+Web (Next.js, port 3000) analizi **aynı makinedeki** `app_gemini.py` (port **5001**) üzerinden çağırır. Nginx dış dünyaya 3000’i açar; 5001 yalnızca localhost’tur.
+
+### 1) Sunucuda kontrol (SSH)
+
+```bash
+curl -s http://127.0.0.1:5001/health
+ss -tlnp | grep 5001
+```
+
+`connection refused` → Gemini servisi çalışmıyor.
+
+### 2) Web `.env` (production)
+
+`apps/web/.env` veya process env:
+
+```env
+AI_SERVICE_URL=http://127.0.0.1:5001/predict
+AI_GATEWAY_SHARED_SECRET=<web ile aynı gizli değer>
+AI_REQUEST_TIMEOUT_MS=120000
+```
+
+`AI_SERVICE_URL` **5000** (`app.py`) ise FFA/OCT **404** veya erişim hatası alırsınız; OCT/FFA için **5001 + app_gemini** şart.
+
+### 3) AI `.env.local` (`services/ai/.env.local`)
+
+```env
+GEMINI_API_KEY=...
+AI_GATEWAY_SHARED_SECRET=<web ile birebir aynı>
+AI_GEMINI_PORT=5001
+```
+
+### 4) Sürekli çalıştırma
+
+Örnek unit: `deploy/retinai-gemini-ai.service.example` → `/etc/systemd/system/retinai-gemini-ai.service`
+
+```bash
+sudo systemctl enable --now retinai-gemini-ai
+sudo systemctl status retinai-gemini-ai
+journalctl -u retinai-gemini-ai -n 50 --no-pager
+```
+
+Deploy sonrası kodu güncellediyseniz: `sudo systemctl restart retinai-gemini-ai` ve `systemctl restart` (Next.js servisiniz).
