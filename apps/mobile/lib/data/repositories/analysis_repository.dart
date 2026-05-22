@@ -14,33 +14,11 @@ class AnalysisRepository {
   final _api = ApiClient.instance;
   final _dao = AnalysisDao.instance;
 
-  /// Sunucu yanıtı modalite alanlarını düşürebilir; yerel OCT/FFA/fundus bilgisini korur.
   static AnalysisApiModel mergeModalityFromLocal(
     AnalysisApiModel server,
     AnalysisApiModel local,
-  ) {
-    String? pickKind(String? fromServer, String? fromLocal) {
-      bool valid(String? k) =>
-          k == 'oct' || k == 'ffa' || k == 'fundus';
-      if (valid(fromServer)) return fromServer;
-      if (valid(fromLocal)) return fromLocal;
-      return fromServer ?? fromLocal;
-    }
-
-    return server.copyWith(
-      reportKind: pickKind(server.reportKind, local.reportKind),
-      aiInferenceJson: server.aiInferenceJson ?? local.aiInferenceJson,
-      octImageUrl: server.octImageUrl ?? local.octImageUrl,
-      ffaImageUrl: server.ffaImageUrl ?? local.ffaImageUrl,
-      originalImage: server.originalImage ?? local.originalImage,
-      heatmapUrl: server.heatmapUrl ?? local.heatmapUrl,
-      octDrFeedback: server.octDrFeedback ?? local.octDrFeedback,
-      ffaDrFeedback: server.ffaDrFeedback ?? local.ffaDrFeedback,
-      drFeedback: server.drFeedback ?? local.drFeedback,
-      doctorStructuredReview:
-          server.doctorStructuredReview ?? local.doctorStructuredReview,
-    );
-  }
+  ) =>
+      AnalysisApiModel.mergePreservingImagingModality(server, local);
 
   /// Bir hastanın analizlerini döner.
   Future<List<AnalysisApiModel>> getByPatientId(String patientId) async {

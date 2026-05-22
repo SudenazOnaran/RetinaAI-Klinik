@@ -32,68 +32,22 @@ Map<String, dynamic>? _parseAiInferenceMap(String? raw) {
 }
 
 /// `report_kind` = `radiological_ai` (web) veya boş olabilir; gerçek modalite JSON / URL ile çözülür.
-String? effectiveReportKindFromAnalysis(AnalysisApiModel a) {
-  final rk = a.reportKind?.trim().toLowerCase();
-  if (rk == 'oct' || rk == 'ffa' || rk == 'fundus') return rk;
+String? effectiveReportKindFromAnalysis(AnalysisApiModel a) =>
+    AnalysisApiModel.resolveImagingModality(a);
 
-  final root = _parseAiInferenceMap(a.aiInferenceJson);
-
-  if (root != null) {
-    final modality = root['modality']?.toString().trim().toLowerCase();
-    if (modality == 'oct' || modality == 'ffa' || modality == 'fundus') {
-      return modality;
-    }
-
-    final octVal = root['oct'];
-    final ffaVal = root['ffa'];
-    if (ffaVal is Map) return 'ffa';
-    if (octVal is Map) return 'oct';
-
-    if (root.containsKey('pytorch') ||
-        root.containsKey('drGrade') ||
-        root.containsKey('dr_grade') ||
-        root.containsKey('drLabel') ||
-        root.containsKey('dr_label') ||
-        root.containsKey('clinicalReasoning') ||
-        root.containsKey('clinical_reasoning') ||
-        root.containsKey('fundusFindings') ||
-        root.containsKey('fundus_findings')) {
-      return 'fundus';
-    }
-  }
-
-  final fromUrls = _inferSingleModalityFromImageUrls(a);
-  if (fromUrls != null) return fromUrls;
-
-  return null;
-}
-
-bool _nonEmptyUrl(String? u) => u != null && u.trim().isNotEmpty;
-
-/// Yalnızca tek modalite URL’si varsa döndürür (çok modlu kayıtta null).
-String? _inferSingleModalityFromImageUrls(AnalysisApiModel a) {
-  final hasFfa = _nonEmptyUrl(a.ffaImageUrl);
-  final hasOct = _nonEmptyUrl(a.octImageUrl);
-  final hasFundus = _nonEmptyUrl(a.originalImage) || _nonEmptyUrl(a.heatmapUrl);
-  final n = (hasFfa ? 1 : 0) + (hasOct ? 1 : 0) + (hasFundus ? 1 : 0);
-  if (n != 1) return null;
-  if (hasFfa) return 'ffa';
-  if (hasOct) return 'oct';
-  if (hasFundus) return 'fundus';
-  return null;
-}
+String? _inferSingleModalityFromImageUrls(AnalysisApiModel a) =>
+    AnalysisApiModel.inferImagingModalityFromUrls(a);
 
 /// Geri bildirim formu yalnızca fundus | oct | ffa kabul eder (`radiological_ai` yok).
 String resolvedFeedbackModalityForAnalysis(AnalysisApiModel a) {
-  final inferred = effectiveReportKindFromAnalysis(a) ??
-      _inferSingleModalityFromImageUrls(a);
-  if (inferred == 'oct' || inferred == 'ffa' || inferred == 'fundus') {
-    return inferred!;
-  }
-  final rk = a.reportKind?.trim().toLowerCase();
-  if (rk == 'oct' || rk == 'ffa' || rk == 'fundus') return rk!;
-  return 'fundus';
+  return effectiveReportKindFromAnalysis(a) ??
+      _inferSingleModalityFromImageUrls(a) ??
+      'fundus';
 }
+
+bool analysisMatchesCardKind(AnalysisApiModel a, String cardLabel) =>
+    AnalysisApiModel.resolveImagingModality(a) ==
+    cardLabel.trim().toLowerCase();
 
 String radiologyModalityDisplayTitle(String? kind) {
   switch (kind?.toLowerCase()) {
@@ -245,10 +199,23 @@ double _confidenceFromAiBody(String modality, Map<String, dynamic> body) {
   return ((pytorch?['confidence'] as num?) ?? 0).toDouble().clamp(0.0, 1.0);
 }
 
-List<Widget> _clinicalWidgetsFromInferenceMap(Map<String, dynamic>? map) {
+List<Widget> _clinicalWidgetsFromInferenceMap(
+  Map<String, dynamic>? map, {
+  String? forceModality,
+}) {
   if (map == null || map.isEmpty) return [];
-  final modality =
-      (map['modality'] ?? 'fundus').toString().toLowerCase();
+  var modality = (forceModality ?? map['modality']?.toString() ?? '')
+      .trim()
+      .toLowerCase();
+  if (modality.isEmpty) {
+    if (map['ffa'] is Map) {
+      modality = 'ffa';
+    } else if (map['oct'] is Map) {
+      modality = 'oct';
+    } else {
+      modality = 'fundus';
+    }
+  }
   final out = <Widget>[];
 
   void addHeading(String t) {
@@ -547,9 +514,7 @@ class _PatientDetailScreenState extends State<PatientDetailScreen>
   AnalysisApiModel? _latestAnalysisForKind(String kind) {
     final k = kind.toLowerCase();
     for (final a in _analyses) {
-      final ek =
-          effectiveReportKindFromAnalysis(a) ?? (a.reportKind ?? '').toLowerCase();
-      if (ek == k) return a;
+      if (AnalysisApiModel.resolveImagingModality(a) == k) return a;
     }
     return null;
   }
@@ -1911,12 +1876,11 @@ class _RadiologyDetailSheetState extends State<_RadiologyDetailSheet> {
     pw.MemoryImage? originalImg;
     pw.MemoryImage? heatmapImg;
     try {
-      if (_analysis.originalImage != null &&
-          _analysis.originalImage!.isNotEmpty &&
-          File(_analysis.originalImage!).existsSync()) {
-        originalImg = pw.MemoryImage(
-          await File(_analysis.originalImage!).readAsBytes(),
-        );
+      final imgPath = AnalysisApiModel.primaryImagePath(_analysis);
+      if (imgPath != null &&
+          imgPath.isNotEmpty &&
+          File(imgPath).existsSync()) {
+        originalImg = pw.MemoryImage(await File(imgPath).readAsBytes());
       }
     } catch (_) {}
     try {
@@ -2361,16 +2325,22 @@ class _InlineAnalysisCardState extends State<_InlineAnalysisCard> {
     }
   }
 
-  AnalysisApiModel? get _activeFeedbackTarget =>
-      _persistedRecord ??
-      (_pickedImage == null && _result == null
-          ? widget.lastSavedAnalysis
-          : null);
+  AnalysisApiModel? get _activeFeedbackTarget {
+    if (_persistedRecord != null) return _persistedRecord;
+    if (_pickedImage != null || _result != null) return null;
+    final last = widget.lastSavedAnalysis;
+    if (last == null) return null;
+    if (analysisMatchesCardKind(last, widget.label)) return last;
+    return null;
+  }
 
-  bool get _showRestoredSummary =>
-      widget.lastSavedAnalysis != null &&
-      _pickedImage == null &&
-      _result == null;
+  bool get _showRestoredSummary {
+    final last = widget.lastSavedAnalysis;
+    if (last == null || _pickedImage != null || _result != null) {
+      return false;
+    }
+    return analysisMatchesCardKind(last, widget.label);
+  }
 
   String? get _displayLabel {
     if (_result != null) return _labelFromAiBody(widget.label, _result!);
@@ -2392,8 +2362,10 @@ class _InlineAnalysisCardState extends State<_InlineAnalysisCard> {
     return null;
   }
 
-  List<Widget> get _inferenceUiBlocks =>
-      _clinicalWidgetsFromInferenceMap(_inferencePreviewMap);
+  List<Widget> get _inferenceUiBlocks => _clinicalWidgetsFromInferenceMap(
+        _inferencePreviewMap,
+        forceModality: widget.label.toLowerCase(),
+      );
 
   String? get _heatmapBase64 => _result?['heatmapPlus'] as String?;
 
@@ -2476,9 +2448,9 @@ class _InlineAnalysisCardState extends State<_InlineAnalysisCard> {
           patientId: widget.patientId,
           aiResult: label ?? 'unknown',
           confidence: conf,
-          heatmapUrl: modality == 'fundus'
-              ? (savedHeatmapPath ?? (body['heatmapUrl'] as String?))
-              : savedHeatmapPath,
+          heatmapUrl: savedHeatmapPath ?? (modality == 'fundus'
+              ? (body['heatmapUrl'] as String?)
+              : null),
           originalImage: modality == 'fundus' ? savedOriginalPath : null,
           octImageUrl: modality == 'oct' ? savedOriginalPath : null,
           ffaImageUrl: modality == 'ffa' ? savedOriginalPath : null,
@@ -2591,13 +2563,6 @@ class _InlineAnalysisCardState extends State<_InlineAnalysisCard> {
       return widget.lastSavedAnalysis?.aiResult ?? '—';
     }
     return _activeFeedbackTarget?.aiResult ?? '—';
-  }
-
-  String _feedbackReportKind() {
-    final t = _activeFeedbackTarget;
-    if (t == null) return widget.label.toLowerCase();
-    return (effectiveReportKindFromAnalysis(t) ?? widget.label)
-        .toLowerCase();
   }
 
   void _transfer() {
@@ -2752,7 +2717,7 @@ class _InlineAnalysisCardState extends State<_InlineAnalysisCard> {
         if (_activeFeedbackTarget != null)
           StructuredDoctorFeedbackForm(
             initialRecord: _activeFeedbackTarget!,
-            reportKind: _feedbackReportKind(),
+            reportKind: widget.label.toLowerCase(),
             aiSummaryLabel: _approvalLabelForFeedback(),
             liveResponseBody: _result,
             onSaved: (updated) {

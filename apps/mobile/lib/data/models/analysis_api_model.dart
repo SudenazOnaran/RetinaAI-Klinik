@@ -87,6 +87,112 @@ class AnalysisApiModel {
     this.sectionDoctorNotes,
   });
 
+  static bool _hasUrl(String? u) => u != null && u.trim().isNotEmpty;
+
+  static Map<String, dynamic>? _parseInferenceRoot(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) return decoded;
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+    } catch (_) {}
+    return null;
+  }
+
+  /// Fundus / OCT / FFA — görüntü URL'leri ve AI snapshot'tan modalite.
+  static String? resolveImagingModality(AnalysisApiModel a) {
+    final rk = a.reportKind?.trim().toLowerCase();
+    if (rk == 'oct' || rk == 'ffa' || rk == 'fundus') return rk;
+
+    final fromUrls = inferImagingModalityFromUrls(a);
+    if (fromUrls != null) return fromUrls;
+
+    final root = _parseInferenceRoot(a.aiInferenceJson);
+    if (root != null) {
+      final modality = root['modality']?.toString().trim().toLowerCase();
+      if (modality == 'oct' || modality == 'ffa' || modality == 'fundus') {
+        return modality;
+      }
+      if (root['ffa'] is Map) return 'ffa';
+      if (root['oct'] is Map) return 'oct';
+      if (root.containsKey('pytorch') ||
+          root.containsKey('drGrade') ||
+          root.containsKey('dr_grade') ||
+          root.containsKey('fundusFindings') ||
+          root.containsKey('fundus_findings')) {
+        return 'fundus';
+      }
+    }
+
+    return null;
+  }
+
+  /// Radyolojik rapor PDF / önizleme için birincil görüntü yolu.
+  static String? primaryImagePath(AnalysisApiModel a) {
+    final k = resolveImagingModality(a);
+    if (k == 'ffa') return a.ffaImageUrl ?? a.originalImage;
+    if (k == 'oct') return a.octImageUrl ?? a.originalImage;
+    return a.originalImage ?? a.ffaImageUrl ?? a.octImageUrl;
+  }
+
+  /// `ffaImageUrl` / `octImageUrl` öncelikli; heatmap tek başına fundus sayılmaz.
+  static String? inferImagingModalityFromUrls(AnalysisApiModel a) {
+    final hasFfa = _hasUrl(a.ffaImageUrl);
+    final hasOct = _hasUrl(a.octImageUrl);
+    final hasOrig = _hasUrl(a.originalImage);
+    if (hasFfa && !hasOct) return 'ffa';
+    if (hasOct && !hasFfa) return 'oct';
+    if (hasOrig) return 'fundus';
+    if (_hasUrl(a.heatmapUrl) && !hasFfa && !hasOct) return 'fundus';
+    return null;
+  }
+
+  /// Sunucu `radiological_ai` + `originalImage` döndürse bile yerel OCT/FFA korunur.
+  static AnalysisApiModel mergePreservingImagingModality(
+    AnalysisApiModel server,
+    AnalysisApiModel local,
+  ) {
+    String? pickKind(String? fromServer, String? fromLocal) {
+      bool valid(String? k) =>
+          k == 'oct' || k == 'ffa' || k == 'fundus';
+      if (valid(fromServer)) return fromServer;
+      if (valid(fromLocal)) return fromLocal;
+      return null;
+    }
+
+    final inference =
+        server.aiInferenceJson ?? local.aiInferenceJson;
+    final resolvedKind = pickKind(server.reportKind, local.reportKind) ??
+        resolveImagingModality(local.copyWith(aiInferenceJson: inference)) ??
+        resolveImagingModality(server.copyWith(aiInferenceJson: inference));
+
+    var ffaUrl = server.ffaImageUrl ?? local.ffaImageUrl;
+    var octUrl = server.octImageUrl ?? local.octImageUrl;
+    var origUrl = server.originalImage ?? local.originalImage;
+
+    if (resolvedKind == 'ffa') {
+      ffaUrl ??= origUrl;
+      origUrl = null;
+    } else if (resolvedKind == 'oct') {
+      octUrl ??= origUrl;
+      origUrl = null;
+    }
+
+    return server.copyWith(
+      reportKind: resolvedKind ?? local.reportKind ?? server.reportKind,
+      aiInferenceJson: inference,
+      ffaImageUrl: ffaUrl,
+      octImageUrl: octUrl,
+      originalImage: origUrl,
+      heatmapUrl: server.heatmapUrl ?? local.heatmapUrl,
+      octDrFeedback: server.octDrFeedback ?? local.octDrFeedback,
+      ffaDrFeedback: server.ffaDrFeedback ?? local.ffaDrFeedback,
+      drFeedback: server.drFeedback ?? local.drFeedback,
+      doctorStructuredReview:
+          server.doctorStructuredReview ?? local.doctorStructuredReview,
+    );
+  }
+
   static String? _modalityFromJson(Map<String, dynamic> json) {
     final raw = json['reportKind'] ?? json['report_kind'];
     if (raw is! String) return null;
