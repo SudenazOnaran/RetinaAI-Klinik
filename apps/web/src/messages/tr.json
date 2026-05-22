@@ -39,6 +39,7 @@
       "panel": "Panel",
       "patients": "Hasta Kayıtları",
       "reports": "Hasta Raporları",
+      "anteriorSegment": "Ön Segment Görüntü Analizi",
       "calendar": "Takvim",
       "monitoring": "İzleme ve Alarm",
       "settings": "Ayarlar",
@@ -478,11 +479,36 @@
     "drStagingConfidence": "Güven düzeyi",
     "drStagingRationale": "Kısa gerekçe"
   },
+  "anteriorSegmentAnalysis": {
+    "title": "AI ön segment görüntü analizi",
+    "description": "Ön segment (slit-lamp / anterior segment) fotoğrafı yükleyin; 19 hastalık için yapılandırılmış tarama değerlendirmesi alın. Kesin tanı değildir.",
+    "disclaimer": "Bu çıktı yalnızca klinik destek / triyaj amaçlıdır; nihai tanı hekim değerlendirmesi ile konur.",
+    "selectImage": "Ön segment görüntüsü seçin",
+    "clearImage": "Görüntüyü kaldır",
+    "previewAlt": "Ön segment önizleme",
+    "analyze": "Ön segmenti analiz et",
+    "analyzing": "Analiz ediliyor…",
+    "imageQuality": "Görüntü kalitesi",
+    "qualityScore": "Kalite skoru (0–100)",
+    "detectedFindings": "Tespit edilen bulgular",
+    "diseaseAssessment": "Hastalık değerlendirmesi",
+    "supporting": "Destekleyen bulgular",
+    "evaluatedStructures": "Değerlendirilen yapılar",
+    "overallSummary": "Genel özet",
+    "urgentReferralTitle": "Acil yönlendirme önerilir",
+    "statusPresent": "Mevcut",
+    "statusPossiblyPresent": "Muhtemelen mevcut",
+    "statusNotDetected": "Tespit edilmedi",
+    "statusLimitedAssessment": "Sınırlı değerlendirme",
+    "analysisFail": "Ön segment analizi tamamlanamadı.",
+    "parseFail": "Sunucu yanıtı işlenemedi."
+  },
   "aiAnalysisPanel": {
     "fundusShort": "Fundus",
     "fundusHint": "Düzeltme ve «Rapora ekle» fundus kartının altındadır.",
     "octShort": "OCT",
     "ffaShort": "FFA",
+    "anteriorSegmentShort": "Ön Segment",
     "likelihood": "Olasılık",
     "octBlockHeader": "Maküler OCT (AI metin özeti)",
     "ffaBlockHeader": "FFA (AI metin özeti)",
@@ -509,7 +535,9 @@
     "ffaAiSummaryTitle": "AI sonuç özeti",
     "ffaClinicalDetailTitle": "Klinik detay (faaz, bulgular, teşhisler)",
     "modalityPanelToggle": "Paneli aç / kapa",
-    "modalityPickOctDisagreeStatic": "Hayırsanız klinik görüşünüzü aşağıdaki OÇT öncelikli tanılardan (veya sağlıklı makula) ile kaydedin:"
+    "modalityPickOctDisagreeStatic": "Hayırsanız klinik görüşünüzü aşağıdaki OÇT öncelikli tanılardan (veya sağlıklı makula) ile kaydedin:",
+    "modalityPickAnteriorSegmentDisagree": "Hayırsanız, aşağıdaki ön segment hastalık listesinden klinik görüşünüzü seçin:",
+    "modalityNoAiListForPickAnteriorSegment": "Bu analizde hastalık listesi yok; yalnızca «Evet» ile AI özetini onaylayabilirsiniz."
   },
   "modalityDisagree": {
     "oct": {
@@ -526,6 +554,28 @@
       "ffa_amd_cnv": "AMD (koroidal neovaskülarizasyon - CNV)",
       "ffa_csr": "Santral seröz koryoretinopati (CSR)",
       "ffa_uveitis": "Üveit / retinal vaskülit"
+    },
+    "anteriorSegment": {
+      "as_healthy": "Sağlıklı / belirgin patoloji yok",
+      "as_conjunctivitis": "Konjonktivit",
+      "as_blepharitis": "Blefarit",
+      "as_hordeolum": "Hordeolum (arpacık)",
+      "as_chalazion": "Şalazyon",
+      "as_pterygium": "Pterjiyum",
+      "as_subconjunctival_hemorrhage": "Subkonjonktival kanama",
+      "as_keratitis": "Keratit",
+      "as_corneal_ulcer": "Kornea ülseri",
+      "as_keratoconus": "Keratokonus",
+      "as_dry_eye": "Kuru göz sendromu",
+      "as_allergic_conjunctivitis": "Alerjik konjonktivit",
+      "as_anterior_uveitis": "Ön üveit",
+      "as_cataract": "Katarakt",
+      "as_entropion": "Entropiyon",
+      "as_ectropion": "Ektropiyon",
+      "as_pinguecula": "Pingvekula",
+      "as_corneal_scar": "Kornea skarı",
+      "as_anisocoria": "Anizokori",
+      "as_ptosis": "Ptozis"
     },
     "ffaDrStageTitle": "DR evresi (ICDR: sağlıklı → hafif → orta → şiddetli → proliferatif)",
     "ffaDrStageHint": "FFA tek başına tam evre için yetersiz olabilir; kayıt için fundus ile uyumlu bir ICDR evresi seçin (listedeki Türkçe/İngilizce etiketler aynı evreleri temsil eder)."
@@ -711,6 +761,11 @@
   "calendarPage": {
     "eyebrow": "Klinik Takvim",
     "title": "Aylık Görev Planı"
+  },
+  "anteriorSegmentPage": {
+    "eyebrow": "Görüntüleme Teknikleri",
+    "title": "Ön Segment Görüntü Analizi",
+    "description": "Slit-lamp veya anterior segment fotoğrafı yükleyin; Gemini destekli yapılandırılmış tarama değerlendirmesi alın."
   },
   "analysisPage": {
     "title": "Görsel Yükle ve Analiz",

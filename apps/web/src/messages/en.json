@@ -39,6 +39,7 @@
       "panel": "Panel",
       "patients": "Patient Records",
       "reports": "Patient Reports",
+      "anteriorSegment": "Anterior Segment Image Analysis",
       "calendar": "Calendar",
       "monitoring": "Monitoring and Alerts",
       "settings": "Settings",
@@ -478,6 +479,30 @@
     "drStagingConfidence": "Confidence tier",
     "drStagingRationale": "Brief rationale"
   },
+  "anteriorSegmentAnalysis": {
+    "title": "AI anterior segment image analysis",
+    "description": "Upload an anterior segment (slit-lamp) photo; receive structured screening assessment for 19 conditions. Not a definitive diagnosis.",
+    "disclaimer": "For clinical decision support / triage only; final diagnosis is made by the treating physician.",
+    "selectImage": "Select anterior segment image",
+    "clearImage": "Remove image",
+    "previewAlt": "Anterior segment preview",
+    "analyze": "Analyze anterior segment",
+    "analyzing": "Analyzing…",
+    "imageQuality": "Image quality",
+    "qualityScore": "Quality score (0–100)",
+    "detectedFindings": "Detected findings",
+    "diseaseAssessment": "Disease assessment",
+    "supporting": "Supporting findings",
+    "evaluatedStructures": "Evaluated structures",
+    "overallSummary": "Overall summary",
+    "urgentReferralTitle": "Urgent referral recommended",
+    "statusPresent": "Present",
+    "statusPossiblyPresent": "Possibly present",
+    "statusNotDetected": "Not detected",
+    "statusLimitedAssessment": "Limited assessment",
+    "analysisFail": "Anterior segment analysis could not be completed.",
+    "parseFail": "Could not parse the server response."
+  },
   "aiAnalysisPanel": {
     "title": "AI analysis panel",
     "subtitle": "Fundus, OCT, and FFA: fundus and images are saved with the record.",
@@ -485,6 +510,7 @@
     "fundusHint": "Correction and “add to form” are at the bottom of the fundus card.",
     "octShort": "OCT",
     "ffaShort": "FFA",
+    "anteriorSegmentShort": "Anterior Segment",
     "likelihood": "Likelihood",
     "octBlockHeader": "Macular OCT (AI text summary)",
     "ffaBlockHeader": "FFA (AI text summary)",
@@ -511,7 +537,9 @@
     "ffaAiSummaryTitle": "AI result summary",
     "ffaClinicalDetailTitle": "Clinical detail (phase, findings, diagnoses)",
     "modalityPanelToggle": "Expand / collapse panel",
-    "modalityPickOctDisagreeStatic": "If not, record your view using the OCT-priority diagnoses below (or healthy macula):"
+    "modalityPickOctDisagreeStatic": "If not, record your view using the OCT-priority diagnoses below (or healthy macula):",
+    "modalityPickAnteriorSegmentDisagree": "If not, pick the anterior segment condition that best matches your clinical judgment:",
+    "modalityNoAiListForPickAnteriorSegment": "No disease list in this run; you can only confirm with «Yes»."
   },
   "modalityDisagree": {
     "oct": {
@@ -528,6 +556,28 @@
       "ffa_amd_cnv": "AMD (choroidal neovascularization - CNV)",
       "ffa_csr": "Central serous chorioretinopathy (CSR)",
       "ffa_uveitis": "Uveitis / retinal vasculitis"
+    },
+    "anteriorSegment": {
+      "as_healthy": "Healthy / no significant pathology",
+      "as_conjunctivitis": "Conjunctivitis",
+      "as_blepharitis": "Blepharitis",
+      "as_hordeolum": "Stye (hordeolum)",
+      "as_chalazion": "Chalazion",
+      "as_pterygium": "Pterygium",
+      "as_subconjunctival_hemorrhage": "Subconjunctival hemorrhage",
+      "as_keratitis": "Keratitis",
+      "as_corneal_ulcer": "Corneal ulcer",
+      "as_keratoconus": "Keratoconus",
+      "as_dry_eye": "Dry eye syndrome",
+      "as_allergic_conjunctivitis": "Allergic conjunctivitis",
+      "as_anterior_uveitis": "Anterior uveitis",
+      "as_cataract": "Cataract",
+      "as_entropion": "Entropion",
+      "as_ectropion": "Ectropion",
+      "as_pinguecula": "Pinguecula",
+      "as_corneal_scar": "Corneal scar",
+      "as_anisocoria": "Anisocoria",
+      "as_ptosis": "Ptosis"
     },
     "ffaDrStageTitle": "DR stage (ICDR: healthy → mild → moderate → severe → proliferative)",
     "ffaDrStageHint": "FFA alone may be insufficient for full staging; pick an ICDR stage aligned with your exam — labels below mirror healthy/mild/moderate/severe/proliferative."
@@ -713,6 +763,11 @@
   "calendarPage": {
     "eyebrow": "Clinic Calendar",
     "title": "Monthly Task Plan"
+  },
+  "anteriorSegmentPage": {
+    "eyebrow": "Imaging Modalities",
+    "title": "Anterior Segment Image Analysis",
+    "description": "Upload a slit-lamp or anterior segment photo for a Gemini-powered structured screening assessment."
   },
   "analysisPage": {
     "title": "Upload Image and Analyze",

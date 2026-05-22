@@ -214,6 +214,16 @@ CORS(
                 "x-request-id",
             ],
         },
+        r"/predict-anterior-segment": {
+            "origins": ALLOWED_CORS_ORIGINS,
+            "methods": ["POST", "OPTIONS"],
+            "allow_headers": [
+                "Content-Type",
+                "X-AI-Gateway-Key",
+                "X-Request-Id",
+                "x-request-id",
+            ],
+        },
     },
 )
 
@@ -450,7 +460,7 @@ def handle_unhandled_exception(err):
         stack=traceback.format_exc(),
         patient_id=patient_id,
         payload_summary=_safe_predict_payload_summary()
-        if request.path in ("/predict", "/predict-oct", "/predict-ffa")
+        if request.path in ("/predict", "/predict-oct", "/predict-ffa", "/predict-anterior-segment")
         else json.dumps({"path": request.path}, ensure_ascii=False),
     )
     return jsonify({
@@ -2477,6 +2487,455 @@ def predict_ffa():
         return jsonify({
             "success": False,
             "error": "FFA analizi sirasinda beklenmeyen bir hata olustu.",
+            "requestId": request_id,
+        }), 500
+
+
+# --- Anterior segment (on segment) goruntu analizi ---
+
+ANTERIOR_SEGMENT_OUTPUT_LANG_INSTRUCTION_TR = (
+    "CIKTI: Zorunlu JSON semasina harfiyen uy. "
+    "disease_assessment icindeki disease alanlarini Turkce kisa klinik adlarla yaz "
+    "(ornek: Konjonktivit, Blefarit, Hordeolum, Katarakt). "
+    "status alanlarinda yalnizca su degerlerden birini kullan: "
+    "Present | Possibly Present | Not Detected | Limited Assessment. "
+    "detected_findings, supporting_findings, evaluated_structures ve overall_summary Turkce olsun."
+)
+
+ANTERIOR_SEGMENT_OUTPUT_LANG_INSTRUCTION_EN = (
+    "OUTPUT: Strictly follow the required JSON schema. "
+    "Use English clinical disease names in disease_assessment.disease. "
+    "status must be exactly one of: "
+    "Present | Possibly Present | Not Detected | Limited Assessment."
+)
+
+ANTERIOR_SEGMENT_BASE_PROMPT = """
+You are an ophthalmology-focused AI assistant specialized in anterior segment eye image analysis.
+
+Analyze the provided anterior segment eye image carefully.
+Your task is NOT to give a definitive medical diagnosis.
+Your task is to perform a structured clinical screening assessment based ONLY on visible anterior segment findings.
+
+Diseases to evaluate:
+
+* Conjunctivitis
+* Blepharitis
+* Stye (Hordeolum)
+* Chalazion
+* Pterygium
+* Subconjunctival Hemorrhage
+* Keratitis
+* Corneal Ulcer
+* Keratoconus
+* Dry Eye Syndrome
+* Allergic Conjunctivitis
+* Anterior Uveitis
+* Cataract
+* Entropion
+* Ectropion
+* Pinguecula
+* Corneal Scar
+* Anisocoria
+* Ptosis
+
+For EACH disease:
+
+1. Determine:
+
+   * Present
+   * Possibly Present
+   * Not Detected
+2. Give a confidence score from 0-100
+3. Explain the visible findings that support the decision
+4. Mention which anatomical structures were evaluated:
+
+   * conjunctiva
+   * cornea
+   * sclera
+   * eyelid
+   * iris
+   * pupil
+   * tear film
+   * limbus
+
+IMPORTANT RULES:
+
+* Only use visual evidence from the image.
+* Do NOT invent findings that are not visible.
+* If image quality is insufficient, explicitly state that.
+* If a disease cannot be reliably assessed from a single anterior segment photo, state "Limited Assessment".
+* Be conservative and clinically cautious.
+* Multiple diseases may coexist.
+* Do not output generic explanations.
+* Focus on observable ophthalmic findings.
+
+Pay special attention to:
+
+* redness distribution
+* corneal opacity
+* corneal thinning
+* eyelid swelling
+* discharge/crusting
+* pupil asymmetry
+* conjunctival growth
+* subconjunctival blood patches
+* tear film abnormalities
+* eyelid position abnormalities
+* iris irregularities
+* corneal surface irregularity
+
+Return output ONLY in the following JSON format:
+
+{
+"image_quality": {
+"quality_score": 0,
+"issues": []
+},
+"detected_findings": [],
+"disease_assessment": [
+{
+"disease": "",
+"status": "Present | Possibly Present | Not Detected | Limited Assessment",
+"confidence": 0,
+"supporting_findings": [],
+"evaluated_structures": []
+}
+],
+"urgent_referral_needed": false,
+"urgent_reasons": [],
+"overall_summary": ""
+}
+
+If severe corneal opacity, corneal ulcer, acute red eye with corneal involvement, severe ptosis, anisocoria, or possible anterior uveitis is suspected, mark:
+"urgent_referral_needed": true
+
+Include all 19 diseases listed above in disease_assessment, each with all required fields.
+"""
+
+
+def _anterior_segment_locale_to_instruction(locale_raw: str) -> str:
+    s = (locale_raw or "").strip().lower()
+    if s.startswith("tr"):
+        return ANTERIOR_SEGMENT_OUTPUT_LANG_INSTRUCTION_TR
+    return ANTERIOR_SEGMENT_OUTPUT_LANG_INSTRUCTION_EN
+
+
+def _normalize_anterior_segment_status(raw: str) -> str:
+    s = (raw or "").strip().lower()
+    tr_map = {
+        "mevcut": "present",
+        "var": "present",
+        "muhtemelen mevcut": "possibly_present",
+        "olası mevcut": "possibly_present",
+        "olası": "possibly_present",
+        "tespit edilmedi": "not_detected",
+        "yok": "not_detected",
+        "sınırlı değerlendirme": "limited_assessment",
+        "sinirli degerlendirme": "limited_assessment",
+    }
+    if s in tr_map:
+        s = tr_map[s]
+    if s in ("present", "possibly present", "possibly_present"):
+        return "possibly_present" if "possibly" in s or s == "possibly_present" else "present"
+    if s in ("not detected", "not_detected"):
+        return "not_detected"
+    if s in ("limited assessment", "limited_assessment"):
+        return "limited_assessment"
+    if "possibly" in s:
+        return "possibly_present"
+    if "not" in s and "detect" in s:
+        return "not_detected"
+    if "limited" in s:
+        return "limited_assessment"
+    if "present" in s:
+        return "present"
+    return "not_detected"
+
+
+def _anterior_segment_status_score(status_norm: str) -> int:
+    s = (status_norm or "").strip().lower()
+    if s == "present":
+        return 3
+    if s == "possibly_present":
+        return 2
+    if s == "limited_assessment":
+        return 1
+    return 0
+
+
+def _normalize_anterior_segment_assessment(data: object) -> dict:
+    if not isinstance(data, dict):
+        data = {}
+    d = data
+    raw_iq = d.get("image_quality")
+    quality_score = 0
+    issues: list[str] = []
+    if isinstance(raw_iq, dict):
+        quality_score = _normalize_confidence_0_100(raw_iq.get("quality_score"))
+        issues = _coerce_str_list(raw_iq.get("issues"), 20)
+    elif isinstance(raw_iq, str) and raw_iq.strip():
+        issues = [raw_iq.strip()]
+
+    detected_findings = _coerce_str_list(d.get("detected_findings"), 40)
+    raw_diseases = d.get("disease_assessment")
+    disease_assessment: list[dict] = []
+    if isinstance(raw_diseases, list):
+        for item in raw_diseases:
+            if not isinstance(item, dict):
+                continue
+            status_norm = _normalize_anterior_segment_status(str(item.get("status") or ""))
+            conf = _normalize_confidence_0_100(item.get("confidence"))
+            if conf <= 0:
+                if status_norm == "present":
+                    conf = 85
+                elif status_norm == "possibly_present":
+                    conf = 62
+                elif status_norm == "limited_assessment":
+                    conf = 45
+                else:
+                    conf = 20
+            disease_assessment.append(
+                {
+                    "disease": str(item.get("disease") or "").strip() or "—",
+                    "status": status_norm,
+                    "confidence": conf,
+                    "supportingFindings": _coerce_str_list(
+                        item.get("supporting_findings"), 30
+                    ),
+                    "evaluatedStructures": _coerce_str_list(
+                        item.get("evaluated_structures"), 20
+                    ),
+                }
+            )
+
+    urgent_referral_needed = bool(d.get("urgent_referral_needed"))
+    urgent_reasons = _coerce_str_list(d.get("urgent_reasons"), 20)
+    overall_summary = str(d.get("overall_summary") or "").strip()[:12_000]
+
+    return {
+        "imageQuality": {
+            "qualityScore": quality_score,
+            "issues": issues,
+        },
+        "detectedFindings": detected_findings,
+        "diseaseAssessment": disease_assessment,
+        "urgentReferralNeeded": urgent_referral_needed,
+        "urgentReasons": urgent_reasons,
+        "overallSummary": overall_summary,
+    }
+
+
+def _predict_anterior_segment_with_gemini_core(
+    image: Image.Image, client: genai.Client, locale_tag: str
+) -> dict:
+    img_send = _resize_pil_for_gemini(image)
+    locale_norm = "tr" if (locale_tag or "").strip().lower().startswith("tr") else "en"
+    image_hash = _image_sha256_for_cache(img_send)
+    cache_key = (
+        f"anterior-segment|{GEMINI_MODEL}|{GEMINI_MAX_IMAGE_SIDE}|{locale_norm}|{image_hash}"
+    )
+    cached = _analysis_cache_get(cache_key)
+    if cached is not None:
+        return cached
+    lang_inst = _anterior_segment_locale_to_instruction(locale_tag)
+    prompt = ANTERIOR_SEGMENT_BASE_PROMPT.strip() + "\n\n" + lang_inst
+    resp = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=[prompt, img_send],
+        config=types.GenerateContentConfig(
+            temperature=0.0,
+            max_output_tokens=8192,
+            response_mime_type="application/json",
+        ),
+    )
+    try:
+        raw = (resp.text or "").strip()
+    except ValueError as err:
+        raise ValueError(
+            "Gemini on segment yaniti okunamadi veya engellendi."
+        ) from err
+
+    data = _parse_model_json_text(raw)
+    if not data:
+        raise ValueError("Gemini on segment ciktisi bos veya gecersiz JSON.")
+    normalized = _normalize_anterior_segment_assessment(data)
+    result = {
+        "success": True,
+        "anteriorSegment": normalized,
+        "inference": {
+            "backend": "gemini-anterior-segment",
+            "model": GEMINI_MODEL,
+            "locale": locale_norm,
+        },
+    }
+    _analysis_cache_set(cache_key, result)
+    return result
+
+
+def _predict_anterior_segment_with_gemini(image: Image.Image, locale_tag: str) -> dict:
+    keys = _gemini_api_key_list()
+    if not keys:
+        raise GeminiAllKeysExhausted(
+            "Gemini API anahtari tanimli degil. On segment analizi yalnizca Gemini ile calisir."
+        )
+    start_idx = _pick_gemini_rr_start_index(keys)
+    ordered_indices = _ordered_gemini_key_indices(keys, start_idx)
+    last_err: BaseException | None = None
+    for idx in ordered_indices:
+        key = keys[idx]
+        client = genai.Client(api_key=key)
+        try:
+            return _predict_anterior_segment_with_gemini_core(image, client, locale_tag)
+        except genai_errors.APIError as err:
+            last_err = err
+            if _is_gemini_quota_error(err):
+                _mark_gemini_key_quota_cooldown(key)
+                continue
+            raise
+        except Exception as err:
+            last_err = err
+            if _is_gemini_quota_error(err):
+                _mark_gemini_key_quota_cooldown(key)
+                continue
+            raise
+    raise GeminiAllKeysExhausted(
+        str(last_err) if last_err else "Tum Gemini anahtarlari kota/limit ile reddedildi."
+    )
+
+
+@app.route("/predict-anterior-segment", methods=["POST"])
+def predict_anterior_segment():
+    request_id = resolve_request_id(request.headers)
+    gateway_key = request.headers.get("X-AI-Gateway-Key", "")
+    if gateway_key != AI_GATEWAY_SHARED_SECRET:
+        return jsonify({
+            "success": False,
+            "error": "Yetkisiz AI erisimi.",
+            "requestId": request_id,
+        }), 401
+
+    client_ip = (request.headers.get("X-Forwarded-For", "") or request.remote_addr or "unknown").split(",")[0].strip()
+    if _is_rate_limited(client_ip):
+        return jsonify({
+            "success": False,
+            "error": "Cok fazla istek gonderdiniz. Lutfen biraz bekleyin.",
+            "requestId": request_id,
+        }), 429
+
+    patient_id = None
+    try:
+        patient_id = (request.form.get("patientId") or "").strip() or None
+    except Exception:
+        patient_id = None
+
+    locale_tag = "en"
+    try:
+        locale_tag = (request.form.get("locale") or "en").strip() or "en"
+    except Exception:
+        locale_tag = "en"
+
+    try:
+        file = request.files.get("image")
+        image = _safe_load_image(file)
+        return jsonify(_predict_anterior_segment_with_gemini(image, locale_tag))
+    except ValueError as err:
+        log_structured_error(
+            request_id=request_id,
+            route="/predict-anterior-segment",
+            action="INVALID_REQUEST",
+            error_message=str(err),
+            patient_id=patient_id,
+            payload_summary=_safe_predict_payload_summary(),
+        )
+        return jsonify({
+            "success": False,
+            "error": str(err),
+            "requestId": request_id,
+        }), 400
+    except GeminiAllKeysExhausted as gex:
+        log_structured_error(
+            request_id=request_id,
+            route="/predict-anterior-segment",
+            action="GEMINI_ALL_KEYS_EXHAUSTED",
+            error_message=str(gex)[:2500],
+            patient_id=patient_id,
+            payload_summary=_safe_predict_payload_summary(),
+        )
+        return jsonify({
+            "success": False,
+            "error": (
+                "On segment analizi icin tum Gemini anahtarlari kotaya takildi veya anahtar yok. "
+                "Biraz bekleyip tekrar deneyin veya yoneticiyle iletisime gecin."
+            ),
+            "requestId": request_id,
+        }), 503
+    except genai_errors.APIError as err:
+        if _is_gemini_quota_error(err):
+            log_structured_error(
+                request_id=request_id,
+                route="/predict-anterior-segment",
+                action="GEMINI_QUOTA_EXCEEDED",
+                error_message=str(err)[:2500],
+                patient_id=patient_id,
+                payload_summary=_safe_predict_payload_summary(),
+            )
+            return jsonify({
+                "success": False,
+                "error": (
+                    "Gemini ucretsiz kotasi asildi veya dakika basina cok fazla istek/token kullanildi. "
+                    "Yaklasik 1 dakika bekleyip tekrar deneyin; gorsel cok buyukse kucultun."
+                ),
+                "requestId": request_id,
+                "geminiQuotaExceeded": True,
+            }), 429
+        log_structured_error(
+            request_id=request_id,
+            route="/predict-anterior-segment",
+            action="GEMINI_API_ERROR",
+            error_message=str(err)[:2500],
+            stack=traceback.format_exc(),
+            patient_id=patient_id,
+            payload_summary=_safe_predict_payload_summary(),
+        )
+        return jsonify({
+            "success": False,
+            "error": f"Gemini API hatasi: {err.message or err}",
+            "requestId": request_id,
+        }), 502
+    except Exception as err:
+        if _is_gemini_quota_error(err):
+            log_structured_error(
+                request_id=request_id,
+                route="/predict-anterior-segment",
+                action="GEMINI_QUOTA_EXCEEDED",
+                error_message=str(err)[:2500],
+                patient_id=patient_id,
+                payload_summary=_safe_predict_payload_summary(),
+            )
+            return jsonify({
+                "success": False,
+                "error": (
+                    "Gemini ucretsiz kotasi asildi veya istek limiti asildi. "
+                    "Biraz bekleyip tekrar deneyin; gerekirse GEMINI_MAX_IMAGE_SIDE=256 deneyin."
+                ),
+                "requestId": request_id,
+                "geminiQuotaExceeded": True,
+            }), 429
+        cause = getattr(err, "__cause__", None)
+        cause_msg = str(cause) if cause is not None else None
+        log_structured_error(
+            request_id=request_id,
+            route="/predict-anterior-segment",
+            action="PREDICT_ANTERIOR_SEGMENT_FAILED",
+            error_message=str(err),
+            stack=traceback.format_exc(),
+            cause=cause_msg,
+            patient_id=patient_id,
+            payload_summary=_safe_predict_payload_summary(),
+        )
+        return jsonify({
+            "success": False,
+            "error": "On segment analizi sirasinda beklenmeyen bir hata olustu.",
             "requestId": request_id,
         }), 500
 

@@ -73,6 +73,10 @@ const DASHBOARD_PATH_RULES: Array<{
     roles: ["DOCTOR", "ASSISTANT", "MANAGER", "AUDITOR"],
   },
   {
+    prefix: "/dashboard/on-segment-analiz",
+    roles: ["DOCTOR", "ASSISTANT", "MANAGER"],
+  },
+  {
     prefix: "/dashboard/gecmis",
     roles: ["DOCTOR", "ASSISTANT", "MANAGER", "AUDITOR"],
   },

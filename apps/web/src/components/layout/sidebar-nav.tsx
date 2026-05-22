@@ -18,6 +18,7 @@ import {
   UserRound,
   Siren,
   ChevronDown,
+  Eye,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
@@ -52,6 +53,12 @@ const menuItems: Array<{
     labelKey: "dashboard.menu.reports",
     icon: FileText,
     roles: ["DOCTOR", "ASSISTANT", "MANAGER", "AUDITOR"],
+  },
+  {
+    href: "/dashboard/on-segment-analiz",
+    labelKey: "dashboard.menu.anteriorSegment",
+    icon: Eye,
+    roles: ["DOCTOR", "ASSISTANT", "MANAGER"],
   },
   {
     href: "/dashboard/takvim",
