@@ -36,7 +36,6 @@ import {
   RadiologicalHeatmapPreview,
   RadiologicalMedicalDisclaimer,
   RadiologicalReadyBanner,
-  type ModalityAttentionRegion,
   octLikelihoodToApproxConfidencePct,
   pickHighestLikelihoodNamedRow,
 } from "@/components/dashboard/radiological-modality-blocks";
@@ -112,9 +111,6 @@ export function MacularOctAnalysisCard({
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<OctPayload | null>(null);
   const [heatmapPlus, setHeatmapPlus] = useState<string | null>(null);
-  const [attentionRegions, setAttentionRegions] = useState<ModalityAttentionRegion[]>(
-    [],
-  );
   const [analysisNotes, setAnalysisNotes] = useState("");
   const [analysisCompletedAt, setAnalysisCompletedAt] = useState<Date | null>(
     null,
@@ -138,7 +134,6 @@ export function MacularOctAnalysisCard({
     setPreviewUrl(URL.createObjectURL(f));
     setResult(null);
     setHeatmapPlus(null);
-    setAttentionRegions([]);
     setAnalysisNotes("");
     setAnalysisCompletedAt(null);
     setDidAppendToReport(false);
@@ -154,7 +149,6 @@ export function MacularOctAnalysisCard({
     setPreviewUrl(null);
     setResult(null);
     setHeatmapPlus(null);
-    setAttentionRegions([]);
     setAnalysisNotes("");
     setAnalysisCompletedAt(null);
     setDidAppendToReport(false);
@@ -204,7 +198,6 @@ export function MacularOctAnalysisCard({
             oct as unknown as Record<string, unknown>,
           );
           setHeatmapPlus(hm.heatmapPlus);
-          setAttentionRegions(hm.attentionRegions);
           setAnalysisCompletedAt(new Date());
           setDidAppendToReport(false);
         } else {
@@ -434,10 +427,7 @@ export function MacularOctAnalysisCard({
             {heatmapPlus ? (
               <RadiologicalHeatmapPreview
                 heatmapDataUri={heatmapPlus}
-                title={t("octAnalysis.heatmapTitle")}
                 alt={t("octAnalysis.heatmapAlt")}
-                hint={t("octAnalysis.heatmapHint")}
-                regions={attentionRegions}
               />
             ) : null}
 

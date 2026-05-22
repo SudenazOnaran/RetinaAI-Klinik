@@ -93,20 +93,14 @@ export type ModalityAttentionRegion = {
   label?: string;
 };
 
-/** OCT/FFA: Gemini attention_regions → sunucuda üretilen heatmap (data URI). */
+/** OCT/FFA: yalnizca heatmap goruntusu (aciklama / bolge listesi yok). */
 export function RadiologicalHeatmapPreview({
   heatmapDataUri,
-  title,
   alt,
-  hint,
-  regions,
   className,
 }: {
   heatmapDataUri: string;
-  title: string;
   alt: string;
-  hint?: string;
-  regions?: ModalityAttentionRegion[];
   className?: string;
 }) {
   if (!heatmapDataUri.trim()) return null;
@@ -117,9 +111,6 @@ export function RadiologicalHeatmapPreview({
         className,
       )}
     >
-      <div className="border-b border-slate-800 bg-slate-900/80 px-3 py-1.5 text-center text-[10px] font-semibold uppercase tracking-[0.1em] text-cyan-200">
-        {title}
-      </div>
       <div className="relative aspect-square w-full max-h-[240px] min-h-[140px]">
         <Image
           src={heatmapDataUri}
@@ -130,20 +121,6 @@ export function RadiologicalHeatmapPreview({
           className="object-contain"
         />
       </div>
-      {hint ? (
-        <p className="border-t border-slate-800 px-3 py-2 text-center text-[10px] leading-snug text-slate-400">
-          {hint}
-        </p>
-      ) : null}
-      {regions && regions.length > 0 ? (
-        <ul className="max-h-24 space-y-0.5 overflow-y-auto border-t border-slate-800 px-3 py-2 text-[10px] text-slate-400">
-          {regions.slice(0, 6).map((r, i) => (
-            <li key={i} className="truncate">
-              {r.label?.trim() || `#${i + 1}`}
-            </li>
-          ))}
-        </ul>
-      ) : null}
     </div>
   );
 }

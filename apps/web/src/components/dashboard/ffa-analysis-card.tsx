@@ -33,7 +33,6 @@ import {
   RadiologicalHeatmapPreview,
   RadiologicalMedicalDisclaimer,
   RadiologicalReadyBanner,
-  type ModalityAttentionRegion,
   normalizePercentScore,
   pickHighestLikelihoodNamedRow,
 } from "@/components/dashboard/radiological-modality-blocks";
@@ -147,9 +146,6 @@ export function FfaAnalysisCard({
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<FfaPayload | null>(null);
   const [heatmapPlus, setHeatmapPlus] = useState<string | null>(null);
-  const [attentionRegions, setAttentionRegions] = useState<ModalityAttentionRegion[]>(
-    [],
-  );
   const [analysisNotes, setAnalysisNotes] = useState("");
   const [analysisCompletedAt, setAnalysisCompletedAt] = useState<Date | null>(
     null,
@@ -176,7 +172,6 @@ export function FfaAnalysisCard({
     setPreviewUrl(URL.createObjectURL(f));
     setResult(null);
     setHeatmapPlus(null);
-    setAttentionRegions([]);
     setAnalysisNotes("");
     setAnalysisCompletedAt(null);
     setDidAppendToReport(false);
@@ -192,7 +187,6 @@ export function FfaAnalysisCard({
     setPreviewUrl(null);
     setResult(null);
     setHeatmapPlus(null);
-    setAttentionRegions([]);
     setAnalysisNotes("");
     setAnalysisCompletedAt(null);
     setDidAppendToReport(false);
@@ -242,7 +236,6 @@ export function FfaAnalysisCard({
             ffa as unknown as Record<string, unknown>,
           );
           setHeatmapPlus(hm.heatmapPlus);
-          setAttentionRegions(hm.attentionRegions);
           setAnalysisCompletedAt(new Date());
           setDidAppendToReport(false);
         } else {
@@ -488,10 +481,7 @@ export function FfaAnalysisCard({
             {heatmapPlus ? (
               <RadiologicalHeatmapPreview
                 heatmapDataUri={heatmapPlus}
-                title={t("ffaAnalysis.heatmapTitle")}
                 alt={t("ffaAnalysis.heatmapAlt")}
-                hint={t("ffaAnalysis.heatmapHint")}
-                regions={attentionRegions}
               />
             ) : null}
 
