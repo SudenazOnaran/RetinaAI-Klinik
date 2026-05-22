@@ -8,7 +8,7 @@ class AppDatabase {
 
   static Database? _db;
 
-  static const int _version = 6;
+  static const int _version = 7;
   static const String _dbName = 'retina_ai.db';
 
   Future<Database> get db async {
@@ -64,6 +64,8 @@ class AppDatabase {
         ilaclar TEXT,
         report_kind TEXT,
         ai_inference_json TEXT,
+        oct_image_url TEXT,
+        ffa_image_url TEXT,
         oct_dr_feedback TEXT,
         ffa_dr_feedback TEXT,
         doctor_structured_review TEXT,
@@ -161,6 +163,20 @@ class AppDatabase {
       await db.execute(
         'ALTER TABLE analyses ADD COLUMN doctor_structured_review TEXT',
       );
+    }
+    if (oldVersion < 7) {
+      for (final col in [
+        'report_kind TEXT',
+        'ai_inference_json TEXT',
+        'oct_image_url TEXT',
+        'ffa_image_url TEXT',
+      ]) {
+        try {
+          await db.execute('ALTER TABLE analyses ADD COLUMN $col');
+        } catch (_) {
+          /* sütun zaten var */
+        }
+      }
     }
   }
 

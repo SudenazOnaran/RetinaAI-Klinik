@@ -87,11 +87,19 @@ class AnalysisApiModel {
     this.sectionDoctorNotes,
   });
 
+  static String? _modalityFromJson(Map<String, dynamic> json) {
+    final raw = json['reportKind'] ?? json['report_kind'];
+    if (raw is! String) return null;
+    final k = raw.trim().toLowerCase();
+    if (k == 'oct' || k == 'ffa' || k == 'fundus') return k;
+    return k.isEmpty ? null : k;
+  }
+
   // API response -> Model
   factory AnalysisApiModel.fromJson(Map<String, dynamic> json) {
     return AnalysisApiModel(
       id: json['id'] as String,
-      patientId: json['patientId'] as String,
+      patientId: (json['patientId'] ?? json['patient_id']) as String,
       aiResult: json['aiResult'] as String,
       confidence: (json['confidence'] as num).toDouble(),
       heatmapUrl: json['heatmapUrl'] as String?,
@@ -109,15 +117,18 @@ class AnalysisApiModel {
       aiOdriLabels: json['aiOdriLabels'] as String?,
       aiOdriConfidences: json['aiOdriConfidences'] as String?,
       ilaclar: json['ilaclar'] as String?,
-      aiInferenceJson: json['aiInferenceJson']?.toString(),
-      ffaImageUrl: json['ffaImageUrl'] as String?,
-      octImageUrl: json['octImageUrl'] as String?,
+      aiInferenceJson: (json['aiInferenceJson'] ?? json['ai_inference_json'])
+          ?.toString(),
+      ffaImageUrl:
+          (json['ffaImageUrl'] ?? json['ffa_image_url']) as String?,
+      octImageUrl:
+          (json['octImageUrl'] ?? json['oct_image_url']) as String?,
       ffaDrFeedback: json['ffaDrFeedback'] as String?,
       octDrFeedback: json['octDrFeedback'] as String?,
       doctorStructuredReview: _jsonDynamicToNullableString(
         json['doctorStructuredReview'],
       ),
-      reportKind: json['reportKind'] as String?,
+      reportKind: _modalityFromJson(json),
       reportTitle: json['reportTitle'] as String?,
       reportDateKey: json['reportDateKey'] as String?,
       reportDoctorDisplayName: json['reportDoctorDisplayName'] as String?,
@@ -194,6 +205,8 @@ class AnalysisApiModel {
       drFeedback: map['dr_feedback'] as String?,
       ilaclar: map['ilaclar'] as String?,
       aiInferenceJson: map['ai_inference_json'] as String?,
+      ffaImageUrl: map['ffa_image_url'] as String?,
+      octImageUrl: map['oct_image_url'] as String?,
       octDrFeedback: map['oct_dr_feedback'] as String?,
       ffaDrFeedback: map['ffa_dr_feedback'] as String?,
       doctorStructuredReview: map['doctor_structured_review'] as String?,
@@ -221,6 +234,8 @@ class AnalysisApiModel {
       'ilaclar': ilaclar,
       'report_kind': reportKind,
       'ai_inference_json': aiInferenceJson,
+      'oct_image_url': octImageUrl,
+      'ffa_image_url': ffaImageUrl,
       'oct_dr_feedback': octDrFeedback,
       'ffa_dr_feedback': ffaDrFeedback,
       'doctor_structured_review': doctorStructuredReview,

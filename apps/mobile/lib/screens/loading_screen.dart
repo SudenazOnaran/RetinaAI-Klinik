@@ -121,11 +121,12 @@ class _LoadingScreenState extends ConsumerState<LoadingScreen>
         heatmapUrl: body['heatmapUrl'] as String?,
         createdAt: DateTime.now(),
         isSynced: false,
+        reportKind: 'fundus',
       );
 
-      await AnalysisService.instance.add(analysis);
+      final persisted = await AnalysisService.instance.add(analysis);
 
-      if (mounted) context.go('/results', extra: analysis);
+      if (mounted) context.go('/results', extra: persisted);
     } on DioException catch (e) {
       if (!mounted) return;
       final msg = e.response?.data is Map

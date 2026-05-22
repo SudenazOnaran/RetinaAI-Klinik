@@ -14,6 +14,34 @@ class AnalysisRepository {
   final _api = ApiClient.instance;
   final _dao = AnalysisDao.instance;
 
+  /// Sunucu yanıtı modalite alanlarını düşürebilir; yerel OCT/FFA/fundus bilgisini korur.
+  static AnalysisApiModel mergeModalityFromLocal(
+    AnalysisApiModel server,
+    AnalysisApiModel local,
+  ) {
+    String? pickKind(String? fromServer, String? fromLocal) {
+      bool valid(String? k) =>
+          k == 'oct' || k == 'ffa' || k == 'fundus';
+      if (valid(fromServer)) return fromServer;
+      if (valid(fromLocal)) return fromLocal;
+      return fromServer ?? fromLocal;
+    }
+
+    return server.copyWith(
+      reportKind: pickKind(server.reportKind, local.reportKind),
+      aiInferenceJson: server.aiInferenceJson ?? local.aiInferenceJson,
+      octImageUrl: server.octImageUrl ?? local.octImageUrl,
+      ffaImageUrl: server.ffaImageUrl ?? local.ffaImageUrl,
+      originalImage: server.originalImage ?? local.originalImage,
+      heatmapUrl: server.heatmapUrl ?? local.heatmapUrl,
+      octDrFeedback: server.octDrFeedback ?? local.octDrFeedback,
+      ffaDrFeedback: server.ffaDrFeedback ?? local.ffaDrFeedback,
+      drFeedback: server.drFeedback ?? local.drFeedback,
+      doctorStructuredReview:
+          server.doctorStructuredReview ?? local.doctorStructuredReview,
+    );
+  }
+
   /// Bir hastanın analizlerini döner.
   Future<List<AnalysisApiModel>> getByPatientId(String patientId) async {
     final connected = await ConnectivityUtils.isConnected();
@@ -24,9 +52,18 @@ class AnalysisRepository {
           queryParameters: {'patientId': patientId},
         );
         final data = response.data as Map<String, dynamic>;
-        final analyses = (data['analyses'] as List)
-            .map((a) => AnalysisApiModel.fromJson(a as Map<String, dynamic>))
-            .toList();
+        final localById = {
+          for (final a in await _dao.getByPatientId(patientId)) a.id: a,
+        };
+        final analyses = (data['analyses'] as List).map((a) {
+          final server = AnalysisApiModel.fromJson(
+            a as Map<String, dynamic>,
+          );
+          final local = localById[server.id];
+          return local != null
+              ? mergeModalityFromLocal(server, local)
+              : server;
+        }).toList();
         await _dao.upsertAll(analyses);
         return analyses;
       } on DioException {
@@ -60,8 +97,9 @@ class AnalysisRepository {
     final saved = AnalysisApiModel.fromJson(
       data['analysis'] as Map<String, dynamic>,
     );
-    await _dao.upsert(saved);
-    return saved;
+    final merged = mergeModalityFromLocal(saved, analysis);
+    await _dao.upsert(merged);
+    return merged;
   }
 
   /// Analiz güncelle (doktor notu vb.).

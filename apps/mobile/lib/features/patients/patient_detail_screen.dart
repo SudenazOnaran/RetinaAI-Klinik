@@ -33,6 +33,9 @@ Map<String, dynamic>? _parseAiInferenceMap(String? raw) {
 
 /// `report_kind` = `radiological_ai` (web) veya boş olabilir; gerçek modalite JSON / URL ile çözülür.
 String? effectiveReportKindFromAnalysis(AnalysisApiModel a) {
+  final rk = a.reportKind?.trim().toLowerCase();
+  if (rk == 'oct' || rk == 'ffa' || rk == 'fundus') return rk;
+
   final root = _parseAiInferenceMap(a.aiInferenceJson);
 
   if (root != null) {
@@ -58,9 +61,6 @@ String? effectiveReportKindFromAnalysis(AnalysisApiModel a) {
       return 'fundus';
     }
   }
-
-  final rk = a.reportKind?.trim().toLowerCase();
-  if (rk == 'oct' || rk == 'ffa' || rk == 'fundus') return rk;
 
   final fromUrls = _inferSingleModalityFromImageUrls(a);
   if (fromUrls != null) return fromUrls;
@@ -2470,17 +2470,24 @@ class _InlineAnalysisCardState extends State<_InlineAnalysisCard> {
         final conf = _confidenceFromAiBody(widget.label, body);
         final snapshot = _buildInferenceSnapshot(widget.label, body);
         final enc = jsonEncode(_jsonSanitize(snapshot));
+        final modality = widget.label.toLowerCase();
         final savedAnalysis = AnalysisApiModel(
           id: UuidGenerator.generateOfflineId(),
           patientId: widget.patientId,
           aiResult: label ?? 'unknown',
           confidence: conf,
-          heatmapUrl: savedHeatmapPath ?? (body['heatmapUrl'] as String?),
-          originalImage: savedOriginalPath,
+          heatmapUrl: modality == 'fundus'
+              ? (savedHeatmapPath ?? (body['heatmapUrl'] as String?))
+              : savedHeatmapPath,
+          originalImage: modality == 'fundus' ? savedOriginalPath : null,
+          octImageUrl: modality == 'oct' ? savedOriginalPath : null,
+          ffaImageUrl: modality == 'ffa' ? savedOriginalPath : null,
           createdAt: DateTime.now(),
           isSynced: false,
-          reportKind: widget.label.toLowerCase(),
-          drGradeInt: ((body['drGrade'] ?? body['dr_grade']) as num?)?.toInt(),
+          reportKind: modality,
+          drGradeInt: modality == 'fundus'
+              ? ((body['drGrade'] ?? body['dr_grade']) as num?)?.toInt()
+              : null,
           aiInferenceJson: enc,
         );
         persisted = await AnalysisService.instance.add(savedAnalysis);
