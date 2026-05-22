@@ -13,7 +13,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Eye, Loader2, Upload, X } from "lucide-react";
+import { Eye, Loader2, Upload, X, CheckCircle2 } from "lucide-react";
 import { useTranslation } from "@/components/providers/i18n-provider";
 import { logStructuredError } from "@/lib/structured-error-log";
 import { ANALYSIS_NOTES_MAX_LEN } from "@/lib/dataset/analysis-report-sections";
@@ -43,6 +43,11 @@ import {
   isFormatRelatedAiError,
   validateAiImageFile,
 } from "@/lib/ai-upload-filename";
+import { fileToDataUrl } from "@/lib/file-to-data-url";
+import {
+  isModalityDisagreePending,
+  modalityDrFeedbackForStorage,
+} from "@/lib/doctor-feedback";
 
 export type AnteriorSegmentDiseaseAssessment = {
   disease: string;
@@ -95,6 +100,14 @@ type AnteriorSegmentAnalysisCardProps = {
   suppressHeader?: boolean;
   reportDoctorFeedback?: string;
   onReportDoctorFeedbackChange?: (value: string) => void;
+  onSaveReport?: (payload: {
+    imageDataUrl: string;
+    aiPayload: Record<string, unknown>;
+    doctorFeedback: string;
+    analysisNotes?: string;
+    fileName?: string;
+    patientId?: string | null;
+  }) => Promise<{ ok: true } | { ok: false; error: string }>;
   className?: string;
 };
 
@@ -104,6 +117,7 @@ export function AnteriorSegmentAnalysisCard({
   suppressHeader = false,
   reportDoctorFeedback,
   onReportDoctorFeedbackChange,
+  onSaveReport,
   className,
 }: AnteriorSegmentAnalysisCardProps) {
   const isPanel = variant === "panel";
@@ -119,6 +133,9 @@ export function AnteriorSegmentAnalysisCard({
     null,
   );
   const [localDoctorFeedback, setLocalDoctorFeedback] = useState("");
+  const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [didSave, setDidSave] = useState(false);
 
   const doctorFeedback = reportDoctorFeedback ?? localDoctorFeedback;
   const setDoctorFeedback =
@@ -143,6 +160,11 @@ export function AnteriorSegmentAnalysisCard({
     setAnalysisNotes("");
     setAnalysisCompletedAt(null);
     setDoctorFeedback("");
+    setImageDataUrl(null);
+    setDidSave(false);
+    void fileToDataUrl(f)
+      .then((url) => setImageDataUrl(url))
+      .catch(() => setImageDataUrl(null));
   };
 
   const clearAll = () => {
@@ -153,6 +175,8 @@ export function AnteriorSegmentAnalysisCard({
     setAnalysisNotes("");
     setAnalysisCompletedAt(null);
     setDoctorFeedback("");
+    setImageDataUrl(null);
+    setDidSave(false);
   };
 
   const handleAnalyze = async () => {
@@ -263,6 +287,50 @@ export function AnteriorSegmentAnalysisCard({
     }
     return 38;
   }, [primaryElevated, result]);
+
+  const canSave =
+    Boolean(onSaveReport) &&
+    Boolean(result) &&
+    Boolean(imageDataUrl) &&
+    Boolean(modalityDrFeedbackForStorage(doctorFeedback));
+
+  const handleSave = async () => {
+    if (!onSaveReport || !result || !imageDataUrl) return;
+    const feedback = modalityDrFeedbackForStorage(doctorFeedback);
+    if (!feedback) {
+      toast({
+        variant: "destructive",
+        title: t("anteriorSegmentHistory.errors.feedbackRequired"),
+      });
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const res = await onSaveReport({
+        imageDataUrl,
+        aiPayload: result as unknown as Record<string, unknown>,
+        doctorFeedback: feedback,
+        analysisNotes: analysisNotes.trim() || undefined,
+        fileName: file?.name,
+        patientId: patientId ?? null,
+      });
+      if (res.ok) {
+        setDidSave(true);
+        toast({
+          title: t("anteriorSegmentHistory.savedTitle"),
+          description: t("anteriorSegmentHistory.savedDesc"),
+        });
+      } else {
+        toast({
+          variant: "destructive",
+          title: t("errorPage.title"),
+          description: res.error,
+        });
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <Card
@@ -540,7 +608,10 @@ export function AnteriorSegmentAnalysisCard({
           <div className="space-y-4">
             <ModalityConditionFeedback
               value={doctorFeedback}
-              onChange={setDoctorFeedback}
+              onChange={(v) => {
+                setDoctorFeedback(v);
+                setDidSave(false);
+              }}
               items={disagreeItems}
               disagreePrompt={t("aiAnalysisPanel.modalityPickAnteriorSegmentDisagree")}
               noItemsHint={t("aiAnalysisPanel.modalityNoAiListForPickAnteriorSegment")}
@@ -557,7 +628,10 @@ export function AnteriorSegmentAnalysisCard({
                 </span>
                 <Textarea
                   value={analysisNotes}
-                  onChange={(e) => setAnalysisNotes(e.target.value)}
+                  onChange={(e) => {
+                    setAnalysisNotes(e.target.value);
+                    setDidSave(false);
+                  }}
                   className="mt-2 min-h-[80px] text-sm"
                   placeholder={t("radiologicalReport.analysisNotesPlaceholder")}
                   maxLength={ANALYSIS_NOTES_MAX_LEN}
@@ -567,6 +641,29 @@ export function AnteriorSegmentAnalysisCard({
                 </span>
               </label>
             </div>
+
+            {onSaveReport ? (
+              <div className="space-y-2">
+                {didSave ? (
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+                    {t("anteriorSegmentHistory.savedInlineHint")}
+                  </div>
+                ) : null}
+                <Button
+                  type="button"
+                  className="h-11 w-full rounded-xl bg-emerald-600 text-sm font-semibold text-white hover:bg-emerald-700"
+                  disabled={!canSave || isSaving || isModalityDisagreePending(doctorFeedback)}
+                  onClick={() => void handleSave()}
+                >
+                  {isSaving ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                  )}
+                  {t("anteriorSegmentHistory.saveButton")}
+                </Button>
+              </div>
+            ) : null}
 
             {isPanel ? (
               <Button

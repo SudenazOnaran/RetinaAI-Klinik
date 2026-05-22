@@ -9,7 +9,7 @@ const BACKUPS_DIR = path.join(STORAGE_ROOT, "backups");
 type SaveObjectInput = {
   doctorId: string;
   patientId?: string | null;
-  category: "original" | "heatmap" | "oct" | "ffa";
+  category: "original" | "heatmap" | "oct" | "ffa" | "anterior-segment";
   dataUrlOrBase64: string;
 };
 

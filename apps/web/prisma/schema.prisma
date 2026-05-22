@@ -23,6 +23,7 @@ model Doctor {
   credentialPolicy DoctorCredentialPolicy?
   settings         DoctorSettings?
   patients         Patient[]
+  anteriorSegmentReports AnteriorSegmentReport[]
 }
 
 model Patient {
@@ -37,6 +38,7 @@ model Patient {
   gender        String?
   hba1c         Float?
   analyses      Analysis[]
+  anteriorSegmentReports AnteriorSegmentReport[]
   doctor        Doctor     @relation(fields: [doctorId], references: [id], onDelete: Cascade)
 }
 
@@ -96,6 +98,28 @@ model Analysis {
   trainingDatasetEntry            TrainingDatasetEntry?
   trainingDatasetEntryOct         TrainingDatasetEntryOct?
   trainingDatasetEntryFfa         TrainingDatasetEntryFfa?
+}
+
+/// Ön segment görüntü analizi — bağımsız sayfa kayıtları (görüntü + AI + doktor geri bildirimi).
+model AnteriorSegmentReport {
+  id                        String   @id @default(cuid())
+  doctorId                  String
+  patientId                 String?
+  imageUrl                  String
+  /// Özet satır (birincil bulgu veya genel özet)
+  aiSummary                 String?  @db.VarChar(2000)
+  /// Tam AI metin özeti (tablo / detay)
+  aiTextSummary             String?  @db.Text
+  aiInferenceJson           Json
+  anteriorSegmentDrFeedback String?  @db.VarChar(4000)
+  analysisNotes             String?  @db.VarChar(2000)
+  urgentReferralNeeded      Boolean  @default(false)
+  fileName                  String?  @db.VarChar(260)
+  createdAt                 DateTime @default(now())
+  doctor                    Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  patient                   Patient? @relation(fields: [patientId], references: [id], onDelete: SetNull)
+
+  @@index([doctorId, createdAt(sort: Desc)])
 }
 
 /// Egitim satiri: goruntu URL, efektif DR, doktor notlari ozeti, `training_snapshot_v2` JSON, ML sutunlari.

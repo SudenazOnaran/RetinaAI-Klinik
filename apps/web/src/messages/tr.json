@@ -765,7 +765,39 @@
   "anteriorSegmentPage": {
     "eyebrow": "Görüntüleme Teknikleri",
     "title": "Ön Segment Görüntü Analizi",
-    "description": "Slit-lamp veya anterior segment fotoğrafı yükleyin; Gemini destekli yapılandırılmış tarama değerlendirmesi alın."
+    "description": "Slit-lamp veya anterior segment fotoğrafı yükleyin; Gemini destekli yapılandırılmış tarama değerlendirmesi alın.",
+    "tabAnalyze": "Yeni analiz",
+    "tabHistory": "Geçmiş raporlar"
+  },
+  "anteriorSegmentHistory": {
+    "title": "Geçmiş ön segment raporları",
+    "description": "Kaydedilen görüntüler, yapay zeka çıktıları, doktor geri bildirimleri ve notlar.",
+    "empty": "Henüz kayıtlı ön segment raporu yok. Analiz tamamlayıp «Raporu kaydet» ile ekleyin.",
+    "colImage": "Görüntü",
+    "colDate": "Tarih",
+    "colAiSummary": "AI özeti",
+    "colDoctorFeedback": "Doktor geri bildirimi",
+    "colNotes": "Notlar",
+    "viewDetail": "Detay",
+    "delete": "Sil",
+    "fullAiOutput": "Tam AI çıktısı",
+    "urgentBadge": "Acil",
+    "saveButton": "Raporu kaydet",
+    "savedTitle": "Rapor kaydedildi",
+    "savedDesc": "Kayıt geçmiş raporlar sekmesine eklendi.",
+    "savedInlineHint": "Bu analiz kaydedildi. Geçmiş raporlar sekmesinden görüntüleyebilirsiniz.",
+    "deletedTitle": "Kayıt silindi",
+    "reportBlockHeader": "Ön segment (AI metin özeti)",
+    "qualityIssues": "Kalite sorunları",
+    "feedbackAgreePrefix": "AI ile uyumlu",
+    "feedbackAgreeAi": "AI sonucu doğru",
+    "feedbackCorrectionPrefix": "Doktor düzeltmesi",
+    "errors": {
+      "noImage": "Kaydedilecek görüntü bulunamadı.",
+      "noAiResult": "Kaydedilecek AI sonucu yok. Önce analiz çalıştırın.",
+      "feedbackRequired": "Kaydetmeden önce doktor geri bildirimini (Evet/Hayır) tamamlayın.",
+      "saveFailed": "Rapor kaydedilemedi. Lütfen tekrar deneyin."
+    }
   },
   "analysisPage": {
     "title": "Görsel Yükle ve Analiz",

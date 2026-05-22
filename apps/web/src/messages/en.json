@@ -767,7 +767,39 @@
   "anteriorSegmentPage": {
     "eyebrow": "Imaging Modalities",
     "title": "Anterior Segment Image Analysis",
-    "description": "Upload a slit-lamp or anterior segment photo for a Gemini-powered structured screening assessment."
+    "description": "Upload a slit-lamp or anterior segment photo for a Gemini-powered structured screening assessment.",
+    "tabAnalyze": "New analysis",
+    "tabHistory": "Report history"
+  },
+  "anteriorSegmentHistory": {
+    "title": "Anterior segment report history",
+    "description": "Saved images, AI outputs, doctor feedback, and notes.",
+    "empty": "No saved anterior segment reports yet. Complete an analysis and use «Save report».",
+    "colImage": "Image",
+    "colDate": "Date",
+    "colAiSummary": "AI summary",
+    "colDoctorFeedback": "Doctor feedback",
+    "colNotes": "Notes",
+    "viewDetail": "Detail",
+    "delete": "Delete",
+    "fullAiOutput": "Full AI output",
+    "urgentBadge": "Urgent",
+    "saveButton": "Save report",
+    "savedTitle": "Report saved",
+    "savedDesc": "The record was added to the history tab.",
+    "savedInlineHint": "This analysis was saved. View it under Report history.",
+    "deletedTitle": "Record deleted",
+    "reportBlockHeader": "Anterior segment (AI text summary)",
+    "qualityIssues": "Quality issues",
+    "feedbackAgreePrefix": "Aligned with AI",
+    "feedbackAgreeAi": "AI result correct",
+    "feedbackCorrectionPrefix": "Doctor correction",
+    "errors": {
+      "noImage": "No image to save.",
+      "noAiResult": "No AI result to save. Run analysis first.",
+      "feedbackRequired": "Complete doctor feedback (Yes/No) before saving.",
+      "saveFailed": "Could not save the report. Please try again."
+    }
   },
   "analysisPage": {
     "title": "Upload Image and Analyze",
