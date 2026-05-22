@@ -41,6 +41,13 @@ import {
   pickHighestLikelihoodNamedRow,
 } from "@/components/dashboard/radiological-modality-blocks";
 import { parseModalityHeatmapFromApiResponse } from "@/lib/modality-heatmap";
+import {
+  fileWithAiUploadName,
+  formatUnsupportedImageMessage,
+  humanizeAiImageUploadError,
+  isFormatRelatedAiError,
+  validateAiImageFile,
+} from "@/lib/ai-upload-filename";
 
 export type OctCondition = {
   name: string;
@@ -117,6 +124,16 @@ export function MacularOctAnalysisCard({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
+    const check = validateAiImageFile(f);
+    if (!check.ok) {
+      e.target.value = "";
+      toast({
+        variant: "destructive",
+        title: t("analysisCard.unsupportedFormatTitle"),
+        description: formatUnsupportedImageMessage(t, check.displayExt),
+      });
+      return;
+    }
     setFile(f);
     setPreviewUrl(URL.createObjectURL(f));
     setResult(null);
@@ -168,7 +185,7 @@ export function MacularOctAnalysisCard({
     const clientRid = crypto.randomUUID();
     try {
       const fd = new FormData();
-      fd.append("image", file);
+      fd.append("image", fileWithAiUploadName(file, "oct"));
       fd.append("patientId", patientId);
       fd.append("locale", locale === "tr" ? "tr" : "en");
 
@@ -203,10 +220,17 @@ export function MacularOctAnalysisCard({
           description: t("analysisCard.queueDesc"),
         });
       } else {
+        const rawErr =
+          typeof data.error === "string" ? data.error.trim() : "";
+        const serverErr = rawErr
+          ? humanizeAiImageUploadError(rawErr, t)
+          : t("analysisCard.serviceUnavailableRetry");
         toast({
           variant: "destructive",
-          title: t("errorPage.title"),
-          description: t("analysisCard.serviceUnavailableRetry"),
+          title: isFormatRelatedAiError(rawErr)
+            ? t("analysisCard.unsupportedFormatTitle")
+            : t("errorPage.title"),
+          description: serverErr,
         });
       }
     } catch (error) {
@@ -326,7 +350,7 @@ export function MacularOctAnalysisCard({
               <input
                 id={fileInputId}
                 type="file"
-                accept="image/jpeg,image/png,image/webp,image/bmp"
+                accept="image/jpeg,image/png,image/webp,image/bmp,image/tiff,.tif,.tiff"
                 className="hidden"
                 onChange={handleFileChange}
               />

@@ -48,7 +48,16 @@ AI_GATEWAY_SHARED_SECRET=<web ile aynı gizli değer>
 AI_REQUEST_TIMEOUT_MS=120000
 ```
 
-`AI_SERVICE_URL` **5000** (`app.py`) ise FFA/OCT **404** veya erişim hatası alırsınız; OCT/FFA için **5001 + app_gemini** şart.
+`AI_SERVICE_URL` **5000** (`app.py`) iken OCT/FFA **5000/predict-oct** adresine giderse **404** alırsınız (app.py bu yolları sunmaz). Web gateway artık fundus 5000 iken OCT/FFA’yı otomatik **5001**’e yönlendirir; yine de `retinai-gemini-ai` ayakta olmalıdır.
+
+**Sadece fundus çalışıyor, OCT/FFA “AI servisine erişilemiyor”** → tipik tablo:
+
+| Servis | Port | Endpoint |
+|--------|------|----------|
+| `retina-ai` (Gunicorn, `app.py`) | 5000 | `/predict` ✅ fundus |
+| `retinai-gemini-ai` (`app_gemini.py`) | 5001 | `/predict-oct`, `/predict-ffa` ✅ |
+
+Kontrol: `curl -s http://127.0.0.1:5001/health` ve `curl -s -o /dev/null -w "%{http_code}" -H "X-AI-Gateway-Key: SECRET" -F locale=tr http://127.0.0.1:5001/predict-oct` (400 = endpoint var).
 
 ### 3) AI `.env.local` (`services/ai/.env.local`)
 

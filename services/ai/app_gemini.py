@@ -221,12 +221,18 @@ MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 Image.MAX_IMAGE_PIXELS = 25_000_000
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
 
-ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"}
 ALLOWED_MIME_TYPES = {
     "image/jpeg",
+    "image/jpg",
     "image/png",
     "image/bmp",
     "image/webp",
+    "image/tiff",
+}
+# Tarayici / export bazen application/octet-stream gonderir; uzanti veya PIL dogrulamasi yeterli.
+ALLOWED_MIME_TYPES_LENIENT = ALLOWED_MIME_TYPES | {
+    "application/octet-stream",
 }
 
 RATE_LIMIT_WINDOW_SECONDS = int(os.environ.get("AI_RATE_LIMIT_WINDOW_SECONDS", "60"))
@@ -337,14 +343,37 @@ def _has_allowed_extension(filename: str) -> bool:
     return ext in ALLOWED_EXTENSIONS
 
 
+def _extension_from_content_type(content_type: str) -> str | None:
+    ct = (content_type or "").strip().lower()
+    return {
+        "image/jpeg": ".jpg",
+        "image/jpg": ".jpg",
+        "image/png": ".png",
+        "image/bmp": ".bmp",
+        "image/webp": ".webp",
+        "image/tiff": ".tif",
+    }.get(ct)
+
+
 def _safe_load_image(file_storage):
     if file_storage is None:
         raise ValueError("Gorsel dosyasi bulunamadi.")
-    if not _has_allowed_extension(file_storage.filename or ""):
-        raise ValueError("Sadece JPG, JPEG, PNG, BMP ve WEBP formatlari kabul edilir.")
+    filename = (file_storage.filename or "").strip()
+    if not _has_allowed_extension(filename):
+        inferred = _extension_from_content_type(file_storage.content_type or "")
+        if inferred:
+            filename = f"upload{inferred}"
+        else:
+            raise ValueError(
+                "UNSUPPORTED_IMAGE_FORMAT: Sadece JPG, JPEG, PNG, BMP, WEBP ve TIFF "
+                "formatlari kabul edilir."
+            )
     content_type = (file_storage.content_type or "").lower()
-    if content_type and content_type not in ALLOWED_MIME_TYPES:
-        raise ValueError("Gecersiz dosya tipi. Lutfen bir gorsel yukleyin.")
+    if content_type and content_type not in ALLOWED_MIME_TYPES_LENIENT:
+        raise ValueError(
+            "UNSUPPORTED_IMAGE_FORMAT: Gecersiz dosya tipi. "
+            "Lutfen JPG, PNG, BMP, WEBP veya TIFF yukleyin."
+        )
     raw = file_storage.read()
     if not raw:
         raise ValueError("Bos dosya yuklenemez.")
@@ -354,7 +383,9 @@ def _safe_load_image(file_storage):
         Image.open(io.BytesIO(raw)).verify()
         return Image.open(io.BytesIO(raw)).convert("RGB")
     except (UnidentifiedImageError, OSError):
-        raise ValueError("Dosya gecerli bir gorsel degil.")
+        raise ValueError(
+            "INVALID_IMAGE_FILE: Dosya gecerli bir gorsel degil veya bozuk olabilir."
+        )
 
 
 def _predict_payload_summary() -> str:

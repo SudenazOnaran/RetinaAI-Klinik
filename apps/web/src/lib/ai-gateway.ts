@@ -52,41 +52,61 @@ function getAiServiceUrl() {
   return process.env.AI_SERVICE_URL || "http://localhost:5000/predict";
 }
 
-/** Makula OCT: varsayilan olarak `AI_SERVICE_URL` temelinde `/predict-oct` (Gemini: 5001). */
+/** app_gemini.py varsayilan portu; OCT/FFA yalnizca bu serviste (/predict-oct, /predict-ffa). */
+function getGeminiServicePort(): string {
+  const raw = (process.env.AI_GEMINI_PORT || "5001").trim();
+  return raw || "5001";
+}
+
+/**
+ * Fundus bazi kurulumlarda app.py (Gunicorn, 5000) uzerinden calisir.
+ * OCT/FFA endpoint'leri yalnizca app_gemini'de vardir — 5000'e turetilirse 404 alinir.
+ */
+function applyGeminiPortForModalityIfLegacyFundus(u: URL): void {
+  const port = u.port || (u.protocol === "https:" ? "443" : "80");
+  if (port === "5000") {
+    u.port = getGeminiServicePort();
+  }
+}
+
+function buildModalityServiceUrl(
+  suffix: "predict-oct" | "predict-ffa",
+  baseUrl: string,
+): string {
+  const u = new URL(baseUrl);
+  applyGeminiPortForModalityIfLegacyFundus(u);
+  const path = u.pathname.replace(/\/$/, "");
+  if (path.endsWith("/predict")) {
+    u.pathname = path.replace(/\/predict$/, `/${suffix}`);
+  } else if (!path || path === "/") {
+    u.pathname = `/${suffix}`;
+  } else {
+    u.pathname = `${path}/${suffix}`;
+  }
+  return u.toString();
+}
+
+/** Makula OCT: `AI_OCT_SERVICE_URL` veya `AI_SERVICE_URL` -> `/predict-oct` (Gemini portu). */
 function getDerivedOctServiceUrl() {
   const explicit = (process.env.AI_OCT_SERVICE_URL || "").trim();
   if (explicit) return explicit;
   const base = process.env.AI_SERVICE_URL || "http://localhost:5000/predict";
   try {
-    const u = new URL(base);
-    const path = u.pathname.replace(/\/$/, "");
-    if (path.endsWith("/predict")) {
-      u.pathname = path.replace(/\/predict$/, "/predict-oct");
-    } else {
-      u.pathname = `${path}/predict-oct`;
-    }
-    return u.toString();
+    return buildModalityServiceUrl("predict-oct", base);
   } catch {
-    return "http://localhost:5000/predict-oct";
+    return `http://127.0.0.1:${getGeminiServicePort()}/predict-oct`;
   }
 }
 
-/** FFA: `AI_FFA_SERVICE_URL` veya `.../predict` -> `.../predict-ffa`. */
+/** FFA: `AI_FFA_SERVICE_URL` veya `AI_SERVICE_URL` -> `/predict-ffa` (Gemini portu). */
 function getDerivedFfaServiceUrl() {
   const explicit = (process.env.AI_FFA_SERVICE_URL || "").trim();
   if (explicit) return explicit;
   const base = process.env.AI_SERVICE_URL || "http://localhost:5000/predict";
   try {
-    const u = new URL(base);
-    const path = u.pathname.replace(/\/$/, "");
-    if (path.endsWith("/predict")) {
-      u.pathname = path.replace(/\/predict$/, "/predict-ffa");
-    } else {
-      u.pathname = `${path}/predict-ffa`;
-    }
-    return u.toString();
+    return buildModalityServiceUrl("predict-ffa", base);
   } catch {
-    return "http://localhost:5000/predict-ffa";
+    return `http://127.0.0.1:${getGeminiServicePort()}/predict-ffa`;
   }
 }
 

@@ -36,6 +36,12 @@ import {
 } from "@/lib/dataset/snapshot";
 import { ANALYSIS_NOTES_MAX_LEN } from "@/lib/dataset/analysis-report-sections";
 import {
+  formatUnsupportedImageMessage,
+  humanizeAiImageUploadError,
+  isFormatRelatedAiError,
+  validateAiImageFile,
+} from "@/lib/ai-upload-filename";
+import {
   RadiologicalAiSummaryOneLine,
   RadiologicalAnalysisTimestamp,
   RadiologicalClinicalDetailCollapsible,
@@ -218,6 +224,16 @@ export function ImageAnalysisCard({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
+    const check = validateAiImageFile(f);
+    if (!check.ok) {
+      e.target.value = "";
+      toast({
+        variant: "destructive",
+        title: t("analysisCard.unsupportedFormatTitle"),
+        description: formatUnsupportedImageMessage(t, check.displayExt),
+      });
+      return;
+    }
     setFile(f);
     setPreviewUrl(URL.createObjectURL(f));
     setResult(null);
@@ -263,10 +279,17 @@ export function ImageAnalysisCard({
           description: t("analysisCard.queueDesc"),
         });
       } else {
+        const rawErr =
+          typeof data.error === "string" ? data.error.trim() : "";
+        const serverErr = rawErr
+          ? humanizeAiImageUploadError(rawErr, t)
+          : t("analysisCard.serviceUnavailableRetry");
         toast({
           variant: "destructive",
-          title: t("errorPage.title"),
-          description: t("analysisCard.serviceUnavailableRetry"),
+          title: isFormatRelatedAiError(rawErr)
+            ? t("analysisCard.unsupportedFormatTitle")
+            : t("errorPage.title"),
+          description: serverErr,
         });
       }
     } catch (error) {

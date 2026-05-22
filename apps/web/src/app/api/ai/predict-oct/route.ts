@@ -9,6 +9,7 @@ import {
   logStructuredError,
 } from "@/lib/structured-error-log";
 import { aiFailureShouldBypassQueue } from "@/lib/ai-gateway-queue-policy";
+import { resolveAiUploadFilename } from "@/lib/ai-upload-filename";
 
 export const runtime = "nodejs";
 
@@ -64,7 +65,11 @@ export async function POST(req: Request) {
   }
 
   const upstreamForm = new FormData();
-  upstreamForm.append("image", file, file.name || "oct.jpg");
+  upstreamForm.append(
+    "image",
+    file,
+    resolveAiUploadFilename(file, "oct"),
+  );
   upstreamForm.append("locale", locale);
   if (patientId) {
     upstreamForm.append("patientId", patientId);
