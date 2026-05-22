@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { ChevronDown } from "lucide-react";
 import {
   Collapsible,
@@ -80,6 +81,69 @@ export function RadiologicalAiSummaryOneLine({
           · {confidenceText}
         </span>
       </p>
+    </div>
+  );
+}
+
+export type ModalityAttentionRegion = {
+  x: number;
+  y: number;
+  weight: number;
+  radius?: number;
+  label?: string;
+};
+
+/** OCT/FFA: Gemini attention_regions → sunucuda üretilen heatmap (data URI). */
+export function RadiologicalHeatmapPreview({
+  heatmapDataUri,
+  title,
+  alt,
+  hint,
+  regions,
+  className,
+}: {
+  heatmapDataUri: string;
+  title: string;
+  alt: string;
+  hint?: string;
+  regions?: ModalityAttentionRegion[];
+  className?: string;
+}) {
+  if (!heatmapDataUri.trim()) return null;
+  return (
+    <div
+      className={cn(
+        "mx-auto w-full max-w-[240px] overflow-hidden rounded-2xl border border-slate-200 bg-slate-950 shadow-lg",
+        className,
+      )}
+    >
+      <div className="border-b border-slate-800 bg-slate-900/80 px-3 py-1.5 text-center text-[10px] font-semibold uppercase tracking-[0.1em] text-cyan-200">
+        {title}
+      </div>
+      <div className="relative aspect-square w-full max-h-[240px] min-h-[140px]">
+        <Image
+          src={heatmapDataUri}
+          alt={alt}
+          fill
+          unoptimized
+          sizes="240px"
+          className="object-contain"
+        />
+      </div>
+      {hint ? (
+        <p className="border-t border-slate-800 px-3 py-2 text-center text-[10px] leading-snug text-slate-400">
+          {hint}
+        </p>
+      ) : null}
+      {regions && regions.length > 0 ? (
+        <ul className="max-h-24 space-y-0.5 overflow-y-auto border-t border-slate-800 px-3 py-2 text-[10px] text-slate-400">
+          {regions.slice(0, 6).map((r, i) => (
+            <li key={i} className="truncate">
+              {r.label?.trim() || `#${i + 1}`}
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </div>
   );
 }

@@ -30,11 +30,14 @@ import {
   RadiologicalAiSummaryOneLine,
   RadiologicalAnalysisTimestamp,
   RadiologicalClinicalDetailCollapsible,
+  RadiologicalHeatmapPreview,
   RadiologicalMedicalDisclaimer,
   RadiologicalReadyBanner,
+  type ModalityAttentionRegion,
   normalizePercentScore,
   pickHighestLikelihoodNamedRow,
 } from "@/components/dashboard/radiological-modality-blocks";
+import { parseModalityHeatmapFromApiResponse } from "@/lib/modality-heatmap";
 import { cn } from "@/lib/utils";
 
 type FfaDisease = {
@@ -136,6 +139,10 @@ export function FfaAnalysisCard({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<FfaPayload | null>(null);
+  const [heatmapPlus, setHeatmapPlus] = useState<string | null>(null);
+  const [attentionRegions, setAttentionRegions] = useState<ModalityAttentionRegion[]>(
+    [],
+  );
   const [analysisNotes, setAnalysisNotes] = useState("");
   const [analysisCompletedAt, setAnalysisCompletedAt] = useState<Date | null>(
     null,
@@ -151,6 +158,8 @@ export function FfaAnalysisCard({
     setFile(f);
     setPreviewUrl(URL.createObjectURL(f));
     setResult(null);
+    setHeatmapPlus(null);
+    setAttentionRegions([]);
     setAnalysisNotes("");
     setAnalysisCompletedAt(null);
     setDidAppendToReport(false);
@@ -165,6 +174,8 @@ export function FfaAnalysisCard({
     setFile(null);
     setPreviewUrl(null);
     setResult(null);
+    setHeatmapPlus(null);
+    setAttentionRegions([]);
     setAnalysisNotes("");
     setAnalysisCompletedAt(null);
     setDidAppendToReport(false);
@@ -209,6 +220,12 @@ export function FfaAnalysisCard({
         const ffa = data.ffa as FfaPayload | undefined;
         if (ffa && typeof ffa === "object" && ffa.activity) {
           setResult(ffa);
+          const hm = parseModalityHeatmapFromApiResponse(
+            data,
+            ffa as unknown as Record<string, unknown>,
+          );
+          setHeatmapPlus(hm.heatmapPlus);
+          setAttentionRegions(hm.attentionRegions);
           setAnalysisCompletedAt(new Date());
           setDidAppendToReport(false);
         } else {
@@ -443,6 +460,16 @@ export function FfaAnalysisCard({
                 />
               );
             })()}
+
+            {heatmapPlus ? (
+              <RadiologicalHeatmapPreview
+                heatmapDataUri={heatmapPlus}
+                title={t("ffaAnalysis.heatmapTitle")}
+                alt={t("ffaAnalysis.heatmapAlt")}
+                hint={t("ffaAnalysis.heatmapHint")}
+                regions={attentionRegions}
+              />
+            ) : null}
 
             <RadiologicalClinicalDetailCollapsible
               title={t("radiologicalReport.clinicalDetailTitle")}

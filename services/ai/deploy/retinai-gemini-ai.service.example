@@ -10,8 +10,10 @@ After=network.target
 
 [Service]
 Type=simple
-User=www-data
-Group=www-data
+# Manuel testi deploy ile yaptiysaniz ( .env.local sahibi deploy ): User/Group=deploy kullanin.
+# Nginx+www-data ile ayni kullanici gerekiyorsa .env.local okunabilirligi: chmod 640, grup www-data.
+User=deploy
+Group=deploy
 WorkingDirectory=/opt/apps/retina_ai/services/ai
 EnvironmentFile=-/opt/apps/retina_ai/services/ai/.env.local
 ExecStart=/opt/apps/retina_ai/services/ai/.venv/bin/python app_gemini.py

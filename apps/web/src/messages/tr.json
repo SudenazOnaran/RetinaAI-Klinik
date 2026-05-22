@@ -439,7 +439,10 @@
     "likelihoodModerate": "Orta",
     "likelihoodHigh": "Yüksek",
     "analysisFail": "Makula OCT analizi tamamlanamadı.",
-    "parseFail": "Sunucu yanıtı işlenemedi."
+    "parseFail": "Sunucu yanıtı işlenemedi.",
+    "heatmapTitle": "Isı haritası (AI dikkat bölgeleri)",
+    "heatmapAlt": "Makula OCT ısı haritası",
+    "heatmapHint": "Gemini’nin kararında etkili gördüğü bölgelerden üretilmiştir; Grad-CAM değildir."
   },
   "ffaAnalysis": {
     "title": "AI FFA (anjiyografi) analizi",
@@ -467,6 +470,9 @@
     "likelihoodHigh": "Yüksek",
     "analysisFail": "FFA analizi tamamlanamadı.",
     "parseFail": "Sunucu yanıtı işlenemedi.",
+    "heatmapTitle": "Isı haritası (AI dikkat bölgeleri)",
+    "heatmapAlt": "FFA ısı haritası",
+    "heatmapHint": "Gemini’nin kararında etkili gördüğü bölgelerden üretilmiştir; Grad-CAM değildir.",
     "drStagingTitle": "Diyabetik retinopati — FFA üzerinden tahmini evre (ICDR uyumlu)",
     "drStagingStage": "Tahmini evre",
     "drStagingConfidence": "Güven düzeyi",
