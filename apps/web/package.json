@@ -13,6 +13,7 @@
     "build": "npm run clean:next-artifacts && npm run clean:build && cross-env NODE_ENV=production NEXT_DIST_DIR=.next-build next build",
     "start": "cross-env NEXT_DIST_DIR=.next-build next start",
     "lint": "next lint",
+    "postinstall": "prisma generate",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

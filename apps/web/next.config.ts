@@ -3,6 +3,8 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   /* config options here */
   distDir: process.env.NEXT_DIST_DIR || ".next",
+  // Prisma query engine must stay external; bundling forces prisma:// (Accelerate) URLs.
+  serverExternalPackages: ["@prisma/client", "prisma"],
   eslint: {
     // Production build should not fail when dev-only eslint packages are omitted.
     ignoreDuringBuilds: true,
